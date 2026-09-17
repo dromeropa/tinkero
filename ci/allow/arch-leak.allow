@@ -1,0 +1,30 @@
+# Baseline written by './dev baseline'. Entries may only be removed, never added by hand.
+# Each one is work owed by a later plan; see docs/superpowers/plans/.
+usr/bin/omarchy-channel-current
+usr/bin/omarchy-channel-set
+usr/bin/omarchy-debug
+usr/bin/omarchy-default-agent
+usr/bin/omarchy-hibernation-available
+usr/bin/omarchy-pkg-add
+usr/bin/omarchy-pkg-aur-accessible
+usr/bin/omarchy-pkg-aur-add
+usr/bin/omarchy-pkg-aur-install
+usr/bin/omarchy-pkg-drop
+usr/bin/omarchy-pkg-missing
+usr/bin/omarchy-pkg-present
+usr/bin/omarchy-reinstall-configs
+usr/bin/omarchy-remove-dev-env
+usr/bin/omarchy-remove-launcher-entry
+usr/bin/omarchy-remove-security-sshd
+usr/bin/omarchy-setup-security-fingerprint
+usr/bin/omarchy-setup-security-sshd
+usr/bin/omarchy-update-available
+usr/bin/omarchy-version-channel
+usr/bin/omarchy-version-pkgs
+usr/share/omarchy/default/agents/skills/diagnose-crash/SKILL.md
+usr/share/omarchy/default/agents/skills/omarchy/hooks.md
+usr/share/omarchy/default/fonts/omarchy/README.md
+usr/share/omarchy/default/hypr/input.lua
+usr/share/omarchy/default/omarchy/launcher.hides
+usr/share/omarchy/default/omarchy/omarchy-menu.jsonc
+usr/share/omarchy/shell/plugins/menu/MenuModel.js

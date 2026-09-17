@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# omarchy:summary=Explain how Tinkero is updated
+
+echo "Tinkero updates through 'sudo dnf upgrade' and 'mise up'; see tinkero-status."
