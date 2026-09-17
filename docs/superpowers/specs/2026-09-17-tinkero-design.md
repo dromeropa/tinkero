@@ -86,7 +86,7 @@ The `with` form is RPM's rich-dependency idiom for a version range on one packag
 **`%install`**, in this order:
 
 1. Unpack the tree to `/usr/share/omarchy` (upstream's own path; `OMARCHY_PATH` defaults to it, and the `omarchy` skill teaches the agent that this directory is package-owned and read-only, which is exactly right under RPM).
-2. Delete everything the audit marks *drop* (about 85 scripts, plus `migrations/`, `default/pacman/`, `default/limine/`, `default/snapper/`, `default/libalpm/`, the plymouth and sddm themes, `omarchy-migrate-notify.service`, and the parts of `install/` that the replacement provisioning does not source).
+2. Delete everything the audit marks *drop* (`build/drop.list`: 79 commands at `v4.0.4`, plus `migrations/`, `default/pacman/`, `default/limine/`, `default/snapper/`, `default/libalpm/`, the plymouth and sddm themes, `omarchy-migrate-notify.service`, and the parts of `install/` that the replacement provisioning does not source).
 3. Apply the patch set (4.3) and copy the replacement scripts over their upstream namesakes.
 4. Rewrite the default menu (4.4) and apply branding: replace the logo files, rebuild the icon font, apply `branding/strings.tsv` (4.13).
 5. Move `bin/omarchy-*` to `/usr/bin` and populate `/usr/share/omarchy/bin/` with **symlinks** to them. This is upstream's own layout; it matters because the Hyprland environment puts `$OMARCHY_PATH/bin` first on `PATH`, so there must be exactly one copy of each script.
@@ -111,7 +111,7 @@ The authoritative, per-script classification is `docs/research/arch-coupling-aud
 | `shell/plugins/menu/MenuModel.js` | `guardHelpers()` builds the installed-package set from `rpm -qa` names and provides, mapped back to Arch names through the reverse index of `pkgmap.tsv`, instead of `pacman -Qq`/`-Qi`. Without this every menu package guard is wrong, because the menu defines its own `omarchy-pkg-present` function that shadows the command |
 | `bin/omarchy-apply-lock` | manages only the fingerprint PAM file; the password file is RPM-owned and written by `tinkero-pam-sync` (4.8). Upstream's target-user logic is kept |
 | `bin/omarchy-debug` | package inventory through `rpm -qa --qf`; product line from `rpm -q tinkero` |
-| `bin/omarchy-version` | version from `/usr/share/omarchy/version` plus the RPM release |
+| `bin/omarchy-version` | version and release from `rpm -q tinkero`. The tree's own `version` file is not usable: at tag `v4.0.4` it still reads `4.0.0.alpha` |
 | `bin/omarchy-reinstall-configs` | upstream replays `/etc/skel` over `$HOME` and then calls `omarchy-refresh-limine` and `omarchy-refresh-plymouth`; none of the three exists in Tinkero, so the body becomes `tinkero-provision --reset-all`. The command name is kept because the `omarchy` skill documents it as the rollback |
 | `bin/omarchy-install-hermes-cli` | drops the `hermes-desktop` hand-over branch |
 | `bin/omarchy-launch-about` | passes `-c /usr/share/tinkero/fastfetch/config.jsonc` on its two `fastfetch` calls, **only when the user has no `~/.config/fastfetch/config.jsonc`**: the script already has a `custom_fastfetch_config` test that it uses to skip its window-fit logic, and `-c` would otherwise override the user's own file. Upstream relies on a system-wide `/etc/fastfetch/config.jsonc`, which Tinkero does not install because it would change `fastfetch` for every session on the host |
@@ -141,7 +141,7 @@ Dropped for the same reason, until authselect-based replacements exist: `omarchy
 
 **The name map** is `distro/fedora/pkgmap.tsv`, installed to `/usr/share/tinkero/pkgmap.tsv`: tab-separated `arch-name`, `kind` (`dnf`, `flatpak`, `none`), `target`. Every literal package name that the installed payload passes to a package wrapper or a menu guard must have a row, even if its kind is `none`; CI enforces this (section 8). The initial content comes from the package table in the research doc, section 3.3.
 
-Everything else in `bin/` (about 330 of 444 scripts) ships unmodified, and that claim is enforced by the Arch-leak gate rather than asserted.
+Everything else in `bin/` (336 of 444 scripts at `v4.0.4`) ships unmodified, and that claim is enforced by the Arch-leak gate rather than asserted.
 
 ### 4.4 Menu: build-time rewrite of the default, not an extension file
 
@@ -369,7 +369,7 @@ Revision 1 numbered its phases from 2 because an earlier "phase 1" (agent layer 
 **CI on every push and on every lock bump:**
 
 1. **Arch-leak gate.** Build the RPM in mock; grep the installed payload with the audit's tier 1 pattern; any match outside the allowlist fails.
-2. **Dangling-command gate.** Every `omarchy-*`/`tinkero-*` token in the built menu, the Hyprland Lua, the shell's QML/JS and the kept scripts resolves to a file in the payload.
+2. **Dropped-reference gate.** Nothing in the payload still names a command that `build/drop.list` removed. (The broader check, "every `omarchy-*` token resolves to a file", was tried first and reports 110 false positives on the untouched upstream tree: PAM service names, CSS ids, window classes, unit names. The narrower question has none, and it is the one that matters.) Like the arch-leak gate, it compares its findings with a checked-in allowlist that may only shrink.
 3. **Name-map gate.** Every literal package name reaching a package wrapper or menu guard has a row in `pkgmap.tsv`.
 4. **Single-copy gate.** `/usr/share/omarchy/bin` contains only symlinks into `/usr/bin`.
 4a. **Branding gate.** No capitalised "Omarchy" inside a string literal in the payload's QML, JS, Lua, JSON, JSONC or `.desktop` files outside the allowlist; no `*omarchy*` file under a theme's `backgrounds/`, and every wallpaper in the payload has a keep row in `branding/images.tsv`; every row of `branding/strings.tsv` matched its expected count during the build (4.13).
@@ -455,7 +455,7 @@ tinkero/
   LICENSE                          MIT (compatible with Omarchy's MIT)
   upstream.lock
   install.sh
-  .copr/Makefile                   make srpm: fetch, verify, template the spec
+  .copr/Makefile                   COPR's make_srpm entry: fetch, verify, render the spec, build the SRPM
   tinkero.spec.in
   patches/                         the eleven patches against the pinned tag
   menu/overrides.jsonc             build-time menu edits
@@ -485,7 +485,10 @@ tinkero/
   docs/spec-review.md
   docs/guides/phase-0-spike.md     the VM spike procedure
   docs/superpowers/specs/          this document
-  docs/superpowers/plans/          implementation plans
+  docs/superpowers/plans/          implementation plans (Phase 2 roadmap, plan 2A)
+  dev                              developer entry points (check, lock, payload, gates, baseline, spec)
+  build/                           assemble, fetch-upstream, render-spec, drop.list
+  tests/                           hermetic shell tests and the fixture tree generator
 ```
 
 ## 13. References

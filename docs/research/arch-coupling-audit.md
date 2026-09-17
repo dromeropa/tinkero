@@ -82,7 +82,7 @@ Resulting patch set (the rebase cost): **11 small patches**, listed in §9. Ever
 | `omarchy-update-confirm`, `-analyze-logs`, `-lock`, `-requires-free-space`, `-status`, `-stay-awake`, `-user-notify`, `-dev` | drop | same; no tier 1 hit but dead without `omarchy-update` |
 | `omarchy-update-mise`, `omarchy-update-firmware`, `omarchy-update-time` | keep | `mise up`, `fwupdmgr`, `timedatectl`; portable. Menu entries `update.firmware`, `update.time` stay. `omarchy-update-firmware:14` copies `fwupdx64.efi` to `/boot/EFI/arch/` when `/usr/lib/fwupd/efi/fwupdx64.efi` exists; Fedora ships that file under a different path, so the branch does not run, but it is on the allowlist with this note rather than assumed portable |
 | `omarchy-channel-current`, `omarchy-channel-set`, `omarchy-version-channel` | replace | print `tinkero`; `-set` refuses |
-| `omarchy-version` | patch | one line reads the pacman package version; read `/usr/share/omarchy/version` and append the Tinkero RPM release |
+| `omarchy-version` | patch | lines 20-24 read the pacman package version; ask `rpm -q tinkero` instead. The tree's `version` file cannot be used: at `v4.0.4` it still reads `4.0.0.alpha` |
 | `omarchy-version-pkgs` | replace | last `dnf` transaction time from `dnf history` |
 | `omarchy-migrate`, `omarchy-upgrade-to-quattro` | drop | migrations are a non-goal; `omarchy-migrate-notify.service` is dropped with them |
 | `omarchy-refresh-pacman`, `omarchy-refresh-limine` | drop | |
@@ -209,7 +209,7 @@ The prefix list removes 76 of the 333 entries (counted against the `v4.0.4` file
 Run against the *installed payload* of the built `tinkero` RPM (not the source tree):
 
 1. **Arch-leak gate.** The tier 1 grep over the payload must match only the allowlist: the comment-only hits in §4.5 and §5 (`omarchy-default-agent`, `launcher.hides`, `hooks.md`, `fonts/omarchy/README.md`, `input.lua`). Any new file fails the build; the fix is a row in this audit.
-2. **Dangling-command gate.** Every `omarchy-*` and `tinkero-*` token in the built menu JSONC, in `default/hypr/**/*.lua`, in `shell/**/*.qml|js`, and in the kept scripts resolves to a file in the payload.
+2. **Dropped-reference gate.** Nothing in the payload names a command that `build/drop.list` removed (matched with non-name characters on both sides, so `omarchy-update` does not match inside `omarchy-update-available`). The broader "every `omarchy-*` token resolves to a file" check reports 110 false positives on the untouched tree and was abandoned.
 3. **Name-map gate.** Every literal package name passed to `omarchy-pkg-add`, `-drop`, `-present`, `-missing` in the payload (including menu guards) has a row in `pkgmap.tsv`, even if the row's target is `none`.
 4. **Single-copy gate.** No script name exists as a regular file in both `/usr/bin` and `/usr/share/omarchy/bin`; the latter holds only symlinks (upstream's layout, `docs/file-layout.md:56-57`).
 5. **Branding gate.** See §11 and the design spec §4.13: no capitalised "Omarchy" in a string literal outside the allowlist, no `*omarchy*` file under any theme's `backgrounds/`, no wallpaper without a reviewed keep row in `branding/images.tsv`, and every `branding/strings.tsv` row matched its expected count.
@@ -232,7 +232,7 @@ Eleven files carry a diff against upstream and therefore a rebase cost on each b
 
 Spec rev 1 also listed `bin/omarchy-agent-crash` as needing a debuginfod patch. At `v4.0.4` that script contains no debuginfod URL (it only builds the prompt and names the skill path), so it ships unmodified.
 
-Replacements (Tinkero's own files under upstream names, no rebase): 21 scripts, listed in §4 and §6 (thirteen package, update, channel and version scripts in §4.1-4.2, counting each name; `omarchy-hibernation-available`; the two fingerprint and two sshd scripts; `omarchy-theme-set-gnome`; the two provisioning scripts). Dropped: about 85 scripts. Kept unmodified: about 330 of 444.
+Replacements (Tinkero's own files under upstream names, no rebase): 21 scripts, listed in §4 and §6 (thirteen package, update, channel and version scripts in §4.1-4.2, counting each name; `omarchy-hibernation-available`; the two fingerprint and two sshd scripts; `omarchy-theme-set-gnome`; the two provisioning scripts). Dropped: 79 scripts (the exact list is `build/drop.list`, written for plan 2A and verified against the tree: every line must match or the build fails). Kept unmodified: 336 of 444 (444 less 79 dropped, 21 replaced and 8 patched in `bin/`).
 
 ## 10. Bump checklist additions
 
@@ -290,3 +290,18 @@ Added 2026-09-17. The original method (§1) did not look at the tree's top-level
 | `fastfetch/config.jsonc` | keep, relocated | drives the About screen and calls `omarchy-version` (patched), `omarchy-version-channel` and `omarchy-version-pkgs` (replaced), and `omarchy-version-branch` and `omarchy-theme-current` (both keep: no tier 1 to 3 hit, nothing host-specific). Installed to `/usr/share/tinkero/fastfetch/`, not `/etc/fastfetch/`, so that `fastfetch` elsewhere on the host is unchanged; `omarchy-launch-about` is patched to point at it |
 
 The tier 1 to 3 greps should be run over `etc/` as well at each bump, and the CI gates already see whatever of it reaches the payload.
+
+## 13. What the first real assembly added
+
+Added 2026-09-17. Writing plan 2A meant running a prototype of `build/assemble` and the gates against the real tarball. The dropped-reference gate found callers the greps of §1 could not, because they look for Arch tools, not for references to scripts this audit removes:
+
+| Finding | Verdict |
+|---|---|
+| `omarchy-reinstall` ("reinstall Omarchy packages and reset default configs") calls the dropped `omarchy-reinstall-pkgs`; its only caller is a comment in `omarchy-provision-user` | drop (in 2A's list) |
+| `omarchy-launch-battlenet` and `default/applications/battlenet.desktop` are reachable only from the dropped gaming installer | drop (in 2A's list) |
+| `omarchy-launch-docker-tui:16` calls `omarchy-sudo-docker`, which §4.3 drops | open for plan 2B; recommendation: drop the launcher too and do not re-add the `Super+Shift+D` binding (§7 would then re-add two bindings, not three) |
+| `omarchy-default-agent:35` has an `openclaw)` case naming the dropped `omarchy-install-openclaw-cli`; §4.5 called the script comment-only, which was wrong | open for plan 2B; recommendation: a one-line patch, making twelve patches |
+| `omarchy-bar:235` and `default/bash/env-bootstrap:7-8` name dropped commands in comments only | keep; permanent allowlist entries |
+
+The baselines at the end of plan 2A are 28 arch-leak files and 50 dropped references; both lists are the work queue of plans 2B and 2C.
+
