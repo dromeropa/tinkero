@@ -1,0 +1,35 @@
+name: ci
+on:
+  push:
+  pull_request:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    container: fedora:44
+    steps:
+      - name: Tools
+        run: dnf -y install git-core curl diffutils findutils ShellCheck rpmlint rpm-build make
+      - uses: actions/checkout@v4
+      - name: Trust the workspace
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: ShellCheck
+        run: >
+          shellcheck -x -e SC1090,SC1091
+          dev build/assemble build/fetch-upstream build/render-spec build/lib.sh
+          ci/gate-arch-leak ci/gate-dropped-refs ci/gate-single-copy ci/lib-gate.sh
+          tests/run tests/lib.sh tests/test-*.sh tests/fixtures/make-tree.sh
+          distro/fedora/replacements/*
+      - name: Unit tests
+        run: ./dev check
+      - name: Gates on the real upstream tree
+        run: ./dev gates
+      - name: Spec renders, parses and lints
+        run: |
+          ./dev spec
+          rpmspec -P tinkero.spec > /dev/null
+          rpmlint tinkero.spec
+      - name: SRPM builds the way COPR builds it
+        run: |
+          mkdir -p "$PWD/.cache/srpm"
+          make -f .copr/Makefile srpm outdir="$PWD/.cache/srpm"
+          ls -l .cache/srpm/*.src.rpm
