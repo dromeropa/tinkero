@@ -7,7 +7,7 @@ The tree's own version file is not usable: at v4.0.4 it still says 4.0.0.alpha.
 @@ -17,11 +17,8 @@
    exit 0
  fi
-
+ 
 -# The edge channel installs omarchy-dev instead of omarchy, so check both.
 -for package in omarchy-dev omarchy; do
 -  version=$(pacman -Q "$package" 2>/dev/null | awk '{ print $2 }')
@@ -15,6 +15,6 @@ The tree's own version file is not usable: at v4.0.4 it still says 4.0.0.alpha.
 -done
 +# Tinkero: the tree belongs to the tinkero RPM, whose version is the upstream tag.
 +version=$(rpm -q --qf '%{VERSION}-%{RELEASE}' tinkero 2>/dev/null) || version=""
-
+ 
  [[ -n $version ]] || exit 1
-
+ 
