@@ -12,8 +12,10 @@ tag=$(lock_get omarchy_tag "$lock");        commit=$(lock_get omarchy_commit "$l
 hypr=$(lock_get hyprland "$lock");          qs=$(lock_get quickshell "$lock")
 rev=$(lock_get tinkero_rev "$lock")
 [[ $tag =~ ^v[0-9]+(\.[0-9]+)+$ ]]   || die "omarchy_tag must look like v4.0.4: $tag"
+[[ $commit =~ ^[0-9a-f]{40}$ ]] || die "omarchy_commit must be a full commit id: $commit"
 [[ $hypr =~ ^([0-9]+)\.([0-9]+)\.[0-9]+$ ]] || die "hyprland must be MAJOR.MINOR.PATCH: $hypr"
-next="${BASH_REMATCH[1]}.$(( BASH_REMATCH[2] + 1 ))"
+next="${BASH_REMATCH[1]}.$(( 10#${BASH_REMATCH[2]} + 1 ))"
+[[ $qs =~ ^[A-Za-z0-9.^~+_-]+$ ]] || die "quickshell has characters that cannot appear in an RPM version: $qs"
 [[ $rev =~ ^[0-9]+$ ]] || die "tinkero_rev must be an integer: $rev"
 date=${TINKERO_BUILD_DATE:-$(LC_ALL=C date -u '+%a %b %d %Y')}
 
