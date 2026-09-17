@@ -21,6 +21,11 @@ out=$("$ROOT/ci/gate-arch-leak" "$p" "$d/allow" 2>&1) && rc=0 || rc=$?
 assert_eq "$rc" "1" "arch-leak fails on a stale allowlist entry"
 assert_contains "$out" "stale" "and says so"
 
+# fail loudly on a missing payload instead of silently passing
+out=$("$ROOT/ci/gate-arch-leak" "$d/no-payload" "$d/allow-nopayload" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" "2" "arch-leak fails loudly when there is no payload at DEST"
+assert_contains "$out" "no payload at DEST" "and says so"
+
 # dropped-refs
 : > "$d/allow2"
 out=$("$ROOT/ci/gate-dropped-refs" "$p" "$d/drop.list" "$d/allow2" 2>&1) && rc=0 || rc=$?
@@ -45,8 +50,26 @@ out=$("$ROOT/ci/gate-dropped-refs" "$p" "$d/drop-nobin.list" "$d/allow4" 2>&1) &
 assert_eq "$rc" "0" "dropped-refs with no bin/ lines passes"
 assert_contains "$out" "PASS" "and reports PASS"
 
+# dropped-refs edge case: drop list cannot be read
+out=$("$ROOT/ci/gate-dropped-refs" "$p" "$d/no-such-droplist" "$d/allow6" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" "2" "dropped-refs fails loudly when the drop list cannot be read"
+assert_contains "$out" "cannot read drop list" "and says so"
+
+# dropped-refs edge case: unsupported glob character
+printf 'bin/omarchy-fo?o\n' > "$d/drop-badglob.list"
+out=$("$ROOT/ci/gate-dropped-refs" "$p" "$d/drop-badglob.list" "$d/allow7" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" "2" "dropped-refs rejects an unsupported glob character"
+assert_contains "$out" "unsupported glob" "and says so"
+
 # single-copy
 "$ROOT/ci/gate-single-copy" "$p" >/dev/null 2>&1; assert_eq "$?" "0" "single-copy passes on a correct layout"
 rm "$p/usr/share/omarchy/bin/omarchy-clean"; cp "$p/usr/bin/omarchy-clean" "$p/usr/share/omarchy/bin/omarchy-clean"
 "$ROOT/ci/gate-single-copy" "$p" >/dev/null 2>&1; assert_eq "$?" "1" "single-copy fails on a regular file in the tree bin/"
+
+# single-copy edge case: no commands at all
+mkdir -p "$d/empty-dest/usr/bin" "$d/empty-dest/usr/share/omarchy/bin"
+out=$("$ROOT/ci/gate-single-copy" "$d/empty-dest" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" "1" "single-copy fails when there are no commands"
+assert_contains "$out" "no commands in usr/share/omarchy/bin" "and says so"
+
 rm -rf "$d"; finish

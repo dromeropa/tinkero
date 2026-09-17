@@ -2,9 +2,18 @@
 # gate-single-copy DEST: /usr/share/omarchy/bin must contain only symlinks into
 # /usr/bin, each resolving to a file in the payload.
 set -euo pipefail
+export LC_ALL=C
 [[ $# -eq 1 ]] || { echo "usage: gate-single-copy DEST" >&2; exit 2; }
 dest=$1; rc=0
-for f in "$dest/usr/share/omarchy/bin"/*; do
+[[ -d $dest/usr/bin ]] || { echo "FAIL: no payload at DEST (run ./dev payload first)"; exit 2; }
+shopt -s nullglob
+entries=("$dest/usr/share/omarchy/bin"/*)
+shopt -u nullglob
+if [[ ${#entries[@]} -eq 0 ]]; then
+  echo "FAIL: no commands in usr/share/omarchy/bin"
+  exit 1
+fi
+for f in "${entries[@]}"; do
   name=$(basename "$f")
   if [[ ! -L $f ]]; then echo "FAIL: not a symlink: usr/share/omarchy/bin/$name"; rc=1; continue; fi
   if [[ $(readlink "$f") != "/usr/bin/$name" ]]; then echo "FAIL: wrong target for $name: $(readlink "$f")"; rc=1; fi

@@ -2,16 +2,25 @@
 # gate-dropped-refs DEST DROPLIST ALLOW: nothing in the payload may still call a
 # command that build/drop.list removed. Findings are "path:command".
 set -euo pipefail
+export LC_ALL=C
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd); # shellcheck source=ci/lib-gate.sh
 source "$here/lib-gate.sh"
 [[ $# -eq 3 ]] || { echo "usage: gate-dropped-refs DEST DROPLIST ALLOW" >&2; exit 2; }
 dest=$1; droplist=$2; allow=$3
+[[ -d $dest/usr/bin ]] || { echo "FAIL: no payload at DEST (run ./dev payload first)"; exit 2; }
+[[ -f $droplist && -r $droplist ]] || { echo "FAIL: cannot read drop list: $droplist"; exit 2; }
 found=$(mktemp); trap 'rm -f "$found"' EXIT
 # Dropped command names = bin/ lines of the drop list that no longer exist in the payload.
 # Globs are expanded against what is NOT there by listing names from the line itself when
 # it has no glob, and by skipping glob lines (their members are caught by name below).
-names=$(grep -E '^bin/' "$droplist" | grep -v '[*?[]' | sed 's|^bin/||' | sort -u || true)
-globs=$(grep -E '^bin/' "$droplist" | grep '[*?[]' | sed 's|^bin/||' || true)
+binlines=$(grep -E '^bin/' "$droplist" || true)
+badglob=$(grep '[?[]' <<<"$binlines" || true)
+if [[ -n $badglob ]]; then
+  echo "FAIL: unsupported glob in drop list line: $(head -n1 <<<"$badglob") (only * is supported)"
+  exit 2
+fi
+names=$(grep -v '[*?[]' <<<"$binlines" | sed 's|^bin/||' | sort -u || true)
+globs=$(grep '[*?[]' <<<"$binlines" | sed 's|^bin/||' || true)
 : > "$found"
 if [[ -n $names ]]; then
   alt=$(paste -sd'|' <<<"$names")

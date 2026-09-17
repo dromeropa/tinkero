@@ -8,7 +8,7 @@ compare_with_allowlist() {
   local found=$1 allow=$2 what=$3 rc=0 tmp
   if [[ ${TINKERO_GATE_WRITE:-0} == 1 ]]; then
     { echo "# Baseline written by './dev baseline'. Entries may only be removed, never added by hand."
-      echo "# Each one is work owed by a later plan; see docs/superpowers/plans/."
+      echo "# Most are work owed by a later plan; a few are permanent (comment-only mentions). See the audit."
       cat "$found"; } > "$allow"
     echo "WROTE: $allow ($(wc -l < "$found") entries)"; return 0
   fi
@@ -17,10 +17,10 @@ compare_with_allowlist() {
   local extra stale
   extra=$(comm -23 "$found" "$tmp"); stale=$(comm -13 "$found" "$tmp")
   if [[ -n $extra ]]; then
-    echo "FAIL: $what not on the allowlist ($allow):"; echo "  ${extra//$'\n'/$'\n'  }"; rc=1
+    echo "FAIL: $what not on the allowlist ($allow):"; printf '  %s\n' "${extra//$'\n'/$'\n'  }"; rc=1
   fi
   if [[ -n $stale ]]; then
-    echo "FAIL: stale allowlist entries (no longer found; delete them from $allow):"; echo "  ${stale//$'\n'/$'\n'  }"; rc=1
+    echo "FAIL: stale allowlist entries (no longer found; delete them from $allow):"; printf '  %s\n' "${stale//$'\n'/$'\n'  }"; rc=1
   fi
   rm -f "$tmp"
   [[ $rc -eq 0 ]] && echo "PASS: $what ($(wc -l < "$found") allowed finding(s))"

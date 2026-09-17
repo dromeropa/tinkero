@@ -2,10 +2,12 @@
 # gate-arch-leak DEST ALLOW: no file in the payload may name an Arch tool
 # unless it is on the allowlist. Findings are paths relative to DEST.
 set -euo pipefail
+export LC_ALL=C
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd); # shellcheck source=ci/lib-gate.sh
 source "$here/lib-gate.sh"
 [[ $# -eq 2 ]] || { echo "usage: gate-arch-leak DEST ALLOW" >&2; exit 2; }
 dest=$1; allow=$2
+[[ -d $dest/usr/bin ]] || { echo "FAIL: no payload at DEST (run ./dev payload first)"; exit 2; }
 pattern='pacman|\byay\b|\bparu\b|expac|makepkg|limine|mkinitcpio|snapper|\bufw\b|pkgs\.omarchy\.org|archlinux|checkupdates|paccache|pactree'
 found=$(mktemp); trap 'rm -f "$found"' EXIT
 ( cd "$dest" && grep -rIlE "$pattern" . 2>/dev/null | sed 's|^\./||' | sort -u ) > "$found" || true
