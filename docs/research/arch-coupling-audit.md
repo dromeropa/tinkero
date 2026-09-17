@@ -54,7 +54,7 @@ Limits: a grep audit finds named tools, not assumptions (a script that expects `
 | `config/` | | 1 | a sample hook |
 | `install/user/` | 22 | 0 | coupled indirectly; see §6 |
 
-Resulting patch set (the rebase cost): **10 small patches**, listed in §9. Everything else is replace, drop, hide or keep.
+Resulting patch set (the rebase cost): **11 small patches**, listed in §9. Everything else is replace, drop, hide or keep.
 
 ## 4. `bin/` classification
 
@@ -202,7 +202,7 @@ Build-time menu edits (`menu/overrides.jsonc`, applied by `menu/apply-overrides`
 
 The prefix list removes 76 of the 333 entries (counted against the `v4.0.4` file); deletion by action removes whatever else still points at a dropped script.
 
-**Keybindings.** Every command bound in `default/hypr/bindings/*.lua` survives the drop list except none: the only bound command that touches a dropped area is `omarchy-launch-docker-tui`, which is kept. The web-app and third-party-app chords (`Super+Shift+{M,G,O,W,/}` and the web-app set) all sit inside `if o.preinstalled_bindings_enabled()` (`applications.lua:10`). The essential bindings (terminal, browser, file manager, editor) are declared before that gate (lines 2-8) and are unaffected. Inside the gate (lines 10-34), three are host-neutral and have their program available: tmux (`Super+Alt+Return`, line 12), **herdr (`Super+Ctrl+Return`, line 13)** and the Docker TUI (`Super+Shift+D`, line 16). Tinkero's seeded `~/.config/hypr/bindings.lua` sets `omarchy_preinstalled_bindings = false` and re-adds exactly those three. A fourth terminal program in the gate, the `cliamp` music TUI (`Super+Shift+Alt+M`, line 15), is left out because `cliamp` exists only in Omarchy's package repo and Tinkero's COPR does not build it; it is the first candidate if the COPR grows. `omarchy-launch-browser` uses `xdg-settings get default-web-browser`, so it launches Firefox on a stock Fedora without changes; `omarchy-launch-webapp` falls back to Chromium and is unreachable once the web-app chords and menu entries are gone.
+**Keybindings.** Every command bound in `default/hypr/bindings/*.lua` survives the drop list except none: the only bound command that touches a dropped area is `omarchy-launch-docker-tui`, which is kept. The web-app and third-party-app chords (`Super+Shift+{M,G,O,W,/}` and the web-app set) all sit inside `if o.preinstalled_bindings_enabled()` (`applications.lua:10`). The essential bindings (terminal, browser, file manager, editor) are declared before that gate (lines 2-8) and are unaffected. Inside the gate (lines 10-34), three are host-neutral and have their program available: tmux (`Super+Alt+Return`, line 12), **herdr (`Super+Ctrl+Return`, line 13)** and the Docker TUI (`Super+Shift+D`, line 16). The gate has two switches (`default/hypr/helpers.lua:84-89`): the Lua global `omarchy_preinstalled_bindings`, which has to be set in `hyprland.lua` before the defaults load, and the marker file `~/.local/state/omarchy/preinstalls-removed`. Tinkero uses the marker: `tinkero-provision` creates it, no upstream config file is forked, and its only other readers are the two `preinstalls` menu rows, which are deleted. The seeded `bindings.lua` re-adds exactly those three. A fourth terminal program in the gate, the `cliamp` music TUI (`Super+Shift+Alt+M`, line 15), is left out because `cliamp` exists only in Omarchy's package repo and Tinkero's COPR does not build it; it is the first candidate if the COPR grows. `omarchy-launch-browser` uses `xdg-settings get default-web-browser`, so it launches Firefox on a stock Fedora without changes; `omarchy-launch-webapp` falls back to Chromium and is unreachable once the web-app chords and menu entries are gone.
 
 ## 8. CI gate derived from this audit
 
@@ -212,10 +212,11 @@ Run against the *installed payload* of the built `tinkero` RPM (not the source t
 2. **Dangling-command gate.** Every `omarchy-*` and `tinkero-*` token in the built menu JSONC, in `default/hypr/**/*.lua`, in `shell/**/*.qml|js`, and in the kept scripts resolves to a file in the payload.
 3. **Name-map gate.** Every literal package name passed to `omarchy-pkg-add`, `-drop`, `-present`, `-missing` in the payload (including menu guards) has a row in `pkgmap.tsv`, even if the row's target is `none`.
 4. **Single-copy gate.** No script name exists as a regular file in both `/usr/bin` and `/usr/share/omarchy/bin`; the latter holds only symlinks (upstream's layout, `docs/file-layout.md:56-57`).
+5. **Branding gate.** See §11 and the design spec §4.13: no capitalised "Omarchy" in a string literal outside the allowlist, no `*omarchy*` file under any theme's `backgrounds/`, no wallpaper without a reviewed keep row in `branding/images.tsv`, and every `branding/strings.tsv` row matched its expected count.
 
 ## 9. The patch set
 
-Ten files carry a diff against upstream and therefore a rebase cost on each bump. All but the first are under ten changed lines.
+Eleven files carry a diff against upstream and therefore a rebase cost on each bump. All but the first are under ten changed lines.
 
 1. `shell/plugins/menu/MenuModel.js` (package snapshot; about 15 lines)
 2. `bin/omarchy-apply-lock` (PAM shape)
@@ -225,8 +226,9 @@ Ten files carry a diff against upstream and therefore a rebase cost on each bump
 6. `bin/omarchy-install-hermes-cli` (the `hermes-desktop` branch, line 40)
 7. `bin/omarchy-remove-launcher-entry` (lines 87-91)
 8. `bin/omarchy-remove-dev-env` (lines 13, 53)
-9. `default/agents/skills/omarchy/SKILL.md` (package idiom, lines 149 and 256, points at the host guide)
+9. `default/agents/skills/omarchy/SKILL.md` (package idiom, lines 149 and 256, points at the host guide; line 175 names the relocated fastfetch default)
 10. `default/agents/skills/diagnose-crash/SKILL.md` (lines 56-64)
+11. `bin/omarchy-launch-about` (its two `fastfetch` calls, lines 104 and 161, get `-c /usr/share/tinkero/fastfetch/config.jsonc` unless the script's own `custom_fastfetch_config` test, lines 16-18, finds a user config, which `-c` would otherwise override; see §12)
 
 Spec rev 1 also listed `bin/omarchy-agent-crash` as needing a debuginfod patch. At `v4.0.4` that script contains no debuginfod URL (it only builds the prompt and names the skill path), so it ships unmodified.
 
@@ -242,3 +244,49 @@ When `upstream.lock` moves to a new tag, before anything else:
 4. Diff `default/omarchy/omarchy-menu.jsonc` ids; the build's dangling-command gate reports new entries that call dropped scripts.
 5. Read `migrations/` added between the tags and classify each as Arch-only or config-only; config-only ones become entries in `docs/config-notes/<tag>.md`, which `tinkero-provision --check` reports.
 6. Known item for the first bump past `v4.0.4`: `omarchy-install-chromium-claude` and the hook that calls it from `omarchy-default-agent` (writes to `/usr/share/chromium/extensions` via `pkexec`); the `gemini` to `agy` rename; the added `ori` stub; the `~/.gemini/config/skills` directory.
+
+## 11. Branding inventory
+
+Added 2026-09-17 after the decision that nothing a user sees should say or show Omarchy (design spec §4.13). Survey of `v4.0.4` for the capitalised name and the logo in places that reach the screen. Identifiers (command names, paths, plugin ids, window classes, PAM service names) are out of scope by that decision and are not listed.
+
+| Surface | Where | Count | Handling |
+|---|---|---|---|
+| Logo glyph `U+E900` | `default/fonts/omarchy/omarchy.ttf`; drawn by `shell/plugins/menu/BarWidget.qml` (the bar's menu button) and referenced from the menu JSONC through `"iconFont":"omarchy"` (23 rows use that font, most for agent logos at `U+E901` and up) | 1 glyph | rebuild the font with Tinkero's mark in that code point |
+| ASCII logos | `/logo.txt`, `/icon.txt`. `omarchy-show-logo` reads `$OMARCHY_PATH/logo.txt` directly; `omarchy-launch-about` and `omarchy-screensaver` read the user copies `~/.config/omarchy/branding/{about,screensaver}.txt`, which `omarchy-branding-about` and `omarchy-branding-screensaver` reset from the root files | 2 files | replace the files; seed the user copies from them |
+| **Theme wallpapers** | 92 background images across 22 themes. 18 themes ship `backgrounds/omarchy.png`: the OMARCHY wordmark, large, in the theme's accent colour on its flat background colour (`accent` and `background` in the theme's `colors.toml`). Three more are named for it: `flexoki-light/backgrounds/2-omarchy.png`, `lupine/backgrounds/06-omarchy.png`, and `rose-pine/backgrounds/3-omarchy-plants.png` (the wordmark inside an illustration). Branding also hides under other names: `tokyo-night/backgrounds/6-oma.jpg` and `5-oma-cityscape.jpg` both show an upstream house mark (a glowing circle, square and diamond; not the logo in `logo.svg`, but plainly somebody else's mark), and `1-quattro.jpg` is upstream's release artwork, which additionally shows third-party marks (Audi, Michelin, Castrol) that a public derivative has no reason to redistribute as its wallpaper. All are ordinary entries in the wallpaper rotation (`omarchy-theme-bg-next`). Found in review; a text grep cannot see any of this, and **only 6 of the 92 images were opened for this audit** (`4-omakub.jpg` was one of them and shows nothing branded), so the rest need one pass by eye. No theme is left empty by the deletions; `flexoki-light` comes closest, going from two wallpapers to one plus the regenerated wordmark | at least 24 | the 18 flat ones are regenerated from the Tinkero wordmark and the theme's colours; illustrated ones and logo or release art are deleted; every wallpaper gets a reviewed row in `branding/images.tsv` |
+| About screen OS line | `etc/fastfetch/config.jsonc:74`, `echo \"Omarchy $version\"`. The audit's original scope did not include `etc/` (see §12) | 1 | substitution list, on the relocated file |
+| Plugin manifests | `"author": "Omarchy"` in 28 `manifest.json` files under `shell/plugins/`; `shell/plugins/menu/manifest.json` also has `name`, `displayName` and `description` naming Omarchy. `shell/shell.qml:1402` reads `displayName` into widget metadata, so at least that one can reach the screen | 28 files | JSON transform at build time; ids unchanged |
+| Image logos | `/logo.svg`, `/icon.png` | 2 files | replace |
+| Menu labels | `learn.omarchy` and `update.omarchy`, both `"label":"Omarchy"` | 2 | menu rewrite (§7) |
+| Keybinding descriptions | `default/hypr/bindings/utilities.lua:1` and `:7`, `"Omarchy menu"` | 2 | substitution list |
+| Shell strings | `shell/plugins/bar/widgets/SystemUpdate.qml:62` tooltip; `shell/services/PluginRegistry.qml:632` error text | 2 | substitution list |
+| Notifications | the welcome toast in `install/user/first-run/welcome.sh`; "Pending Omarchy Migrations" in `omarchy-migrate-notify` | 2 | first is Tinkero's own, second is dropped |
+| Session file | `default/wayland-sessions/omarchy.desktop` `Name=` and `Comment=` | 1 file | Tinkero ships its own |
+| Dev gallery | `shell/plugins/dev-gallery/GalleryPanel.qml` titles, matched by a window rule in `default/hypr/apps/omarchy-shell.lua:14` | 3 | allowlisted: a developer tool, and the title is matched by the window rule |
+| Window-rule regex | `default/hypr/apps/system.lua:7` matches a window titled "Omarchy" among others | 1 | allowlisted: it matches a title, it does not display one |
+| Seeded config comments | header comments in `config/hypr/*.lua`, `config/kitty/kitty.conf`, `config/herdr/config.toml` and the sample hooks | 10 files | left as is: comments in files the user owns, pointing at upstream's documentation |
+| CLI help and usage text | 122 of 444 scripts mention the name, almost all in `# omarchy:summary=` metadata and usage strings | | out of scope for v1 (terminal-only, tied to the command names) |
+
+So the graphical surface is one glyph, four logo files, at least 24 wallpapers, 28 plugin manifests and ten strings. None of it needs a positional patch: files are replaced, images and manifests are generated, and strings go through a count-checked substitution list.
+
+Bump checklist addition: after the greps in §10, run the branding gate on the new tag (literal scan, `backgrounds/*omarchy*` filename check, wallpapers without an `images.tsv` row) and review new hits before updating `branding/strings.tsv`. New themes are the likeliest source of a new branded image.
+
+## 12. The `etc/` payload
+
+Added 2026-09-17. The original method (§1) did not look at the tree's top-level `etc/` directory, which upstream's `omarchy-settings` package installs into `/etc`. It holds 40 files and is almost entirely host policy.
+
+| Files | Verdict | Note |
+|---|---|---|
+| `sudoers.d/omarchy-dns`, `omarchy-theme-browser`, `omarchy-tzupdate` (`%wheel NOPASSWD` for three commands), `omarchy-passwd-tries` | drop | Tinkero adds no sudoers entries. The three commands still work and ask for a password |
+| `security/faillock.conf` (`deny = 10`) | drop | replaces a file owned by Fedora's `pam`; the lock screen's own lockout is handled in its PAM file (spec §4.8) |
+| `nsswitch.conf` | drop | replaces a file authselect owns |
+| `sysctl.d/*` (2), `systemd/system.conf.d/*` (2), `systemd/user.conf.d/*`, `systemd/oomd.conf.d/*`, `systemd/resolved.conf.d/*` (2), `systemd/system/*.d/*` (4), `tmpfiles.d/*` (2), `sysusers.d/*`, `modprobe.d/*`, `NetworkManager/conf.d/*`, `gnupg/dirmngr.conf`, `cups/*` (2), `docker/daemon.json` | drop | system tuning and services; host policy |
+| `systemd/logind.conf.d/10-ignore-power-button.conf` | drop, behaviour replaced | the shell's power menu expects the power key not to power off (`XF86PowerOff` is bound to it in `default/hypr/bindings/utilities.lua:9`). Tinkero gets that with a user unit holding a `handle-power-key` inhibitor lock for the session, without touching `/etc`; logind's polkit default grants it to the active session |
+| `systemd/logind.conf.d/20-inhibit-delay.conf` (`InhibitDelayMaxSec=15`) | drop, **not** replaced | gives `omarchy-sleep-lock`'s delay inhibitor fifteen seconds instead of logind's five to get the lock screen up before suspend; upstream's comment says five is not enough. There is no unprivileged equivalent, so Tinkero accepts the shorter margin and Phase 0 measures it |
+| `limine-entry-tool.d/*` (2), `mkinitcpio.conf.d/*` (2), `plymouth/plymouthd.conf`, `sddm.conf.d/*` (2) | drop | Arch boot and SDDM |
+| `profile.d/omarchy.sh` | drop | sources `default/bash/env-bootstrap` for every login shell on the host; the uwsm env file already does it for the Tinkero session |
+| `xdg/kitty/kitty.conf` | drop | system-wide kitty defaults would affect kitty under GNOME; kitty is optional |
+| `mise/conf.d/omarchy.toml` | keep | a `cursor-agent` tool alias; inert unless that tool is installed |
+| `fastfetch/config.jsonc` | keep, relocated | drives the About screen and calls `omarchy-version` (patched), `omarchy-version-channel` and `omarchy-version-pkgs` (replaced), and `omarchy-version-branch` and `omarchy-theme-current` (both keep: no tier 1 to 3 hit, nothing host-specific). Installed to `/usr/share/tinkero/fastfetch/`, not `/etc/fastfetch/`, so that `fastfetch` elsewhere on the host is unchanged; `omarchy-launch-about` is patched to point at it |
+
+The tier 1 to 3 greps should be run over `etc/` as well at each bump, and the CI gates already see whatever of it reaches the payload.

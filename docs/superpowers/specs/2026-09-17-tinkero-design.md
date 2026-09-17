@@ -28,7 +28,7 @@ Each goal has an acceptance test in section 8; a goal without a passing test is 
 
 | Research objection | Answer in this design |
 |---|---|
-| A port delivers the files but not the maintenance; the porter becomes the maintainer of every seam, and upstream moves weekly | Tinkero **pins** a tag and bumps deliberately, so upstream's pace sets the size of a bump, not its frequency. The seam is measured (audit: 10 small patches, 21 replacement scripts, the rest dropped or untouched) and guarded by CI gates that fail a bump when upstream adds a new Arch assumption (section 8) |
+| A port delivers the files but not the maintenance; the porter becomes the maintainer of every seam, and upstream moves weekly | Tinkero **pins** a tag and bumps deliberately, so upstream's pace sets the size of a bump, not its frequency. The seam is measured (audit: 11 small patches, 21 replacement scripts, the rest dropped or untouched) and guarded by CI gates that fail a bump when upstream adds a new Arch assumption (section 8) |
 | The Hyprland stack on Fedora lives in one-person COPRs | True, and the one person is now the author, by choice: owning the specs removes the dependency on someone else's pace. The cost is real and is budgeted below. Phase 0 proves the desktop on the existing `omedora-4` COPR before any spec is forked |
 | A port gets Omarchy's churn without Omarchy's rollback | Nothing under a pinned tree rolls except Fedora itself. Rollback is: GNOME stays installed and unaffected (an invariant, section 4.9, with a test); the COPR keeps old builds (`auto_prune` off); the tree and its compositor pin move in one dnf transaction (4.2), so there is no half-upgraded state to roll back from |
 
@@ -88,9 +88,11 @@ The `with` form is RPM's rich-dependency idiom for a version range on one packag
 1. Unpack the tree to `/usr/share/omarchy` (upstream's own path; `OMARCHY_PATH` defaults to it, and the `omarchy` skill teaches the agent that this directory is package-owned and read-only, which is exactly right under RPM).
 2. Delete everything the audit marks *drop* (about 85 scripts, plus `migrations/`, `default/pacman/`, `default/limine/`, `default/snapper/`, `default/libalpm/`, the plymouth and sddm themes, `omarchy-migrate-notify.service`, and the parts of `install/` that the replacement provisioning does not source).
 3. Apply the patch set (4.3) and copy the replacement scripts over their upstream namesakes.
-4. Rewrite the default menu (4.4).
+4. Rewrite the default menu (4.4) and apply branding: replace the logo files, rebuild the icon font, apply `branding/strings.tsv` (4.13).
 5. Move `bin/omarchy-*` to `/usr/bin` and populate `/usr/share/omarchy/bin/` with **symlinks** to them. This is upstream's own layout; it matters because the Hyprland environment puts `$OMARCHY_PATH/bin` first on `PATH`, so there must be exactly one copy of each script.
-6. Install `/usr/share/wayland-sessions/tinkero.desktop` (`Name=Tinkero`, `Exec=uwsm start -g -1 -e -D Hyprland hyprland.desktop`), `/usr/share/uwsm/env.d/10-omarchy` (upstream's file; it also activates mise shims for the graphical session, which is how herdr-era tools and agent stubs reach keybindings), the user systemd units, the `omarchy.ttf` icon font and fontconfig snippet, the two lock-screen PAM variants under `/usr/share/tinkero/pam/` with `/etc/pam.d/omarchy-lock-password` as a `%ghost` written by `tinkero-pam-sync` in `%posttrans` (4.8), `/etc/xdg/autostart/tinkero-gnome-restore.desktop` and `tinkero-gnome-restore.service` (4.9), `/usr/share/tinkero/upstream.lock`, `/usr/share/tinkero/pkgmap.tsv`, and the `tinkero-*` commands.
+6. Install `/usr/share/wayland-sessions/tinkero.desktop` (`Name=Tinkero`, `Exec=uwsm start -g -1 -e -D Hyprland hyprland.desktop`), `/usr/share/uwsm/env.d/10-omarchy` (upstream's file; it also activates mise shims for the graphical session, which is how herdr-era tools and agent stubs reach keybindings), the user systemd units (upstream's kept ones plus `tinkero-inhibit-power-key.service`), the `omarchy.ttf` icon font and fontconfig snippet, the two lock-screen PAM variants under `/usr/share/tinkero/pam/` with `/etc/pam.d/omarchy-lock-password` as a `%ghost` written by `tinkero-pam-sync` in `%posttrans` (4.8), `/etc/xdg/autostart/tinkero-gnome-restore.desktop` and `tinkero-gnome-restore.service` (4.9), `/usr/share/tinkero/upstream.lock`, `/usr/share/tinkero/pkgmap.tsv`, and the `tinkero-*` commands.
+
+**Not installed: upstream's `etc/` tree.** Upstream ships 40 files of system policy under `etc/` (audit, section 12): sudoers `NOPASSWD` rules, `faillock.conf`, `nsswitch.conf`, sysctl, logind, resolved, oomd and system-manager overrides, NetworkManager and modprobe tweaks, and the Arch boot, SDDM and Docker configuration. None of it is installed: it is host policy, and section 5 forbids sudoers additions. Three exceptions, each relocated so that it cannot affect other sessions: `etc/fastfetch/config.jsonc` goes to `/usr/share/tinkero/fastfetch/` (it drives the About screen; see the `omarchy-launch-about` patch); `etc/mise/conf.d/omarchy.toml` (a tool alias for `cursor-agent`) is installed as is, since it only matters when that tool is installed; and the one behaviour worth keeping from the logind override, not powering off when the power key is pressed so that the shell's power menu can handle it, is obtained without touching `/etc` by `tinkero-inhibit-power-key.service`, a user unit started from inside the Tinkero session (4.6) that holds a `handle-power-key` inhibitor lock (logind's default polkit policy grants `inhibit-handle-power-key` to the active session without a prompt, and upstream binds `XF86PowerOff` to the power menu, so the key keeps working; Phase 0 confirms). The same directory's `InhibitDelayMaxSec=15` override has no unprivileged equivalent and is dropped: `omarchy-sleep-lock` then has logind's default five seconds, not fifteen, to get the lock screen up before suspend. Upstream's comment says five is not always enough, so this is an accepted risk that Phase 0 measures; if the lock loses that race, the fallback is documenting the one-line logind override for the user to add, not shipping it. The consequence of dropping the sudoers rules is only that changing DNS, time zone or browser policy from the menu asks for a password.
 
 **Not installed: `/etc/skel`.** Revision 1 seeded new users through `/etc/skel`. That is global to the machine (every new account, including ones that only use GNOME) and does nothing for existing accounts, which is what every real user of Tinkero has. `tinkero-provision` (4.6) is the single seeding path.
 
@@ -102,7 +104,7 @@ The upstream tree is never copied into this repo. The repo holds `upstream.lock`
 
 The authoritative, per-script classification is `docs/research/arch-coupling-audit.md` sections 4 to 6. Summary:
 
-**Patches** (a diff against upstream, so a rebase cost on every bump; this is the number to keep small). Ten files, all but the first under ten changed lines:
+**Patches** (a diff against upstream, so a rebase cost on every bump; this is the number to keep small). Eleven files, all but the first under ten changed lines:
 
 | File | Change |
 |---|---|
@@ -112,9 +114,10 @@ The authoritative, per-script classification is `docs/research/arch-coupling-aud
 | `bin/omarchy-version` | version from `/usr/share/omarchy/version` plus the RPM release |
 | `bin/omarchy-reinstall-configs` | upstream replays `/etc/skel` over `$HOME` and then calls `omarchy-refresh-limine` and `omarchy-refresh-plymouth`; none of the three exists in Tinkero, so the body becomes `tinkero-provision --reset-all`. The command name is kept because the `omarchy` skill documents it as the rollback |
 | `bin/omarchy-install-hermes-cli` | drops the `hermes-desktop` hand-over branch |
+| `bin/omarchy-launch-about` | passes `-c /usr/share/tinkero/fastfetch/config.jsonc` on its two `fastfetch` calls, **only when the user has no `~/.config/fastfetch/config.jsonc`**: the script already has a `custom_fastfetch_config` test that it uses to skip its window-fit logic, and `-c` would otherwise override the user's own file. Upstream relies on a system-wide `/etc/fastfetch/config.jsonc`, which Tinkero does not install because it would change `fastfetch` for every session on the host |
 | `bin/omarchy-remove-launcher-entry` | `rpm -qf` and `dnf remove` instead of `pacman -Qqo` and `pacman -Rns` |
 | `bin/omarchy-remove-dev-env` | two direct `pacman -Rns` calls become `omarchy-pkg-drop` |
-| `default/agents/skills/omarchy/SKILL.md` | the package idiom points at `host.md` |
+| `default/agents/skills/omarchy/SKILL.md` | the package idiom (lines 149, 256) points at `host.md`; the "Other Configs" row for fastfetch (line 175) names the relocated default instead of `/etc/fastfetch/config.jsonc` |
 | `default/agents/skills/diagnose-crash/SKILL.md` | "This is Arch" and the debuginfod URL become Fedora's (`https://debuginfod.fedoraproject.org/`) |
 
 **Replacements** (Tinkero's own file under the upstream name; no rebase):
@@ -152,13 +155,13 @@ So `menu/apply-overrides` rewrites `default/omarchy/omarchy-menu.jsonc` during `
 
 The user's own extension file is untouched and layers on top exactly as upstream documents. There is no QML patch and nothing to conflict textually; ids that stop matching after an upstream rename are reported by the build. A system-level extension path will be offered upstream as a PR, since any port would use it; if it lands, this mechanism can shrink.
 
-Visible strings stay as upstream ("Omarchy menu" and so on) to keep the patch set small, subject to open question 2.
+Visible strings in the menu are rebranded as part of the same rewrite (4.13).
 
 ### 4.5 Skill guides for the agent
 
 The `omarchy` skill loads topic guides on demand from the same directory as `SKILL.md`. Tinkero adds one, and the patched `SKILL.md` points at it:
 
-- `host.md` (source: `distro/fedora/skills/host.md`): the host is Fedora; use `omarchy pkg add` first, then `dnf` and `flatpak`, never `pacman`; there is no AUR; PAM is `authselect`-managed and the agent never edits `/etc/pam.d`; SELinux is enforcing, denials are read with `sudo ausearch -m AVC -ts recent`, and the agent never changes SELinux mode, booleans or labels; `/usr/share/omarchy` and `/usr/bin/omarchy-*` are package-owned and are never edited or copied into; recent package changes are `dnf history`; RPM Fusion's `akmod-nvidia` for NVIDIA; `firewall-cmd`, not `ufw`; podman is the container default; updates are `sudo dnf upgrade` and `mise up`; `tinkero-status` reports maintenance state.
+- `host.md` (source: `distro/fedora/skills/host.md`): the host is Fedora; use `omarchy pkg add` first, then `dnf` and `flatpak`, never `pacman`; there is no AUR; PAM is `authselect`-managed and the agent never edits `/etc/pam.d`; SELinux is enforcing, denials are read with `sudo ausearch -m AVC -ts recent`, and the agent never changes SELinux mode, booleans or labels; `/usr/share/omarchy` and `/usr/bin/omarchy-*` are package-owned and are never edited or copied into; recent package changes are `dnf history`; RPM Fusion's `akmod-nvidia` for NVIDIA; `firewall-cmd`, not `ufw`; podman is the container default; the desktop is called Tinkero and is built on the Omarchy tree, whose command names and paths it keeps (4.13); updates are `sudo dnf upgrade` and `mise up`; `tinkero-status` reports maintenance state.
 
 The file name is distro-neutral on purpose (4.10). A `maintenance.md` guide arrives with the advisor in phase 5, not before.
 
@@ -175,11 +178,12 @@ Skills are linked into the harness directories by upstream's loop, run from `tin
 
 Re-running is safe: stage 3 is a no-op when current, stage 4 is idempotent by construction. Log out, pick "Tinkero" at GDM.
 
-**`tinkero-provision`** is the only thing that writes to a home directory. It replaces upstream's `omarchy-provision-user` and `omarchy-provision-first-run`, whose unmodified behaviour on an existing Fedora account would repoint XDG directories, change the default browser and mail handler, write GNOME's dconf keys and create an unencrypted default keyring (audit, section 6). Upstream's autostart still calls `omarchy-provision-first-run` at every session start; Tinkero's replacement runs `tinkero-provision --session`, which is a fast no-op once done.
+**`tinkero-provision`** is the only thing that writes to a home directory. It replaces upstream's `omarchy-provision-user` and `omarchy-provision-first-run`, whose unmodified behaviour on an existing Fedora account would repoint XDG directories, change the default browser and mail handler, write GNOME's dconf keys and create an unencrypted default keyring (audit, section 6). Upstream's autostart still calls `omarchy-provision-first-run` at every session start; Tinkero's replacement runs `tinkero-provision --session`, which is a fast no-op for provisioning once done and, on every session start, starts Tinkero's two session-scoped user units, `tinkero-gnome-restore.service` (4.9) and `tinkero-inhibit-power-key.service` (4.2). Neither has an `[Install]` section: both are `PartOf=graphical-session.target`, which GNOME activates too, so they are only ever started from inside the Tinkero session.
 
 Seeding rules:
 
-- Source is `/usr/share/omarchy/config/**` plus Tinkero's own overrides in `/usr/share/tinkero/config/**` (notably `hypr/bindings.lua`, which sets `omarchy_preinstalled_bindings = false` and re-adds the three host-neutral bindings that sit inside upstream's gate: tmux on `Super+Alt+Return`, herdr on `Super+Ctrl+Return`, Docker TUI on `Super+Shift+D`. The gate's fourth terminal program, the `cliamp` music TUI on `Super+Shift+Alt+M`, is not re-added because `cliamp` is an Omarchy-repo package that Tinkero does not build. Terminal, browser, file manager and editor are declared outside the gate upstream and need nothing).
+- Source is `/usr/share/omarchy/config/**` plus Tinkero's own overrides in `/usr/share/tinkero/config/**` (notably `hypr/bindings.lua`, which re-adds the three host-neutral bindings that sit inside upstream's gate: tmux on `Super+Alt+Return`, herdr on `Super+Ctrl+Return`, Docker TUI on `Super+Shift+D`. The gate's fourth terminal program, the `cliamp` music TUI on `Super+Shift+Alt+M`, is not re-added because `cliamp` is an Omarchy-repo package that Tinkero does not build. Terminal, browser, file manager and editor are declared outside the gate upstream and need nothing).
+- The gate itself is closed with upstream's own switch, not a forked config file: `tinkero-provision` creates `~/.local/state/omarchy/preinstalls-removed`, the marker `o.preinstalled_bindings_enabled()` checks (`default/hypr/helpers.lua:84-89`). Its only other readers are the two `preinstalls` menu rows, which are deleted.
 - **Per file, never overwrite.** A target that exists is left alone and reported as a conflict with a diff command. `--plan` prints the full list without writing; `install.sh` shows it in step 2.
 - Every file written is recorded in `~/.local/state/tinkero/seeded.tsv` with its sha256 and the tag it came from.
 - `~/.bashrc` is never replaced. With consent, one guarded line is appended: source `/usr/share/omarchy/default/bash/rc` only when `XDG_SESSION_DESKTOP` is `Hyprland`, so terminals in GNOME are unchanged. Hyprland sets that variable for everything it spawns (`default/hypr/envs.lua:22`), which covers every terminal opened from a keybinding or the menu; a shell started by a D-Bus-activated or systemd user service would not see it, and simply gets stock bash.
@@ -196,7 +200,7 @@ On every machine: `sudo dnf upgrade` and `mise up`. Nothing else, ever. The menu
 
 For the packager:
 
-- **When wanted (monthly or less): bump the tree.** Follow the bump checklist in the audit, section 10: re-run the coupling greps on the new tag, diff the provisioning chain, the roster and the menu ids, classify new migrations into config notes, rebase the ten patches, set the new Hyprland and Quickshell pins in `upstream.lock`, bump `tinkero_rev`. CI (section 8) must pass, including the VM smoke test, before the COPR build is tagged for release.
+- **When wanted (monthly or less): bump the tree.** Follow the bump checklist in the audit, section 10: re-run the coupling greps on the new tag, diff the provisioning chain, the roster and the menu ids, classify new migrations into config notes, rebase the eleven patches, set the new Hyprland and Quickshell pins in `upstream.lock`, bump `tinkero_rev`. CI (section 8) must pass, including the VM smoke test, before the COPR build is tagged for release.
 - **When Fedora's Qt minor version changes:** rebuild Quickshell (4.1).
 - **Twice a year: Fedora major upgrade.** Add the new chroot to the COPR and get green builds before upgrading any machine.
 
@@ -250,7 +254,7 @@ This is the least-proven part of the design: an unprivileged Wayland client auth
 
 - Session environment lives in uwsm's `env.d`, never in dotfiles. The one `~/.bashrc` line is guarded by session.
 - Provisioning does not touch XDG user directories, default applications, the keyring, GTK bookmarks or dconf.
-- Theme switching needs `org.gnome.desktop.interface` `color-scheme`, `gtk-theme` and `icon-theme` so that GTK applications inside Tinkero follow the theme, and GNOME reads the same keys. Tinkero's `omarchy-theme-set-gnome` saves the three pre-existing values to `~/.local/state/tinkero/gnome-interface.saved` the first time it runs in a login session, and removes that file once the values have been restored. Restoration happens at two points, because the first alone is not reliable: `tinkero-gnome-restore.service`, a user unit bound to `graphical-session.target` and ordered `After=dbus.service`, restores on `ExecStop` at Tinkero logout, but whether the session bus and dconf's writer are still reachable at that moment is a teardown race that cannot be settled on paper; so `/etc/xdg/autostart/tinkero-gnome-restore.desktop` (`OnlyShowIn=GNOME;`) runs the same restore at GNOME login whenever the saved file still exists. The autostart entry is the guarantee, the unit is the fast path, and the entry is a no-op on any login where nothing is pending. `tinkero-provision --remove` restores them too.
+- Theme switching needs `org.gnome.desktop.interface` `color-scheme`, `gtk-theme` and `icon-theme` so that GTK applications inside Tinkero follow the theme, and GNOME reads the same keys. Tinkero's `omarchy-theme-set-gnome` saves the three pre-existing values to `~/.local/state/tinkero/gnome-interface.saved` the first time it runs in a login session, and removes that file once the values have been restored. Restoration happens at two points, because the first alone is not reliable: `tinkero-gnome-restore.service`, a user unit that is `PartOf=graphical-session.target` and ordered `After=dbus.service`, restores on `ExecStop` at Tinkero logout. It has **no `[Install]` section and is never enabled**: GNOME activates the same target, and a unit started there would save GNOME's login-time values and undo whatever the user changed during that GNOME session. A `ConditionEnvironment=` guard is not reliable either, because a condition is evaluated once when the start job runs, and whether the session's variables have reached the user manager by then is a race whose loss is silent. Instead the unit is started explicitly from inside the Tinkero session, by `tinkero-provision --session`, which Hyprland's autostart already runs after it has imported the environment. That restore works at logout, but whether the session bus and dconf's writer are still reachable at that moment is a teardown race that cannot be settled on paper; so `/etc/xdg/autostart/tinkero-gnome-restore.desktop` (`OnlyShowIn=GNOME;`) runs the same restore at GNOME login whenever the saved file still exists. The autostart entry is the guarantee, the unit is the fast path, and the entry is a no-op on any login where nothing is pending. `tinkero-provision --remove` restores them too.
 - Documented exception: theme sync into VS Code, Obsidian and the browser edits those applications' own settings, which are visible from GNOME because they are the same applications. That is the feature; upstream's skip toggles are the opt-out, and the README lists them.
 
 ### 4.10 The distro seam
@@ -282,6 +286,36 @@ tinkero_rev=1
 - `hyprland` sets the lower bound and, through its minor version, the upper bound of the RPM requirement. The `Version:` in `distro/fedora/specs/hyprland.spec` is independent and may be newer within the same minor; CI fails if the COPR's Hyprland does not satisfy the lock.
 - `fedora` is the release `install.sh` accepts. On any other release it stops and points at `tinkero-status`.
 - `tinkero_rev` increments whenever patches, replacements or menu overrides change without a tag change.
+
+### 4.13 Branding
+
+**Decision (2026-09-17): nothing a user sees says or shows Omarchy.** Tinkero presents its own name and mark. This also settles most of the trademark question: MIT licenses the code, not Omarchy's name and logo, so Tinkero does not display them.
+
+The line is drawn between what is *seen* and what is an *identifier*:
+
+- **Rebranded (seen in the graphical session):** the logo glyph, the ASCII and image logos, the wordmark wallpaper each theme ships, the About screen, the screensaver, the installer presentation screens, menu labels, keybinding descriptions in the `Super+K` cheat sheet, notifications, tooltips, the GDM session name.
+- **Kept (identifiers):** the `omarchy-*` command names and the `omarchy` CLI, `~/.config/omarchy` and `~/.local/state/omarchy`, `OMARCHY_PATH` and `/usr/share/omarchy`, plugin ids (`omarchy.bar` and so on), the `omarchy` skill's name, the PAM service names, window classes (`org.omarchy.*`). Renaming these would mean patching several hundred files on every bump, would break every upstream plugin, theme and piece of documentation a user might follow, and is exactly the reimplementation this design rejects. `--help` text printed by those commands also stays as upstream in v1.
+
+At `v4.0.4` the seen surface is small and almost entirely data (audit, section 11). It is handled by build-time file replacement, one generated set of images and a short substitution list. Those do change upstream bytes, but none is a diff with a position in a file, so none carries a rebase cost, and each fails loudly when upstream moves:
+
+| Surface | Upstream source | Tinkero handling |
+|---|---|---|
+| Logo in the bar's menu button and beside menu rows | glyph `U+E900` in `default/fonts/omarchy/omarchy.ttf` (`shell/plugins/menu/BarWidget.qml`, menu JSONC) | the font is rebuilt at RPM build time with the Tinkero mark in `U+E900`; every other glyph (the agent logos) is untouched, and no QML or JSONC changes |
+| About screen, screensaver, floating-terminal presentation screens | `icon.txt`, `logo.txt` (copied to `~/.config/omarchy/branding/about.txt` and `screensaver.txt`; upstream already treats these as user-replaceable branding) | replaced by Tinkero's files at build time; `tinkero-provision` seeds the branding directory from them |
+| Image logos | `logo.svg`, `icon.png` | replaced |
+| **Theme wallpapers** | 18 of the 22 themes ship `backgrounds/omarchy.png`: the OMARCHY wordmark in the theme's accent colour on its flat background colour, one entry in each theme's wallpaper rotation. At least six more of the 92 shipped wallpapers carry the wordmark, an upstream house mark or release artwork, in illustrated form or under other names (audit, section 11) | the 18 flat ones are regenerated at build time as `backgrounds/tinkero.png` from the Tinkero wordmark and each theme's own `colors.toml` (`branding/render-wallpapers`, ImageMagick), so no per-theme artwork is needed. Illustrated ones cannot be regenerated and are deleted. Every shipped wallpaper has a row in `branding/images.tsv` (path, sha256, verdict: keep, regenerate or delete) filled in by a person looking at the image; the build fails on a wallpaper with no row, which is how a new upstream image gets looked at |
+| About screen's OS line | `etc/fastfetch/config.jsonc:74` prints "Omarchy <version>" | the relocated config (4.2) is on the substitution list |
+| Plugin metadata | `"author": "Omarchy"` in 28 `shell/plugins/**/manifest.json`, and the menu plugin's `name`, `displayName` and `description` | rewritten by a small JSON transform (`branding/rewrite-manifests`), not by 28 rows: author becomes "Tinkero (from Omarchy)", the menu plugin's strings say Tinkero. Plugin **ids** are identifiers and do not change |
+| Menu | `learn.omarchy` (opens the Omarchy manual as a web app), `update.omarchy` | the first is replaced by a `learn.tinkero` row that opens Tinkero's README in the default browser; the second is already replaced (4.4) |
+| Cheat sheet | two `"Omarchy menu"` binding descriptions in `default/hypr/bindings/utilities.lua` | substitution list: becomes "Tinkero menu" |
+| Notifications and tooltips | the welcome toast ("Super + Space for Omarchy Menu"), `SystemUpdate.qml`'s tooltip, the plugin registry's "reserved for first-party Omarchy plugins" message | welcome toast is Tinkero's own (4.6); the other two are on the substitution list |
+| Session name at GDM | `Name=Omarchy (Hyprland uwsm)` | Tinkero ships its own session file (4.2) |
+
+The substitution list is `branding/strings.tsv` (file, exact upstream string, replacement, expected count), applied with a fixed-string replace during `%install`. **Each row must match exactly its expected count or the build fails** (the count is 1 except where upstream repeats a string, as with the two identical `"Omarchy menu"` descriptions in `utilities.lua`), so an upstream rewording is caught at the bump instead of silently shipping the old name. The branding gate in section 8 covers what a substitution list cannot know about: it greps the payload's QML, JS, Lua, JSON, JSONC and `.desktop` files for the capitalised word inside string literals and fails on anything outside an allowlist (the dev gallery and its window rule, and a title-matching window rule in `default/hypr/apps/system.lua`), and it fails if any file named `*omarchy*` remains under a theme's `backgrounds/`, if a wallpaper in the payload has no row in `branding/images.tsv`, or if one marked delete or regenerate is still present. The font rebuild needs `python3-fonttools` and the wallpapers need `ImageMagick` as `BuildRequires`; both are in Fedora.
+
+**Attribution stays, prominently and deliberately.** The MIT license requires keeping Omarchy's copyright and license text, which ships in `/usr/share/licenses/tinkero/`. Beyond the legal minimum, the README and the About screen say "built on Omarchy" with a link: rebranding the surface is about not presenting someone else's marks as one's own product, not about hiding where the work comes from. `host.md` (4.5) tells the agent the same thing in one paragraph (this desktop is Tinkero; it is built on the Omarchy tree; the commands and paths keep Omarchy's names; say "Tinkero" when talking about the desktop and use the real command names when giving instructions).
+
+Prerequisite that does not exist yet: a Tinkero mark (a monochrome glyph for the font, an SVG wordmark that the wallpapers are rendered from, and ASCII renderings at the two sizes upstream uses). Until it exists, the build uses a plain "T" placeholder glyph and a text wordmark, which is enough for every milestone.
 
 ## 5. Security and privacy
 
@@ -321,7 +355,7 @@ Not required: `alacritty`, `kitty` (installable from the menu), any browser (the
 
 ## 7. Phases
 
-- **Phase 0, spike (1 to 2 days, in a VM).** Fedora 44 Workstation, the existing `agaspar/omedora-4` COPR, the `v4.0.4` tree assembled by hand following the research doc's section 4.4 with the audit's drop list applied. Goal: reach Milestones A and B by hand and answer, with evidence, the questions a reading cannot: does the lock screen authenticate under SELinux, and does each PAM variant lock out after ten failures, counting each failure once, on a host without and with `with-faillock` (4.8); are there AVC denials after a session; does GDM start the uwsm session cleanly; does the GNOME invariant hold with the 4.9 mechanism, and how often does the logout-time restore actually win its race. Output: a short findings note, and a go/no-go on forking the specs. Runs in parallel with FAS and COPR account setup.
+- **Phase 0, spike (1 to 2 days, in a VM).** Fedora 44 Workstation, the existing `agaspar/omedora-4` COPR, the `v4.0.4` tree assembled by hand following the research doc's section 4.4 with the audit's drop list applied. Goal: reach Milestones A and B by hand and answer, with evidence, the questions a reading cannot: does the lock screen authenticate under SELinux, and does each PAM variant lock out after ten failures, counting each failure once, on a host without and with `with-faillock` (4.8); are there AVC denials after a session; does GDM start the uwsm session cleanly; does the GNOME invariant hold with the 4.9 mechanism, and how often does the logout-time restore actually win its race; is the power-key inhibitor granted to an unprivileged session unit (4.2). The step-by-step procedure is `docs/guides/phase-0-spike.md`. Output: a short findings note, and a go/no-go on forking the specs. Runs in parallel with FAS and COPR account setup.
 - **Phase 1, packages.** Create the COPR with `auto_prune` off; fork the specs listed in 4.1; green builds for fedora-44-x86_64. Milestone: `dnf install hyprland quickshell uwsm mise herdr` from the Tinkero COPR on a clean Fedora 44.
 - **Phase 2, the tree.** `.copr/Makefile`, `tinkero.spec.in`, patches, replacements, `pkgmap.tsv`, menu rewrite, PAM file, session file, `tinkero-provision`, `install.sh`, and the four CI gates plus lint (section 8), which are built first because they define done for everything else. Milestones A, B and C (section 8).
 - **Phase 3, maintenance.** `tinkero-status`, the weekly workflow (upstream watch, Qt watch and rebuild trigger), the VM smoke test in CI, the bump checklist exercised once for real. Milestone D.
@@ -338,13 +372,14 @@ Revision 1 numbered its phases from 2 because an earlier "phase 1" (agent layer 
 2. **Dangling-command gate.** Every `omarchy-*`/`tinkero-*` token in the built menu, the Hyprland Lua, the shell's QML/JS and the kept scripts resolves to a file in the payload.
 3. **Name-map gate.** Every literal package name reaching a package wrapper or menu guard has a row in `pkgmap.tsv`.
 4. **Single-copy gate.** `/usr/share/omarchy/bin` contains only symlinks into `/usr/bin`.
+4a. **Branding gate.** No capitalised "Omarchy" inside a string literal in the payload's QML, JS, Lua, JSON, JSONC or `.desktop` files outside the allowlist; no `*omarchy*` file under a theme's `backgrounds/`, and every wallpaper in the payload has a keep row in `branding/images.tsv`; every row of `branding/strings.tsv` matched its expected count during the build (4.13).
 5. **Lint.** `shellcheck` on Tinkero's scripts, `rpmlint` and `rpmspec --parse` on the specs, a JSONC parse of the built menu, and a lock check (COPR's Hyprland and Quickshell satisfy `upstream.lock`).
 6. **VM smoke test** (Phase 3; manual before then). Fedora 44 image: run `install.sh --yes`, provision a fresh user and a user with pre-existing dotfiles, start the session headless, assert `hyprctl configerrors` is empty, `omarchy-shell shell ping` answers, the menu model loads with guards evaluated, zero AVC denials, and a second `install.sh` run changes nothing.
 
 **Milestones** (each is a checklist run on the author's machine or the VM; a milestone passes when every line does):
 
 - **A, agent.** In a Tinkero session: `Super+Shift+Ctrl+A` opens the agent picker, choosing an agent installs it through mise and launches it; the `omarchy` skill and `host.md` are found by the harness; asked to install a package, the agent uses `omarchy pkg add` and it succeeds through dnf.
-- **B, desktop.** Bar, menu (no dead entries; install and remove of one dnf-mapped package round-trips and the guard flips), notifications, lock and unlock with password under SELinux enforcing, idle lock, screenshots with annotation, clipboard history, theme switching; herdr opens on `Super+Ctrl+Return`; voxtype dictates on F9 when installed.
+- **B, desktop.** Nothing on screen says or shows Omarchy (bar button, menu, About including its OS line, screensaver, every theme's wallpaper rotation, cheat sheet, welcome toast, GDM session list), and About credits it. Pressing the power key opens the power menu instead of powering off. Bar, menu (no dead entries; install and remove of one dnf-mapped package round-trips and the guard flips), notifications, lock and unlock with password under SELinux enforcing, idle lock, screenshots with annotation, clipboard history, theme switching; herdr opens on `Super+Ctrl+Return`; voxtype dictates on F9 when installed.
 - **C, plugins (goals 2 and 3).** `omarchy plugin clone` of a built-in widget, an edit, and enable works; a third-party plugin installs with `omarchy plugin add`; the default agent, asked in plain language, builds a new bar widget that appears in the bar without touching package-owned paths.
 - **GNOME invariant (part of B).** Record `gsettings list-recursively org.gnome.desktop.interface`, `xdg-settings get default-web-browser`, `xdg-user-dir` outputs, the default keyring and `~/.bashrc` before install; after install, a Tinkero session with two theme switches, logout, and a GNOME login, they are identical except for the one guarded `~/.bashrc` line. The run is repeated with the Tinkero session ended three ways (menu logout, `loginctl terminate-session`, and a killed compositor), so that the autostart safety net is exercised and not only the `ExecStop` path. After removal (4.11) they are identical.
 - **D, maintenance.** After a simulated upstream tag, `tinkero-status` exits 1 and names it; after a real bump to the next upstream tag, the bump checklist was followed end to end, CI passed, and `dnf upgrade` on a second machine moved the tree and its pins in one transaction with provisioning reporting moved defaults correctly.
@@ -356,7 +391,8 @@ Revision 1 numbered its phases from 2 because an earlier "phase 1" (agent layer 
 - **Hyprland currency.** Omarchy tracks new Hyprland releases within weeks. Mitigation: the pin is an RPM requirement that moves with the tree (4.2); the weekly workflow makes drift visible.
 - **Config drift across bumps.** Migrations are gone. Mitigation: `seeded.tsv` three-way logic and config notes (4.6).
 - **Upstream adds Arch assumptions.** Mitigation: the CI gates and the bump checklist; the seam is measured, not assumed.
-- **Upstream patch conflicts.** Ten small patches; everything else is a separate file or a build-time transform.
+- **Upstream patch conflicts.** Eleven small patches; everything else is a separate file or a build-time transform.
+- **Sleep lock margin.** Without upstream's logind override the lock has five seconds, not fifteen, before suspend (4.2). Measured in Phase 0.
 - **Pinned launcher versus moving agent CLIs.** `omarchy-agent` hard-codes each harness's unattended flag, and `mise up` moves the CLIs. A renamed flag breaks that agent's launch until the next bump. Accepted; the fix is a bump or a one-line local patch carried in `tinkero_rev`.
 - **Fedora major upgrades.** A COPR only serves the releases it was built for. Mitigation: `tinkero-status` warns when the next chroot is missing; owning the specs makes a rebuild hours, not a wait.
 - **GNOME contamination.** Mitigation: the invariant and its test (4.9, section 8). The restore-at-logout unit is subject to a session-teardown race; the restore-at-GNOME-login autostart entry is the guarantee, and the test ends the session three different ways to prove it.
@@ -369,7 +405,7 @@ Nothing here can prevent the machine from booting or logging in: GDM, GRUB, the 
 ## 10. Open questions
 
 1. COPR project name and FAS username (a task for the author, blocking Phase 1 only).
-2. **Branding.** Tinkero presents Omarchy's name, logo font and screensaver art to users. MIT covers the code, not the marks, and nothing in the upstream tree states a position. Ask upstream before the repo is promoted; until then, keep upstream strings (smaller patch set) and credit Omarchy prominently in the README.
+2. **The Tinkero mark.** Branding is decided (4.13: no visible Omarchy name or logo; identifiers keep upstream's names; attribution stays). What is missing is the artwork: a monochrome glyph, an SVG and two ASCII renderings. A placeholder is used until then. A courtesy note to upstream about the project is still worth sending before the repo is promoted, but it no longer blocks anything.
 3. **Confirm the maintenance budget and exit criterion** in 1.1; the numbers are a proposal.
 4. Lock screen mechanism, decided by Phase 0 (4.8).
 5. Which of the hidden installers return first after v1, and whether through dnf, Flathub or upstream repositories (Signal and Spotify are the obvious candidates).
@@ -404,6 +440,7 @@ Decisions from the 2026-09-16 and 2026-09-17 research session, then revision 2 (
 | Distro seam | `distro/fedora/` holds everything host-specific (R2) | Makes the cross-distro tagline honest at no cost |
 | Architecture and GPU | x86_64 only; NVIDIA documented, not supported; RPM Fusion not enabled by the installer (R2) | Scope; enabling a third-party repo is host policy |
 | Repo | Public, `github.com/dromeropa/tinkero`, `~/Projects/tinkero` locally | COPR builds from a public repo; base for others |
+| Branding | No visible Omarchy name or logo; glyph, logos, labels and notifications rebranded by build-time replacement and a must-match substitution list; command names, paths and ids keep upstream's names; attribution kept in license files, README and About (R2, author's decision) | The marks are not covered by MIT; renaming identifiers would be a reimplementation |
 | License | MIT | Compatible with Omarchy's MIT; author may change |
 | Name | Tinkero, tin-KEH-ro | Coined; tinker plus a playful ending; explicitly not an "oma" name |
 | Tagline | "a tinkerable desktop for Hyprland, bring your own distro" | Credits Hyprland; states the cross-distro ambition |
@@ -420,15 +457,18 @@ tinkero/
   install.sh
   .copr/Makefile                   make srpm: fetch, verify, template the spec
   tinkero.spec.in
-  patches/                         the ten patches against the pinned tag
+  patches/                         the eleven patches against the pinned tag
   menu/overrides.jsonc             build-time menu edits
   menu/apply-overrides
+  branding/                        mark (SVG, glyph source), logo.txt, icon.txt, strings.tsv, images.tsv,
+                                   rebuild-font, render-wallpapers, rewrite-manifests
   bin/tinkero-provision
   bin/tinkero-status
   bin/tinkero-update
   config/                          Tinkero's seeded overrides (hypr/bindings.lua, ...)
   config-notes/<tag>.md            per-bump notes shown by tinkero-provision
   systemd/tinkero-gnome-restore.service
+  systemd/tinkero-inhibit-power-key.service
   autostart/tinkero-gnome-restore.desktop
   distro/fedora/
     specs/                         the COPR package specs
@@ -443,6 +483,7 @@ tinkero/
   docs/research/omarchy-research.md
   docs/research/arch-coupling-audit.md
   docs/spec-review.md
+  docs/guides/phase-0-spike.md     the VM spike procedure
   docs/superpowers/specs/          this document
   docs/superpowers/plans/          implementation plans
 ```

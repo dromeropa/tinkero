@@ -417,9 +417,9 @@ Section numbers are those of revision 2.
 | M7 patch versus shim | separate tables, §4.3 |
 | M8 uninstall | §4.11 |
 | M9 cross-distro claim | `distro/` seam, claim corrected, §4.10 |
-| M10 branding | open question 2; **still open** |
+| M10 branding | decided by the author: no visible Omarchy name or logo, identifiers keep upstream's names, attribution kept; §4.13 and the audit §11. Only the Tinkero artwork is outstanding |
 | M11 hardware scope | non-goals, §3 |
 | M12 skill guidance conflict | single `host.md`, no copying into `/usr`, §4.5 |
 | L1 to L7 | phases renumbered (§7); RPM Fusion not enabled (§3, §4.6); extra GDM session documented (§4.2); `install/` handling stated (§4.2); open questions pruned (§10); pinned-launcher risk added (§9). L4 (redundant `OMARCHY_PATH` export) is moot: upstream's env file is shipped as is |
 
-Not resolvable on paper and carried forward: the lock screen under SELinux (Phase 0), the branding question, the author's confirmation of the maintenance budget.
+Not resolvable on paper and carried forward: the lock screen under SELinux (Phase 0; see `docs/guides/phase-0-spike.md`), the Tinkero artwork, the author's confirmation of the maintenance budget.
