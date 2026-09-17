@@ -1,0 +1,37 @@
+#!/bin/bash
+# Developer entry points. Nothing here needs root, make or rpmbuild.
+#   ./dev check      unit tests (hermetic, no network)
+#   ./dev lock       first fetch: record omarchy_sha256 in upstream.lock
+#   ./dev payload    fetch (verified) and assemble the real payload into .cache/payload
+#   ./dev gates      assemble, then run the CI gates against the real payload
+#   ./dev baseline   assemble, then rewrite the allowlists from the findings (review the diff!)
+#   ./dev spec       render tinkero.spec from the template and the lock
+#   ./dev clean
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")"
+payload=.cache/payload; allow=ci/allow
+
+assemble() {
+  local tarball
+  tarball=$(build/fetch-upstream)      # separate statement, so a failed fetch stops the script
+  rm -rf "$payload"
+  build/assemble "$tarball" "$payload"
+}
+gates() {
+  local rc=0
+  ci/gate-single-copy "$payload" || rc=1
+  ci/gate-arch-leak "$payload" "$allow/arch-leak.allow" || rc=1
+  ci/gate-dropped-refs "$payload" build/drop.list "$allow/dropped-refs.allow" || rc=1
+  return $rc
+}
+
+case ${1:-} in
+  check)    tests/run ;;
+  lock)     build/fetch-upstream --record ;;
+  payload)  assemble ;;
+  gates)    assemble; gates ;;
+  baseline) assemble; mkdir -p "$allow"; TINKERO_GATE_WRITE=1 gates ;;
+  spec)     build/render-spec ;;
+  clean)    rm -rf .cache tinkero.spec ;;
+  *)        sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac
