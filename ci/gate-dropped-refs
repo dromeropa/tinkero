@@ -10,7 +10,7 @@ found=$(mktemp); trap 'rm -f "$found"' EXIT
 # Dropped command names = bin/ lines of the drop list that no longer exist in the payload.
 # Globs are expanded against what is NOT there by listing names from the line itself when
 # it has no glob, and by skipping glob lines (their members are caught by name below).
-names=$(grep -E '^bin/' "$droplist" | grep -v '[*?[]' | sed 's|^bin/||' | sort -u)
+names=$(grep -E '^bin/' "$droplist" | grep -v '[*?[]' | sed 's|^bin/||' | sort -u || true)
 globs=$(grep -E '^bin/' "$droplist" | grep '[*?[]' | sed 's|^bin/||' || true)
 : > "$found"
 if [[ -n $names ]]; then

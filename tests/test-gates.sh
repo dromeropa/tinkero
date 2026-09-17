@@ -30,6 +30,20 @@ assert_contains "$out" "usr/share/omarchy/default/menu.jsonc:omarchy-plymouth-se
 printf 'usr/bin/omarchy-caller:omarchy-snapshot\nusr/share/omarchy/default/menu.jsonc:omarchy-plymouth-set\n' > "$d/allow2"
 "$ROOT/ci/gate-dropped-refs" "$p" "$d/drop.list" "$d/allow2" >/dev/null 2>&1; assert_eq "$?" "0" "dropped-refs passes when allowlisted"
 
+# dropped-refs edge cases: all-glob drop list
+printf 'bin/omarchy-plymouth-*\n' > "$d/drop-glob.list"
+: > "$d/allow3"
+out=$("$ROOT/ci/gate-dropped-refs" "$p" "$d/drop-glob.list" "$d/allow3" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" "1" "dropped-refs with all-glob drop list fails on a match"
+assert_contains "$out" "usr/share/omarchy/default/menu.jsonc:omarchy-plymouth-set" "reports the finding"
+
+# dropped-refs edge cases: no bin/ lines
+printf 'migrations\n' > "$d/drop-nobin.list"
+: > "$d/allow4"
+out=$("$ROOT/ci/gate-dropped-refs" "$p" "$d/drop-nobin.list" "$d/allow4" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" "0" "dropped-refs with no bin/ lines passes"
+assert_contains "$out" "PASS" "and reports PASS"
+
 # single-copy
 "$ROOT/ci/gate-single-copy" "$p" >/dev/null 2>&1; assert_eq "$?" "0" "single-copy passes on a correct layout"
 rm "$p/usr/share/omarchy/bin/omarchy-clean"; cp "$p/usr/bin/omarchy-clean" "$p/usr/share/omarchy/bin/omarchy-clean"
