@@ -1,6 +1,10 @@
-# The contract every Tinkero component checks. Bump deliberately; see the design spec, section 4.8.
+# The contract every Tinkero component checks. Bump deliberately; see the design spec, section 4.12.
+# Format: shell-sourceable key=value, no quoting, no expansion.
+# omarchy_sha256 is added by `make lock` when the tarball is first fetched (Phase 2); builds fail without it.
 omarchy_tag=v4.0.4
+omarchy_commit=c668141e9c42b13c80c9ca4ea108e11708c5e8a5
 hyprland=0.56.2
+quickshell=0.3.0^20.git28771c7
 quickshell_commit=28771c7c74b42e20afca0b1b63980cb46515537c
-quickshell=0.3.0
 fedora=44
+tinkero_rev=1

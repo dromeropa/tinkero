@@ -7,6 +7,8 @@
 
 **Basis of this review.** The first pass was a desk review of the documents in this repo. A second pass (same day, at the author's request) verified the open upstream questions against a shallow clone of `omacom/omarchy` at tag `v4.0.4` (commit `c668141e9c42b13c80c9ca4ea108e11708c5e8a5`), plus `dnf repoquery` on a Fedora 44 host, the COPR API and the herdr GitHub releases. The tree was read, never executed. Results are in section 8, and each affected finding carries a **Verified** note. Citations of the form `upstream path:line` refer to that clone. One consequence worth knowing up front: the research doc studied branch `quattro` HEAD, not the tag the spec pins, and they differ in ways that matter (script count, agent roster, skill directories, the Claude browser-extension hook).
 
+**Disposition.** This review is of spec revision 1 (commit `d4c01c7`); line citations refer to that revision. Spec revision 2 and `docs/research/arch-coupling-audit.md` were written in response. How each finding was handled is in the table at the end of this document (section 11).
+
 ---
 
 ## 1. Verdict
@@ -379,3 +381,45 @@ Ordered by how much downstream work each one gates.
 1. **Spike (1 to 2 days, parallel with FAS/COPR account setup):** VM, `omedora-4` COPR, hand-assembled tree per research §4.4, reach Milestones A and B by hand, record every deviation. Produces the audit (question 1) and real data for the PAM, SELinux, GDM and GNOME-coexistence questions.
 2. **Spec revision 2:** add sections for Security, Config lifecycle, Testing and acceptance, Uninstall and rollback, Dependency manifest; rewrite §4.3 from the audit with the replace/patch/drop column; replace versionlock; fix `upstream.lock`; add the "why we overrule the research" rationale and the maintenance budget; renumber phases.
 3. **Then** write the Phase 2a and 2b implementation plans. Phase 3's advisor stays out of scope until questions 4 and H2/H3 have answers.
+
+---
+
+## 11. Disposition in spec revision 2
+
+Section numbers are those of revision 2.
+
+| Finding | Handling in revision 2 |
+|---|---|
+| B1 menu guards | `MenuModel.js` patch, §4.3 |
+| B2 PATH layout | upstream's symlink layout stated in §4.2, enforced by the single-copy CI gate |
+| B3 unaudited scripts | classified audit committed; §4.3 derived from it; Arch-leak gate in §8 |
+| B4 versionlock | replaced by RPM `Requires` generated from the lock, §4.2 |
+| B5 config lifecycle | `tinkero-provision`, hash-tracked seeding, config notes, no `/etc/skel`, §4.6 |
+| B6 security | new §5; installer hygiene (tagged URL, plan, confirmation) in §4.6; advisor deferred to a conditional Phase 5 |
+| B7 mise | packaged in the COPR, §4.1 |
+| H1 research override | new §1.1 with budget and exit criterion (budget awaits the author's confirmation) |
+| H2 Hyprland requirement | `tinkero-status` reports tag and date only, heuristic labelled, §4.7 |
+| H3 status privileges | manual command in v1; AVC check only under `sudo`, §4.7 |
+| H4 Qt coupling | §4.1 "The Qt obligation", weekly Qt watch in §4.7, risk in §9 |
+| H5 GNOME coexistence | invariant and mechanism in §4.9, acceptance test in §8 |
+| H6 COPR retention | `auto_prune` off, §4.1; rollback procedure in §4.11 |
+| H7 dependency manifest | new §6 |
+| H8 testing | new §8: four gates, lint, VM smoke test, milestones A to D including plugins |
+| H9 `upstream.lock` | §4.12; commit, rev and the full Quickshell snapshot version added to the file, sha256 pending the first fetch |
+| H10 menu extension path | build-time rewrite, §4.4 |
+| H11 first-run chain | both scripts replaced; per-step verdicts in the audit §6, summarised in spec §4.6 |
+| M1 build mechanics | COPR SCM with `make srpm`, §4.2 |
+| M2 PAM ownership | RPM-owned file, one of two variants chosen from the authselect profile so that lockout is kept and failures are counted once, §4.8; the fingerprint setup and removal scripts are replaced with authselect-based versions, §4.3 |
+| M3 install flow | preflight, plan, stages, tagged URL, §4.6 |
+| M4 herdr | packaged in the COPR, §4.1 |
+| M5 roster | not enumerated beyond the tag's own list, §4.1; five skill directories, §4.5 |
+| M6 name map | `distro/fedora/pkgmap.tsv`, format and CI gate, §4.3 |
+| M7 patch versus shim | separate tables, §4.3 |
+| M8 uninstall | §4.11 |
+| M9 cross-distro claim | `distro/` seam, claim corrected, §4.10 |
+| M10 branding | open question 2; **still open** |
+| M11 hardware scope | non-goals, §3 |
+| M12 skill guidance conflict | single `host.md`, no copying into `/usr`, §4.5 |
+| L1 to L7 | phases renumbered (§7); RPM Fusion not enabled (§3, §4.6); extra GDM session documented (§4.2); `install/` handling stated (§4.2); open questions pruned (§10); pinned-launcher risk added (§9). L4 (redundant `OMARCHY_PATH` export) is moot: upstream's env file is shipped as is |
+
+Not resolvable on paper and carried forward: the lock screen under SELinux (Phase 0), the branding question, the author's confirmation of the maintenance budget.

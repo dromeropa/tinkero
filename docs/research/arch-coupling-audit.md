@@ -2,7 +2,7 @@
 
 Audit date: 2026-09-17. Subject: `omacom/omarchy` tag `v4.0.4`, commit `c668141e9c42b13c80c9ca4ea108e11708c5e8a5`, read from a shallow clone. Nothing from the tree was executed.
 
-Purpose: size and classify the seam between the distro-neutral Omarchy tree and its Arch substrate, so that the Tinkero spec's shim table (design spec §4.3), menu overrides (§4.4) and provisioning (§4.6) are derived rather than asserted. This is the audit called for by finding B3 of `docs/spec-review.md`.
+Purpose: size and classify the seam between the distro-neutral Omarchy tree and its Arch substrate, so that the Tinkero spec's patch and replacement tables (design spec §4.3), menu overrides (§4.4) and provisioning (§4.6) are derived rather than asserted. This is the audit called for by finding B3 of `docs/spec-review.md`.
 
 This document describes the **pinned tag**. `docs/research/omarchy-research.md` describes `quattro` HEAD one day later; where the two disagree (script count, agent roster, skill directories, the Claude browser-extension hook), this document wins for anything Tinkero builds against `v4.0.4`.
 
@@ -20,9 +20,17 @@ Tier 2 pattern over `bin/` only, for host-policy coupling that is not package to
 sddm|plymouth|\bdocker\b|/boot/|locale-gen|\bAUR\b
 ```
 
+Tier 3 pattern over `bin/`, for scripts that write system configuration by hand (added after review, because tiers 1 and 2 missed the security scripts that `sed` PAM files):
+
+```
+(sudo|pkexec|as_root)[^|]*(tee|sed -i|install|cp|rm|mv|ln)[^|]* /etc/|/etc/pam\.d|/etc/sudoers
+```
+
+Counts for tiers 2 and 3 are given net of files already caught by an earlier tier.
+
 Then: every `omarchy-install-*` script was classified by the installer it calls; the default menu (`default/omarchy/omarchy-menu.jsonc`) was parsed and grouped by id prefix; the first-run and user-provisioning chain was read end to end; and the commands bound in `default/hypr/bindings/*.lua` were cross-checked against everything marked *drop*.
 
-Limits: a grep audit finds named tools, not assumptions (a script that expects `/etc/pacman.d` to exist without naming pacman would be missed). Scripts that only call the `omarchy-pkg-*` wrappers are coupled *through* the wrappers and are correct once the shims and the name map are correct; they are counted, not listed. The CI gate in §8 exists to catch what this pass missed and what upstream adds later.
+Limits: a grep audit finds named tools, not assumptions (a script that expects `/etc/pacman.d` to exist without naming pacman would be missed). Scripts that only call the `omarchy-pkg-*` wrappers are coupled *through* the wrappers and are correct once the replacement wrappers and the name map are correct; they are counted, not listed. The CI gate in §8 exists to catch what this pass missed and what upstream adds later.
 
 ## 2. Verdict vocabulary
 
@@ -32,14 +40,15 @@ Limits: a grep audit finds named tools, not assumptions (a script that expects `
 | **patch** | Small diff against the upstream file | rebase; this is the number to keep small |
 | **drop** | Not installed | none; needs its menu entries and bindings removed too |
 | **hide** | Script ships (harmless or unreachable) but its menu entry is removed | none |
-| **keep** | Ships unmodified; the hit is a comment, a portable tool, or reachable only through a shim | none |
+| **keep** | Ships unmodified; the hit is a comment, a portable tool, or reachable only through a replaced wrapper | none |
 
 ## 3. Totals
 
 | Area | Files | Tier 1 hits | Notes |
 |---|---|---|---|
 | `bin/` | 444 | 50 | 38 are `omarchy-install-*`; 66 scripts call the `omarchy-pkg-*` wrappers (10 of them are also among the 50) |
-| `bin/` tier 2 only | | 19 | plymouth, sddm, docker, direct boot, Windows VM |
+| `bin/` tier 2 only | | 19 (34 raw, 15 already in tier 1) | plymouth, sddm, docker, direct boot, Windows VM, the `omarchy` dispatcher |
+| `bin/` tier 3 only | | 11 (18 raw, 7 already in tier 1 or 2) | hand edits of `/etc/pam.d`, sudoers, `/etc/supergfxd.conf`, browser policy, `/etc/omarchy.conf` |
 | `shell/` | | 1 | `plugins/menu/MenuModel.js` |
 | `default/` | | 12 | 5 are Arch-only payload that is not installed |
 | `config/` | | 1 | a sample hook |
@@ -71,13 +80,13 @@ Resulting patch set (the rebase cost): **10 small patches**, listed in §9. Ever
 | `omarchy-update-available` | replace | exit 1 (nothing available), so the bar's update indicator stays off. **Not in spec rev 1** |
 | `omarchy-update-system-pkgs`, `-system-pkgs-when-conflicted`, `-aur-pkgs`, `-orphan-pkgs`, `-keyring`, `-pkg-prune`, `-pacman-guard`, `-restart` | drop | only reachable from `omarchy-update` |
 | `omarchy-update-confirm`, `-analyze-logs`, `-lock`, `-requires-free-space`, `-status`, `-stay-awake`, `-user-notify`, `-dev` | drop | same; no tier 1 hit but dead without `omarchy-update` |
-| `omarchy-update-mise`, `omarchy-update-firmware`, `omarchy-update-time` | keep | `mise up`, `fwupdmgr`, `timedatectl`; portable. Menu entries `update.firmware`, `update.time` stay |
+| `omarchy-update-mise`, `omarchy-update-firmware`, `omarchy-update-time` | keep | `mise up`, `fwupdmgr`, `timedatectl`; portable. Menu entries `update.firmware`, `update.time` stay. `omarchy-update-firmware:14` copies `fwupdx64.efi` to `/boot/EFI/arch/` when `/usr/lib/fwupd/efi/fwupdx64.efi` exists; Fedora ships that file under a different path, so the branch does not run, but it is on the allowlist with this note rather than assumed portable |
 | `omarchy-channel-current`, `omarchy-channel-set`, `omarchy-version-channel` | replace | print `tinkero`; `-set` refuses |
 | `omarchy-version` | patch | one line reads the pacman package version; read `/usr/share/omarchy/version` and append the Tinkero RPM release |
 | `omarchy-version-pkgs` | replace | last `dnf` transaction time from `dnf history` |
 | `omarchy-migrate`, `omarchy-upgrade-to-quattro` | drop | migrations are a non-goal; `omarchy-migrate-notify.service` is dropped with them |
 | `omarchy-refresh-pacman`, `omarchy-refresh-limine` | drop | |
-| `omarchy-reinstall-configs` | patch | remove the `omarchy-refresh-limine` call (line 21); otherwise the documented "reset my configs" rollback works as upstream |
+| `omarchy-reinstall-configs` | patch | upstream's body is `cp -af /etc/skel/. ~/` (line 19) followed by `omarchy-refresh-limine` and `omarchy-refresh-plymouth` (lines 21-22). Tinkero ships no `/etc/skel` and drops both refresh scripts, so all three lines are replaced by one call to `tinkero-provision --reset-all`, keeping the command name the `omarchy` skill documents as the rollback |
 | `omarchy-upload-log` | drop | uploads to `logs.omarchy.org`; Tinkero must not send a Fedora user's logs to Omarchy's service |
 | `omarchy-debug` | patch | package inventory via `rpm -qa --qf`, Omarchy package line via `rpm -q tinkero` |
 
@@ -88,16 +97,22 @@ Resulting patch set (the rebase cost): **10 small patches**, listed in §9. Ever
 | `omarchy-snapshot` | drop | snapper + Limine |
 | `omarchy-system-factory-reset`, `-finish`, `omarchy-provision-owner` | drop | ISO-installed Arch machines only; destructive |
 | `omarchy-hibernation-setup`, `-remove` | drop | `mkinitcpio` and Limine resume hooks |
-| `omarchy-hibernation-available` | replace (stub) | returns false, so the `system.hibernate` menu row hides itself through its own guard |
+| `omarchy-hibernation-available` | replace (stub) | returns false, so the `system.hibernate` menu row hides itself through its own guard. Upstream's test would also come out false on Fedora, but it names `mkinitcpio` paths and would trip the Arch-leak gate; a two-line stub is cheaper than an allowlist entry |
 | `omarchy-setup-direct-boot` | drop | UKI/EFI boot entries for Arch |
 | `omarchy-plymouth-*` (7), `omarchy-refresh-plymouth`, `omarchy-refresh-sddm` | drop | spec rev 1 already drops plymouth and sddm theming; outside their own family they are reachable only from the menu (`style.unlock`, `update.config.plymouth`), and `omarchy-theme-set` does not call them |
-| `omarchy-setup-security-fingerprint` | replace | upstream runs `sudo pacman -S libfprint-git fprintd usbutils` directly. Tinkero version: `dnf install fprintd fprintd-pam`, `fprintd-enroll`, `authselect enable-feature with-fingerprint`, then `omarchy-apply-lock` |
+| `omarchy-setup-security-fingerprint` | replace | upstream runs `sudo pacman -S libfprint-git fprintd usbutils` directly and inserts `pam_fprintd.so` into `/etc/pam.d/sudo` and `polkit-1` with `sed -i`, which authselect owns on Fedora. Tinkero version: `dnf install fprintd fprintd-pam`, `fprintd-enroll`, `authselect enable-feature with-fingerprint`, then `omarchy-apply-lock` |
+| `omarchy-remove-security-fingerprint` | replace | upstream `sed -i`s the same PAM files (lines 11-19), removes the lock fingerprint file and drops the packages. Tinkero version: `authselect disable-feature with-fingerprint`, `omarchy-apply-lock` (which removes the fingerprint PAM file when no enrolment remains), `omarchy-pkg-drop fprintd-pam`. Reachable from `remove.security.fingerprint` as soon as `fprintd` is installed, so it cannot ship as is. **Found by tier 3** |
+| `omarchy-setup-security-fido2`, `omarchy-remove-security-fido2` | drop (v1) | insert and delete `pam_u2f.so` lines in `/etc/pam.d/sudo` and `polkit-1` with `sed -i`. The Fedora-native route is `authselect enable-feature with-pam-u2f`; until that replacement is written, the scripts and their menu entries are removed |
+| `omarchy-sudo-passwordless` | drop | writes a sudoers drop-in; Tinkero adds no sudoers entries (spec section 5) |
+| `omarchy-toggle-hybrid-gpu` | drop | writes `/etc/supergfxd.conf` and a systemd drop-in for `supergfxd`, which Fedora does not package; its menu row is hardware-guarded but the script cannot work |
+| `omarchy-dev-link`, `omarchy-dev-unlink`, `omarchy-dev-status` | drop | write `/etc/omarchy.conf` so that `OMARCHY_PATH` points at a checkout in a home directory. Under RPM the tree is package-owned; a root-level redirect of it is developer tooling for upstream's workflow and a needless privileged surface here |
+| `omarchy-remove-browser` | keep | removes browser policy files under `/etc/opt/*/policies` and `/etc/brave` that `omarchy-theme-set-browser-policy` may have written; paths are distro-neutral and the action is user-invoked |
 | `omarchy-setup-security-sshd`, `omarchy-remove-security-sshd` | replace | `firewall-cmd --add-service=ssh` instead of `ufw`; otherwise the same |
-| `omarchy-apply-lock` | patch | write Fedora-shaped PAM (`auth`/`account include system-auth`); keep upstream's target-user logic (lines 15-19) |
+| `omarchy-apply-lock` | patch | upstream writes the password PAM file inline (an Arch-shaped stack with its own `pam_faillock` lines and `account include system-local-login`). Tinkero's password file is RPM-owned (spec §4.8), so the patch reduces the script to managing the fingerprint file; upstream's target-user logic (lines 15-19) is kept |
 | `omarchy-install-service-sunshine`, `omarchy-remove-service-sunshine` | drop | ufw rules plus AUR package |
 | `omarchy-windows-vm`, `omarchy-sudo-docker`, `omarchy-setup-security-sudoless-docker`, `omarchy-remove-security-sudoless-docker`, `omarchy-install-docker-dbs` | drop | Docker and the Windows VM are non-goals |
 | `omarchy-launch-docker-tui` | keep | launches `lazydocker` if present; its `Super+Shift+D` binding is inside the preinstalled-bindings gate (§7) |
-| `omarchy-dev-link` | keep | only mentions sddm in a comment path; developer tool |
+| `omarchy` (the CLI dispatcher) | keep | tier 2 hit on its group descriptions only. `omarchy help` will still list groups whose commands are all dropped (plymouth, windows, hibernation, snapshot, games); cosmetic, accepted, not worth a patch |
 
 ### 4.4 The `omarchy-install-*` family (38 scripts)
 
@@ -108,12 +123,12 @@ All but six go through `omarchy-pkg-add`, so the *script* is portable and the qu
 | Generic installers | `install-app`, `install-and-launch`, `install-terminal`, `install-font`, `install-browser`, `install-editor-helix`, `install-editor-vscode`, `install-editor-zed` | keep; works through the name map. `install-browser` also calls `omarchy-pkg-aur-add` for AUR-only browsers, which the stub refuses cleanly |
 | `install-editor-emacs` | AUR only | hide |
 | Dev environments | `install-dev-env` (mise plus a few `omarchy-pkg-add` calls) | keep; name map needs the handful of `-devel` packages it asks for |
-| Agent CLIs | `install-hermes-cli` | patch: drop the `omarchy-pkg-present hermes-desktop` hand-over branch, keep the pipx/mise path |
+| Agent CLIs | `install-hermes-cli` | patch: drop the `omarchy-pkg-present hermes-desktop` hand-over branch, keep the pipx/mise path. The branch would already evaluate false through the replaced `omarchy-pkg-present`; it is removed anyway so that the script does not depend on a name-map row for a package Tinkero never offers |
 | | `install-openclaw-cli` | drop; pacman package. Remove `openclaw` from the agent picker |
 | AI desktop apps | `install-ai-chatgpt`, `-hermes`, `-openclaw`, `-t3-code` | hide in v1 (decision: no Flatpak remapping in the first release) |
 | Chromium helpers | `install-chromium-copy-url`, `-google-account`, `-ytdlp` | keep, but not run automatically (see §6); they write native-messaging hosts under `~/.config/chromium`, harmless without Chromium |
 | Services | `install-service-1password`, `-dropbox`, `-nordvpn`, `-once`, `-signal`, `-spotify`, `-tailscale` | hide in v1. `signal` and `spotify` have Flathub ids and are the first candidates to bring back |
-| Gaming (9) | `install-gaming-*` | drop; non-goal. `retroarch` also calls pacman directly |
+| Gaming (9) | `install-gaming-*`, and the matching `omarchy-remove-gaming-*` | drop; non-goal. `retroarch` also calls pacman directly; the Xbox controller pair writes udev and modprobe files under `/etc` |
 | `install-preinstalls` | reinstalls Omarchy's default app set | drop |
 
 ### 4.5 Remaining tier 1 hits
@@ -150,7 +165,7 @@ All but six go through `omarchy-pkg-add`, so the *script* is portable and the qu
 | GTK bookmarks (`:110-114`) | adds Downloads, Projects, Pictures, Videos to `~/.config/gtk-3.0/bookmarks` | drop; shared with GNOME's Files |
 | `install/user/theme.sh` | first `omarchy-theme-set` | keep |
 | `install/user/chromium.sh` | installs two Chromium native-messaging helpers | drop from the automatic chain |
-| `install/user/git.sh`, `xcompose.sh` | git aliases and identity prompts; `~/.XCompose` | adapt: only when the target file does not exist |
+| `install/user/git.sh`, `install/user/xcompose.sh` | `git config --global` aliases and identity; writes `~/.XCompose` | adapt: these are commands, not file copies, so the seeding rules do not cover them. `git.sh` runs only when `~/.gitconfig` and `~/.config/git/config` are both absent; `xcompose.sh` only when `~/.XCompose` is absent |
 | `install/user/mise-work.sh` | `~/Work` with a mise config | keep (`omarchy-agent` starts in `~/Work`) |
 | `install/user/hardware/*` (5) | ASUS, Dell XPS, Framework 13 audio, nouveau cursor fixes; each self-detects | keep; they are no-ops on other hardware and only touch user-level PipeWire/Hyprland config |
 | `install/user/default-keyring.sh` | creates an **unencrypted, never-locking** `Default_keyring` and makes it default if no default exists | **drop**: GDM's PAM stack unlocks the login keyring, which is the reason the spec keeps GDM |
@@ -158,10 +173,10 @@ All but six go through `omarchy-pkg-add`, so the *script* is portable and the qu
 | Default browser `chromium.desktop`, `mailto` to `HEY.desktop` (`:119-120`) | | **drop**: global to the account, affects GNOME |
 | `omarchy-refresh-applications` | copies Omarchy's `.desktop` launchers (web apps, TUIs) into `~/.local/share/applications` | adapt: TUI launchers only; web-app launchers are a non-goal and would appear in GNOME's overview |
 | post-update hooks: voxtype invitation, fingerprint setup, agent setup (`omarchy-provision-first-run:70-75`) | installed as `post-update` hooks, which fire after `omarchy-update`. With `omarchy-update` stubbed they **never fire** | adapt: `tinkero-provision` sends the "Set your default agent" notification itself on first session; the other two are left to the menu |
-| `enable-user-units.sh` | enables six user units including `omarchy-migrate-notify` | adapt: the five kept units plus nothing else (the status timer is not in v1) |
-| `gnome-theme.sh`, `gtk-primary-paste.sh` | `gsettings set org.gnome.desktop.interface ...` | **drop**; see the theme note below |
-| `audio-tuning.sh` | speaker EQ presets for known laptops | keep |
-| `welcome.sh`, `wifi.sh` | welcome toast; "connect Wi-Fi, then run updates" toast that points at `omarchy update` | adapt: Tinkero welcome toast only |
+| `install/user/first-run/enable-user-units.sh` | enables six user units including `omarchy-migrate-notify` | adapt: the five kept units plus nothing else (the status timer is not in v1) |
+| `install/user/first-run/gnome-theme.sh`, `gtk-primary-paste.sh` | `gsettings set org.gnome.desktop.interface ...` | **drop**; see the theme note below |
+| `install/user/first-run/audio-tuning.sh` | speaker EQ presets for known laptops | keep |
+| `install/user/first-run/welcome.sh`, `wifi.sh` | welcome toast; "connect Wi-Fi, then run updates" toast that points at `omarchy update` | adapt: Tinkero welcome toast only |
 
 **Theme switching writes shared GNOME state.** `omarchy-theme-set` calls `omarchy-theme-set-gnome` (lines 21-33), which sets `color-scheme`, `gtk-theme` and `icon-theme` in dconf on every switch. GTK apps inside the Tinkero session need those keys to follow the theme, and the GNOME session reads the same keys. Verdict: **replace `omarchy-theme-set-gnome`** with a version that saves the three pre-existing values to `~/.local/state/tinkero/gnome-interface.saved` the first time it runs in a login session, and ship a `graphical-session.target`-bound user unit whose `ExecStop` restores them at Tinkero logout. `omarchy-theme-set-vscode`, `-obsidian` and `-browser` edit application settings that are equally visible from GNOME; they stay enabled (that is the feature) and are documented, with upstream's existing skip toggles (`omarchy-toggle-enabled skip-vscode-theme-changes` and friends) as the opt-out.
 
@@ -180,14 +195,14 @@ Build-time menu edits (`menu/overrides.jsonc`, applied by `menu/apply-overrides`
 
 | Operation | Ids |
 |---|---|
-| delete prefix | `install.package`, `install.aur`, `install.webapp`, `install.gaming`, `install.windows`, `install.preinstalls`, `install.ai` (v1), `install.service` (v1), `install.editor.emacs`, `remove.package`, `remove.webapp`, `remove.gaming`, `remove.windows`, `remove.preinstalls`, `remove.ai`, `remove.service`, `update.omarchy`, `update.channel`, `update.config.plymouth`, `setup.direct-boot`, `setup.reset`, `style.unlock` |
+| delete prefix | `install.package`, `install.aur`, `install.webapp`, `install.gaming`, `install.windows`, `install.preinstalls`, `install.ai` (v1), `install.service` (v1), `install.editor.emacs`, `remove.package`, `remove.webapp`, `remove.gaming`, `remove.windows`, `remove.preinstalls`, `remove.ai`, `remove.service`, `update.omarchy`, `update.channel`, `update.config.plymouth`, `setup.direct-boot`, `setup.reset`, `style.unlock`, `setup.default.agent.openclaw`, `setup.security.fido2`, `remove.security.fido2`, `setup.security.passwordless-sudo`, `setup.security.sudoless-docker`, `remove.security.sudoless-docker`, `trigger.hardware.hybrid-gpu` |
 | delete ids whose action names a dropped script | computed at build time from the drop list, so a new upstream entry that calls a dropped script fails the build instead of shipping dead |
 | replace | `update.omarchy` is re-added as "Update (dnf + mise)" running `omarchy-launch-floating-terminal-with-presentation tinkero-update`, a four-line script: `sudo dnf upgrade`, `mise up` |
 | keep | `install.tui`, `install.style`, `install.development`, `install.editor` (minus emacs), `install.terminal`, `install.browser`, and their `remove.*` mirrors, all through the name map |
 
-That removes roughly 95 of the 151 install/remove entries and about 10 others.
+The prefix list removes 76 of the 333 entries (counted against the `v4.0.4` file); deletion by action removes whatever else still points at a dropped script.
 
-**Keybindings.** Every command bound in `default/hypr/bindings/*.lua` survives the drop list except none: the only bound command that touches a dropped area is `omarchy-launch-docker-tui`, which is kept. The web-app and third-party-app chords (`Super+Shift+{M,G,O,W,/}` and the web-app set) all sit inside `if o.preinstalled_bindings_enabled()` (`applications.lua:10`). Tinkero's seeded `~/.config/hypr/bindings.lua` sets `omarchy_preinstalled_bindings = false` and re-adds the four that make sense on any host (browser, file manager, editor, Docker TUI). `omarchy-launch-browser` uses `xdg-settings get default-web-browser`, so it launches Firefox on a stock Fedora without changes; `omarchy-launch-webapp` falls back to Chromium and is unreachable once the web-app chords and menu entries are gone.
+**Keybindings.** Every command bound in `default/hypr/bindings/*.lua` survives the drop list except none: the only bound command that touches a dropped area is `omarchy-launch-docker-tui`, which is kept. The web-app and third-party-app chords (`Super+Shift+{M,G,O,W,/}` and the web-app set) all sit inside `if o.preinstalled_bindings_enabled()` (`applications.lua:10`). The essential bindings (terminal, browser, file manager, editor) are declared before that gate (lines 2-8) and are unaffected. Inside the gate (lines 10-34), three are host-neutral and have their program available: tmux (`Super+Alt+Return`, line 12), **herdr (`Super+Ctrl+Return`, line 13)** and the Docker TUI (`Super+Shift+D`, line 16). Tinkero's seeded `~/.config/hypr/bindings.lua` sets `omarchy_preinstalled_bindings = false` and re-adds exactly those three. A fourth terminal program in the gate, the `cliamp` music TUI (`Super+Shift+Alt+M`, line 15), is left out because `cliamp` exists only in Omarchy's package repo and Tinkero's COPR does not build it; it is the first candidate if the COPR grows. `omarchy-launch-browser` uses `xdg-settings get default-web-browser`, so it launches Firefox on a stock Fedora without changes; `omarchy-launch-webapp` falls back to Chromium and is unreachable once the web-app chords and menu entries are gone.
 
 ## 8. CI gate derived from this audit
 
@@ -215,7 +230,7 @@ Ten files carry a diff against upstream and therefore a rebase cost on each bump
 
 Spec rev 1 also listed `bin/omarchy-agent-crash` as needing a debuginfod patch. At `v4.0.4` that script contains no debuginfod URL (it only builds the prompt and names the skill path), so it ships unmodified.
 
-Replacements (Tinkero's own files under upstream names, no rebase): 21 scripts, listed in §4 and §6. Dropped: about 75 scripts. Kept unmodified: about 340 of 444.
+Replacements (Tinkero's own files under upstream names, no rebase): 21 scripts, listed in §4 and §6 (thirteen package, update, channel and version scripts in §4.1-4.2, counting each name; `omarchy-hibernation-available`; the two fingerprint and two sshd scripts; `omarchy-theme-set-gnome`; the two provisioning scripts). Dropped: about 85 scripts. Kept unmodified: about 330 of 444.
 
 ## 10. Bump checklist additions
 

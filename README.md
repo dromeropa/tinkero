@@ -8,7 +8,7 @@ It is pronounced tin-KEH-ro. It is deliberately not an "omakase" project: Omarch
 
 ## Status
 
-Design stage. See [`docs/superpowers/specs/2026-09-17-tinkero-design.md`](docs/superpowers/specs/2026-09-17-tinkero-design.md) for the architecture and the decision log, and [`docs/research/omarchy-research.md`](docs/research/omarchy-research.md) for the research on Omarchy it is based on.
+Design stage, spec revision 2. See [`docs/superpowers/specs/2026-09-17-tinkero-design.md`](docs/superpowers/specs/2026-09-17-tinkero-design.md) for the architecture and the decision log, [`docs/research/omarchy-research.md`](docs/research/omarchy-research.md) for the research on Omarchy it is based on, [`docs/research/arch-coupling-audit.md`](docs/research/arch-coupling-audit.md) for the classified audit of the pinned upstream tag, and [`docs/spec-review.md`](docs/spec-review.md) for the review that led to revision 2.
 
 ## Principles
 
