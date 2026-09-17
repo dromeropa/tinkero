@@ -19,7 +19,7 @@ Conflicts:      omedora-settings
 # Hard requirements (design spec 6). Weak ones are added with the features that use them.
 Requires:       uwsm xdg-desktop-portal-hyprland xdg-desktop-portal-gtk hyprland-guiutils hyprsunset hyprpicker lua
 Requires:       qt6-qtwayland qt6-qtmultimedia qt6-qtimageformats qt6-qtsvg gtk4-layer-shell
-Requires:       fontawesome-fonts-all yaru-icon-theme
+Requires:       fontawesome-fonts-all yaru-icon-theme tinkero-nerd-fonts
 Requires:       polkit gnome-keyring pipewire wireplumber pipewire-pulseaudio pamixer brightnessctl
 Requires:       power-profiles-daemon bluez NetworkManager udiskie socat inotify-tools jq gum git-core
 Requires:       foot xdg-terminal-exec tmux herdr mise
