@@ -62,7 +62,7 @@ fi
 # 4. Relocate the two etc/ files Tinkero keeps, then drop the rest of etc/.
 install -Dm 0644 "$tree/etc/fastfetch/config.jsonc" "$dest/usr/share/tinkero/fastfetch/config.jsonc"
 install -Dm 0644 "$tree/etc/mise/conf.d/omarchy.toml" "$dest/etc/mise/conf.d/omarchy.toml"
-rm -rf "$tree/etc"
+rm -rf "${tree:?}/etc"
 
 # 5. System files that live outside the tree.
 install -Dm 0644 "$tree/default/uwsm/env.d/10-omarchy" "$dest/usr/share/uwsm/env.d/10-omarchy"
@@ -85,4 +85,4 @@ done
 for f in "$root"/bin/tinkero-*; do
   [[ -f $f ]] && install -m 0755 "$f" "$dest/usr/bin/$(basename "$f")"
 done
-echo "assembled $(ls "$dest/usr/bin" | wc -l) commands into $dest"
+echo "assembled $(find "$dest/usr/bin" -mindepth 1 -maxdepth 1 | wc -l) commands into $dest"

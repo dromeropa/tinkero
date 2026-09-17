@@ -1,3 +1,4 @@
+#!/bin/bash
 source "$(dirname "$0")/lib.sh"
 d=$(mktmp)
 cat > "$d/lock" <<'L'

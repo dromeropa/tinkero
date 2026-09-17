@@ -1,3 +1,4 @@
+#!/bin/bash
 source "$(dirname "$0")/lib.sh"
 d=$(mktmp); p=$d/dest
 mkdir -p "$p/usr/bin" "$p/usr/share/omarchy/bin" "$p/usr/share/omarchy/default"
@@ -26,7 +27,7 @@ out=$("$ROOT/ci/gate-dropped-refs" "$p" "$d/drop.list" "$d/allow2" 2>&1) && rc=0
 assert_eq "$rc" "1" "dropped-refs fails on a call to a dropped command"
 assert_contains "$out" "usr/bin/omarchy-caller:omarchy-snapshot" "reports path:command"
 assert_contains "$out" "usr/share/omarchy/default/menu.jsonc:omarchy-plymouth-set" "expands drop-list globs"
-[[ $out != *omarchy-snapshot-helper* ]] && ok "does not match a longer command name" || not_ok "does not match a longer command name" "$out"
+if [[ $out != *omarchy-snapshot-helper* ]]; then ok "does not match a longer command name"; else not_ok "does not match a longer command name" "$out"; fi
 printf 'usr/bin/omarchy-caller:omarchy-snapshot\nusr/share/omarchy/default/menu.jsonc:omarchy-plymouth-set\n' > "$d/allow2"
 "$ROOT/ci/gate-dropped-refs" "$p" "$d/drop.list" "$d/allow2" >/dev/null 2>&1; assert_eq "$?" "0" "dropped-refs passes when allowlisted"
 

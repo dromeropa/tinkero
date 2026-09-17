@@ -1192,7 +1192,15 @@ If any script changed to satisfy ShellCheck, re-run `./dev check && ./dev gates`
 
 ## Deviations
 
-(empty at the time of writing; Task 7, Step 3 appends here)
+- `build/assemble`: `rm -rf "$tree/etc"` became `rm -rf "${tree:?}/etc"` (ShellCheck SC2115: guard against the var ever being empty and expanding to `/etc`).
+- `build/assemble`: the final `ls "$dest/usr/bin" | wc -l` became `find "$dest/usr/bin" -mindepth 1 -maxdepth 1 | wc -l` (ShellCheck SC2012).
+- `build/lib.sh`, `ci/lib-gate.sh`, `tests/lib.sh`: added a leading `# shellcheck shell=bash` directive; these files are meant to be sourced, not executed, so they have no shebang and ShellCheck otherwise cannot tell what dialect to check them as (SC2148).
+- `ci/lib-gate.sh`: the two `sed 's/^/  /' <<<"$var"` indent helpers became `echo "  ${var//$'\n'/$'\n'  }"` (ShellCheck SC2001, pure bash instead of a sed subprocess, same output).
+- `tests/lib.sh`: the `ROOT` variable is set here but only read by scripts that source this file (`tests/test-lock.sh` uses `$ROOT/build/lib.sh`), so ShellCheck flags it as unused in isolation; added `# shellcheck disable=SC2034` with a reason (SC2034).
+- `tests/lib.sh` and `tests/test-gates.sh`: the `assert_*` one-liners and one inline check used the `cond && ok ... || not_ok ...` pattern; rewritten as `if/then/else` (ShellCheck SC2015: the `||` branch could in principle also run if `ok` itself failed).
+- `tests/test-assemble.sh`, `tests/test-fetch.sh`, `tests/test-gates.sh`, `tests/test-lock.sh`, `tests/test-render-spec.sh`: added a `#!/bin/bash` shebang; they are only ever run via `bash "$t"` from `tests/run`, so the shebang is inert, but ShellCheck needs one to know the dialect when the file is a scan target on its own (SC2148).
+- `tests/test-lock.sh`: added `# shellcheck disable=SC2016` with a reason above the line that intentionally single-quotes `$(touch %s/pwned)` so it stays literal text for the lock parser to (correctly) not execute (SC2016).
+- CI workflow tested locally against a `fedora:44` container (docker) before each push, since none of ShellCheck/rpmlint/rpmspec/make/rpm-build exist on this workstation; the SRPM `git archive` step only works from a real git clone or checkout, not from a git worktree whose `.git` is a pointer file to a host path outside the container mount (a local-testing artifact only, not relevant to `actions/checkout@v4` in CI).
 
 ## What this plan deliberately leaves out
 

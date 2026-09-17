@@ -1,3 +1,4 @@
+#!/bin/bash
 source "$(dirname "$0")/lib.sh"
 d=$(mktmp); tb=$("$ROOT/tests/fixtures/make-tree.sh" "$d/src")
 c=0123456789abcdef0123456789abcdef01234567

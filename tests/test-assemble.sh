@@ -1,3 +1,4 @@
+#!/bin/bash
 source "$(dirname "$0")/lib.sh"
 d=$(mktmp); tb=$("$ROOT/tests/fixtures/make-tree.sh" "$d/src")
 # a private repo root so the test controls drop.list, patches and replacements

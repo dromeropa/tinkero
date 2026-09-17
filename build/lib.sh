@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Shared helpers for build/ and ci/ scripts. Source, do not execute.
 
 # lock_get KEY [FILE]: print the value of KEY from upstream.lock.
