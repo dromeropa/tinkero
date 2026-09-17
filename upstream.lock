@@ -1,0 +1,6 @@
+# The contract every Tinkero component checks. Bump deliberately; see the design spec, section 4.8.
+omarchy_tag=v4.0.4
+hyprland=0.56.2
+quickshell_commit=28771c7c74b42e20afca0b1b63980cb46515537c
+quickshell=0.3.0
+fedora=44
