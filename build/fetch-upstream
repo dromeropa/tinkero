@@ -1,0 +1,31 @@
+#!/bin/bash
+# fetch-upstream [--record]: download the upstream tarball for omarchy_commit
+# into .cache/ and verify it against omarchy_sha256 in upstream.lock.
+# --record writes the checksum into the lock when it has none (first fetch only).
+# Prints the tarball path on success.
+set -euo pipefail
+here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+root=${TINKERO_ROOT:-$(dirname "$here")}
+# shellcheck source=build/lib.sh
+source "$here/lib.sh"
+lock=${TINKERO_LOCK:-$root/upstream.lock}
+record=0; [[ ${1:-} == --record ]] && record=1
+
+commit=$(lock_get omarchy_commit "$lock")
+[[ $commit =~ ^[0-9a-f]{40}$ ]] || die "omarchy_commit is not a full commit id: $commit"
+url=${TINKERO_UPSTREAM_URL:-https://github.com/omacom/omarchy/archive/$commit.tar.gz}
+out=${TINKERO_CACHE:-$root/.cache}/omarchy-$commit.tar.gz
+mkdir -p "$(dirname "$out")"
+[[ -f $out ]] || curl -fsSL --retry 3 -o "$out.part" "$url" && { [[ -f $out.part ]] && mv "$out.part" "$out"; true; }
+[[ -f $out ]] || die "download failed: $url"
+
+actual=$(sha256sum "$out" | cut -d' ' -f1)
+if want=$(lock_get omarchy_sha256 "$lock" 2>/dev/null); then
+  [[ $actual == "$want" ]] || { rm -f "$out"; die "checksum mismatch for $url: lock has $want, got $actual (cached file removed)"; }
+elif (( record )); then
+  sed -i "/^omarchy_commit=/a omarchy_sha256=$actual" "$lock"
+  echo "recorded omarchy_sha256=$actual in $lock" >&2
+else
+  die "upstream.lock has no omarchy_sha256; run './dev lock' once and commit the result"
+fi
+echo "$out"
