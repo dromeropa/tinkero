@@ -1,0 +1,24 @@
+#!/bin/bash
+# render-spec [OUT]: fill tinkero.spec.in from upstream.lock. Default OUT: tinkero.spec
+set -euo pipefail
+here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+root=${TINKERO_ROOT:-$(dirname "$here")}
+# shellcheck source=build/lib.sh
+source "$here/lib.sh"
+lock=${TINKERO_LOCK:-$root/upstream.lock}
+out=${1:-$root/tinkero.spec}
+
+tag=$(lock_get omarchy_tag "$lock");        commit=$(lock_get omarchy_commit "$lock")
+hypr=$(lock_get hyprland "$lock");          qs=$(lock_get quickshell "$lock")
+rev=$(lock_get tinkero_rev "$lock")
+[[ $tag =~ ^v[0-9]+(\.[0-9]+)+$ ]]   || die "omarchy_tag must look like v4.0.4: $tag"
+[[ $hypr =~ ^([0-9]+)\.([0-9]+)\.[0-9]+$ ]] || die "hyprland must be MAJOR.MINOR.PATCH: $hypr"
+next="${BASH_REMATCH[1]}.$(( BASH_REMATCH[2] + 1 ))"
+[[ $rev =~ ^[0-9]+$ ]] || die "tinkero_rev must be an integer: $rev"
+date=${TINKERO_BUILD_DATE:-$(LC_ALL=C date -u '+%a %b %d %Y')}
+
+sed -e "s|@VERSION@|${tag#v}|g" -e "s|@RELEASE@|$rev|g" -e "s|@TAG@|$tag|g" \
+    -e "s|@COMMIT@|$commit|g" -e "s|@HYPRLAND@|$hypr|g" -e "s|@HYPRLAND_NEXT@|$next|g" \
+    -e "s|@QUICKSHELL@|$qs|g" -e "s|@DATE@|$date|g" "$root/tinkero.spec.in" > "$out"
+if grep -n '@[A-Z_]*@' "$out"; then die "unfilled placeholder in $out"; fi
+echo "$out"

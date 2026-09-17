@@ -1,0 +1,56 @@
+# Generated from tinkero.spec.in by build/render-spec. Do not edit tinkero.spec.
+Name:           tinkero
+Version:        @VERSION@
+Release:        @RELEASE@%{?dist}
+Summary:        A tinkerable desktop for Hyprland, built on the Omarchy tree
+License:        MIT
+URL:            https://github.com/dromeropa/tinkero
+Source0:        omarchy-@COMMIT@.tar.gz
+Source1:        tinkero-src.tar.gz
+BuildArch:      noarch
+BuildRequires:  git-core
+
+# The pin (design spec 4.2): tree and compositor move in one transaction.
+Requires:       (hyprland >= @HYPRLAND@ with hyprland < @HYPRLAND_NEXT@)
+Requires:       quickshell = @QUICKSHELL@
+Conflicts:      omedora
+Conflicts:      omedora-settings
+
+# Hard requirements (design spec 6). Weak ones are added with the features that use them.
+Requires:       uwsm xdg-desktop-portal-hyprland xdg-desktop-portal-gtk hyprland-guiutils hyprsunset hyprpicker lua
+Requires:       qt6-qtwayland qt6-qtmultimedia qt6-qtimageformats qt6-qtsvg gtk4-layer-shell
+Requires:       fontawesome-fonts-all yaru-icon-theme
+Requires:       polkit gnome-keyring pipewire wireplumber pipewire-pulseaudio pamixer brightnessctl
+Requires:       power-profiles-daemon bluez NetworkManager udiskie socat inotify-tools jq gum git-core
+Requires:       foot xdg-terminal-exec tmux herdr mise
+Requires:       grim slurp wl-clipboard wtype tensaku hyprland-preview-share-picker ttfx
+
+%description
+Tinkero is the desktop around the Hyprland compositor: the Quickshell shell,
+session wiring, keybindings, themes, tooling and agent harness of Omarchy
+(upstream tag @TAG@), with the Arch substrate replaced by Fedora's.
+Built on Omarchy, https://github.com/omacom/omarchy, MIT licensed.
+
+%prep
+%setup -q -c -T -a 1
+
+%build
+
+%install
+TINKERO_ROOT=$PWD TINKERO_LOCK=$PWD/upstream.lock build/assemble %{SOURCE0} %{buildroot}
+
+%files
+%license %{_datadir}/licenses/tinkero/LICENSE.omarchy
+%{_bindir}/omarchy*
+%{_datadir}/omarchy
+%{_datadir}/tinkero
+%{_datadir}/uwsm/env.d/10-omarchy
+%{_datadir}/wayland-sessions/tinkero.desktop
+%{_datadir}/fonts/omarchy
+%{_datadir}/fontconfig/conf.avail/50-omarchy.conf
+%{_prefix}/lib/systemd/user/*
+%config(noreplace) %{_sysconfdir}/mise/conf.d/omarchy.toml
+
+%changelog
+* @DATE@ Tinkero <noreply@tinkero.invalid> - @VERSION@-@RELEASE@
+- Built from upstream.lock: @TAG@ (@COMMIT@)
