@@ -16,8 +16,11 @@ commit=$(lock_get omarchy_commit "$lock")
 url=${TINKERO_UPSTREAM_URL:-https://github.com/omacom/omarchy/archive/$commit.tar.gz}
 out=${TINKERO_CACHE:-$root/.cache}/omarchy-$commit.tar.gz
 mkdir -p "$(dirname "$out")"
-[[ -f $out ]] || curl -fsSL --retry 3 -o "$out.part" "$url" && { [[ -f $out.part ]] && mv "$out.part" "$out"; true; }
-[[ -f $out ]] || die "download failed: $url"
+if [[ ! -f $out ]]; then
+  rm -f "$out.part"
+  curl -fsSL --retry 3 -o "$out.part" "$url" || die "download failed: $url"
+  mv "$out.part" "$out"
+fi
 
 actual=$(sha256sum "$out" | cut -d' ' -f1)
 if want=$(lock_get omarchy_sha256 "$lock" 2>/dev/null); then

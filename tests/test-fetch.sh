@@ -9,6 +9,10 @@ out=$(f --record 2>/dev/null)
 assert_eq "$out" "$d/cache/omarchy-$c.tar.gz" "--record fetches and prints the path"
 assert_eq "$(grep -c '^omarchy_sha256=' "$d/lock")" "1" "--record writes the checksum once"
 assert_eq "$(f)" "$d/cache/omarchy-$c.tar.gz" "verifies against the recorded checksum"
+good_sum=$(sha256sum "$d/cache/omarchy-$c.tar.gz" | cut -d' ' -f1)
+printf 'garbage' > "$d/cache/omarchy-$c.tar.gz.part"
+assert_eq "$(f)" "$d/cache/omarchy-$c.tar.gz" "a stale .part beside a good cache file is ignored"
+assert_eq "$(sha256sum "$d/cache/omarchy-$c.tar.gz" | cut -d' ' -f1)" "$good_sum" "and the cached tarball is unchanged"
 sed -i 's/^omarchy_sha256=.*/omarchy_sha256=deadbeef/' "$d/lock"
 assert_fails "checksum mismatch fails" f
 assert_no_path "$d/cache/omarchy-$c.tar.gz" "and removes the bad download"

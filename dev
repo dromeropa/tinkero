@@ -33,5 +33,5 @@ case ${1:-} in
   baseline) assemble; mkdir -p "$allow"; TINKERO_GATE_WRITE=1 gates ;;
   spec)     build/render-spec ;;
   clean)    rm -rf .cache tinkero.spec ;;
-  *)        sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  *)        sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

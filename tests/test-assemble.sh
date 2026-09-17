@@ -37,6 +37,22 @@ assert_no_path "$d/dest/usr/lib/systemd/user/omarchy-migrate-notify.service" "dr
 assert_file "$d/dest/usr/share/licenses/tinkero/LICENSE.omarchy" "upstream license shipped"
 assert_file "$d/dest/usr/share/tinkero/upstream.lock" "lock shipped"
 
+echo '../outside' >> "$r/build/drop.list"
+assert_fails "a drop line escaping the tree with .. fails the build" run "$d/dest6"
+sed -i '$d' "$r/build/drop.list"
+
+echo '/etc' >> "$r/build/drop.list"
+assert_fails "a drop line starting with / fails the build" run "$d/dest7"
+sed -i '$d' "$r/build/drop.list"
+
+mkdir -p "$d/x"
+tar -xzf "$tb" -C "$d/x"
+ln -s omarchy-keep-me "$d/x/omarchy-fixture/bin/omarchy-alias"
+tar -C "$d/x" -czf "$d/symlink-bin.tar.gz" omarchy-fixture
+tb_symlink=$d/symlink-bin.tar.gz
+run_symlink() { TINKERO_ROOT=$r "$ROOT/build/assemble" "$tb_symlink" "$1"; }
+assert_fails "a symlink in upstream bin/ fails the build" run_symlink "$d/dest8"
+
 echo 'bin/omarchy-renamed-upstream' >> "$r/build/drop.list"
 assert_fails "a drop line matching nothing fails the build" run "$d/dest2"
 sed -i '$d' "$r/build/drop.list"

@@ -28,6 +28,7 @@ tar -xzf "$tarball" -C "$tree" --strip-components=1
 # 1. Drop. Every line must match something, so an upstream rename is noticed.
 while IFS= read -r line; do
   [[ -z $line || $line == \#* ]] && continue
+  [[ $line == /* || $line == *..* ]] && die "drop.list: '$line' must be a relative path inside the tree"
   matches=()
   # shellcheck disable=SC2231  # unquoted on purpose: $line may be a glob
   for m in "$tree"/$line; do
@@ -79,6 +80,7 @@ mkdir -p "$dest/usr/bin" "$dest/usr/share/omarchy"
 cp -a "$tree/." "$dest/usr/share/omarchy/"
 for f in "$dest/usr/share/omarchy/bin"/*; do
   name=$(basename "$f")
+  [[ -L $f ]] && die "upstream bin/$(basename "$f") is a symlink; decide how to ship it before building"
   mv "$f" "$dest/usr/bin/$name"
   ln -s "/usr/bin/$name" "$f"
 done
