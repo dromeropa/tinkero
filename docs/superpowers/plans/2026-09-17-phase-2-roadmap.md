@@ -6,7 +6,7 @@ Phase 2 of the design spec (section 7) is six independent subsystems. One plan e
 
 | Plan | Delivers | Depends on | Blocked by Phase 0? | Status |
 |---|---|---|---|---|
-| **2A** build skeleton, payload assembly, CI gates | `./dev gates` green on the real `v4.0.4` tree; SRPM builds in CI | nothing | no | **written**: `2026-09-17-phase-2a-build-skeleton-and-gates.md` |
+| **2A** build skeleton, payload assembly, CI gates | `./dev gates` green on the real `v4.0.4` tree; SRPM builds in CI | nothing | no | **done** 2026-09-17: `2026-09-17-phase-2a-build-skeleton-and-gates.md`; CI green on the branch |
 | **2B** patches, replacements, name map | the remaining patches and replacement scripts; `distro/fedora/pkgmap.tsv`; the name-map gate; `arch-leak.allow` down to its five permanent entries | 2A | no, except `omarchy-apply-lock` and the fingerprint pair, which wait for 2F | to write |
 | **2C** menu rewrite | `menu/apply-overrides`, `menu/overrides.jsonc`, `tinkero-update`; `dropped-refs.allow` down to comment-only entries | 2A, and 2B's drop decisions | no | to write |
 | **2D** branding | font rebuild, wallpaper rendering, manifest rewrite, `branding/strings.tsv` and `images.tsv`, the branding gate | 2A, 2C (menu labels) | no, but needs the placeholder mark and one human pass over 92 wallpapers | to write |
@@ -37,6 +37,19 @@ Running the 2A prototype against the real tree while writing the plan produced 2
 4. **`omarchy-bar` and `default/bash/env-bootstrap`** mention dropped commands only in comments. They stay on the dropped-refs allowlist permanently, each with a trailing `# comment only` note, added when 2C makes the list final.
 5. **The tree's `version` file says `4.0.0.alpha` at tag `v4.0.4`**, so `omarchy-version` is patched to ask RPM, not to read that file (2A, Task 6).
 6. **The "every `omarchy-*` token resolves to a file" gate of spec section 8 is not workable**: on the untouched upstream tree it reports 110 false positives (PAM service names, CSS ids, window classes, unit names). 2A replaces it with the narrower dropped-reference gate, which has none. The spec and audit are updated to match.
+
+## What executing 2A added to the queue
+
+From the task reviews and the final review of 2A. Each is owned by the plan named.
+
+- **2C:** the arch-leak entry for `omarchy-menu.jsonc` is caused by the `learn.arch` row (an Arch wiki web-app link, line 43), which the audit's delete list did not cover. It is on the list now (audit, section 7); 2C must delete it.
+- **2B, needs an audit verdict first:** `config/autostart/limine-snapper-notify.desktop` (a `Hidden=true` mask for an Arch-only autostart entry; inert, invisible to the content-based gate), `bin/omarchy-dev-add-migration` and the other `omarchy-dev-*` developer scripts that still ship while `migrations/` is dropped.
+- **2B:** `omarchy-version` now prints `VERSION-RELEASE` with the dist tag (`4.0.4-1.fc44`), and the About screen shows it. Decide whether the About line wants the bare tag.
+- **Phase 1:** the COPR's font package must be named `tinkero-nerd-fonts` (the spec template requires it by that name), or the template line is renamed then.
+- **First plan that ships a `bin/tinkero-*` command (2C, `tinkero-update`):** add `%{_bindir}/tinkero-*` to `%files`. It cannot be added earlier, because an unmatched glob fails `rpmbuild`.
+- **2B, first task (test hygiene, found by the final re-review):** three regression tests do not pin the guard they were written for, because `assert_fails` discards output and the command fails for another reason even without the guard: the two drop-line escape cases in `tests/test-assemble.sh` and the `quickshell=0.3|x` case in `tests/test-render-spec.sh`. Assert on the `die` message instead (the idiom is already used throughout `tests/test-gates.sh`). Also, `tests/test-assemble.sh` mutates one shared fixture root and its last case corrupts the patch without restoring it, so a case appended at the end passes for the wrong reason; restore the fixture after each destructive case. Smaller: the drop-line guard's `*..*` also refuses a legitimate name containing `..`; `gate-single-copy` exits 1 where the other bad-input paths exit 2; `render-spec` still splices `TINKERO_BUILD_DATE` unvalidated.
+- **Whenever convenient:** `assert_fails` checks only the exit status, not the message; `gate-dropped-refs` would mis-split a payload path containing a colon; CI discards the SRPM it builds (uploading it is a 125 MB artifact); `actions/checkout@v4` is a mutable tag.
+- **Permanent allowlist entries** (comment-only mentions; they stay when 2B and 2C are done): arch-leak: `omarchy-default-agent`, `hooks.md`, `fonts/omarchy/README.md`, `hypr/input.lua`, `launcher.hides`. Dropped-refs: `omarchy-bar`, two in `default/bash/env-bootstrap`, `default/systemd/zram-generator.conf.d/90-omarchy.conf`, `install/user/mise-work.sh`, `omarchy-provision-user` (until 2E replaces it), and the comment lines of `omarchy-launch-docker-tui` and `omarchy-default-agent` (until 2B settles them).
 
 ## Scope notes per plan
 

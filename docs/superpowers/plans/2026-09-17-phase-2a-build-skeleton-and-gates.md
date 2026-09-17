@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Status: executed 2026-09-17.** The repository is now the source of truth: the code blocks below are what was dispatched, and they differ from the landed files where review found defects in this plan (see "Deviations" and "Review findings that changed the code" at the end). Do not re-execute this plan; read it for the design and the interfaces.
+
 **Goal:** Turn the pinned upstream tarball into a verified Tinkero payload directory with one command, and guard that payload with gates that fail when an Arch assumption or a reference to a removed command gets through.
 
 **Architecture:** Everything the RPM's `%install` does lives in one script, `build/assemble TARBALL DEST`, so it runs and is tested without `rpmbuild`; the spec file only calls it. Three gates inspect the assembled payload. Two of them compare their findings with a checked-in allowlist that may only shrink: today's findings are the work queue of plans 2B and 2C, and the gates stop anything new from joining it. Tests are hermetic (a generated fixture tree, no network); a separate `./dev gates` run exercises the real upstream tarball.
@@ -1070,7 +1072,7 @@ The tree's own version file is not usable: at v4.0.4 it still says 4.0.0.alpha.
  
 ```
 
-Two context lines in that patch consist of a single space (they stand for empty lines in the script). If your editor strips trailing whitespace the patch becomes corrupt; in that case generate it with the recipe at the end of this step instead of pasting, and check it with `git apply --check` from a scratch unpack of the tarball.
+Three context lines in that patch consist of a single space (they stand for empty lines in the script). If your editor strips trailing whitespace the patch becomes corrupt; in that case generate it with the recipe at the end of this step instead of pasting, and check it with `git apply --check` from a scratch unpack of the tarball.
 
 Create `patches/series`:
 
@@ -1201,6 +1203,16 @@ If any script changed to satisfy ShellCheck, re-run `./dev check && ./dev gates`
 - `tests/test-assemble.sh`, `tests/test-fetch.sh`, `tests/test-gates.sh`, `tests/test-lock.sh`, `tests/test-render-spec.sh`: added a `#!/bin/bash` shebang; they are only ever run via `bash "$t"` from `tests/run`, so the shebang is inert, but ShellCheck needs one to know the dialect when the file is a scan target on its own (SC2148).
 - `tests/test-lock.sh`: added `# shellcheck disable=SC2016` with a reason above the line that intentionally single-quotes `$(touch %s/pwned)` so it stays literal text for the lock parser to (correctly) not execute (SC2016).
 - CI workflow tested locally against a `fedora:44` container (docker) before each push, since none of ShellCheck/rpmlint/rpmspec/make/rpm-build exist on this workstation; the SRPM `git archive` step only works from a real git clone or checkout, not from a git worktree whose `.git` is a pointer file to a host path outside the container mount (a local-testing artifact only, not relevant to `actions/checkout@v4` in CI).
+
+## Review findings that changed the code
+
+Task reviews and the final review found defects in this plan's own code, fixed on the branch:
+
+- `ci/gate-dropped-refs`: the `names=` pipeline needed `|| true`; without it a drop list with no plain `bin/` line killed the gate silently (Task 4).
+- `tinkero.spec.in`: the Nerd font was missing from the hard requirements; added as `tinkero-nerd-fonts`, a name the Phase 1 COPR must honour (Task 5).
+- The patch must keep its three single-space context lines; verify patches with `cat -A`, never by eye (Task 6).
+- ShellCheck fixes across `build/`, `ci/` and `tests/` (Task 7, listed under Deviations).
+- Final review wave: `dev` usage range; a plain download block in `fetch-upstream`; `assemble` refuses drop lines that leave the tree and symlinks in upstream `bin/`; gates exit 2 on a missing payload, an unreadable drop list or an unsupported glob, and fail on an empty `bin/`; `LC_ALL=C` in the gates; `render-spec` validates `omarchy_commit` and `quickshell` and no longer reads a zero-padded minor as octal; `outdir` default in `.copr/Makefile`; workflow permissions, concurrency, bash shell and timeout.
 
 ## What this plan deliberately leaves out
 

@@ -149,7 +149,7 @@ Revision 1 planned a system-level extension file. Upstream has none: `Menu.qml` 
 
 So `menu/apply-overrides` rewrites `default/omarchy/omarchy-menu.jsonc` during `%install`, driven by `menu/overrides.jsonc`:
 
-- **delete by id prefix**: the Arch-only and out-of-scope groups listed in the audit, section 7 (76 of 333 entries at `v4.0.4`);
+- **delete by id prefix**: the Arch-only and out-of-scope groups listed in the audit, section 7 (77 of 333 entries at `v4.0.4`);
 - **delete by action**: any remaining entry whose action or guard names a dropped script. This list is computed, so a new upstream entry that calls a dropped script is removed automatically, and the build log names it;
 - **replace**: `update.omarchy` becomes "Update (dnf + mise)" and runs `tinkero-update` in a floating terminal (`sudo dnf upgrade`, then `mise up`).
 
@@ -336,8 +336,8 @@ This table is the `Requires:`/`Recommends:` list of `tinkero.spec`. "COPR" means
 | Feature | Hard requires | Source |
 |---|---|---|
 | Compositor and session | `hyprland` (pinned), `uwsm`, `xdg-desktop-portal-hyprland`, `xdg-desktop-portal-gtk`, `hyprland-guiutils`, `hyprsunset`, `hyprpicker`, `lua` | COPR; Fedora for the gtk portal and lua |
-| Shell | `quickshell` (pinned), `qt6-qtwayland`, `qt6-qtmultimedia`, `qt6-qtimageformats`, `qt6-qtsvg`, `gtk4-layer-shell`, Nerd-patched JetBrains Mono, `fontawesome-fonts-all`, `yaru-icon-theme` | COPR for quickshell and the font; Fedora |
-| Session services | `polkit`, `gnome-keyring`, `pipewire`, `wireplumber`, `pipewire-pulseaudio`, `pamixer`, `brightnessctl`, `power-profiles-daemon`, `bluez`, `NetworkManager`, `udiskie`, `socat`, `inotify-tools`, `jq`, `gum`, `git` | Fedora |
+| Shell | `quickshell` (pinned), `qt6-qtwayland`, `qt6-qtmultimedia`, `qt6-qtimageformats`, `qt6-qtsvg`, `gtk4-layer-shell`, Nerd-patched JetBrains Mono (COPR package `tinkero-nerd-fonts`), `fontawesome-fonts-all`, `yaru-icon-theme` | COPR for quickshell and the font; Fedora |
+| Session services | `polkit`, `gnome-keyring`, `pipewire`, `wireplumber`, `pipewire-pulseaudio`, `pamixer`, `brightnessctl`, `power-profiles-daemon`, `bluez`, `NetworkManager`, `udiskie`, `socat`, `inotify-tools`, `jq`, `gum`, `git-core` | Fedora |
 | Terminal | `foot`, `xdg-terminal-exec`, `tmux`, `herdr` | Fedora; COPR for herdr |
 | Capture | `grim`, `slurp`, `wl-clipboard`, `wtype`, `tensaku`, `hyprland-preview-share-picker` | Fedora; COPR for the last two |
 | Agent layer | `mise` | COPR |
