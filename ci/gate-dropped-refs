@@ -1,0 +1,28 @@
+#!/bin/bash
+# gate-dropped-refs DEST DROPLIST ALLOW: nothing in the payload may still call a
+# command that build/drop.list removed. Findings are "path:command".
+set -euo pipefail
+here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd); # shellcheck source=ci/lib-gate.sh
+source "$here/lib-gate.sh"
+[[ $# -eq 3 ]] || { echo "usage: gate-dropped-refs DEST DROPLIST ALLOW" >&2; exit 2; }
+dest=$1; droplist=$2; allow=$3
+found=$(mktemp); trap 'rm -f "$found"' EXIT
+# Dropped command names = bin/ lines of the drop list that no longer exist in the payload.
+# Globs are expanded against what is NOT there by listing names from the line itself when
+# it has no glob, and by skipping glob lines (their members are caught by name below).
+names=$(grep -E '^bin/' "$droplist" | grep -v '[*?[]' | sed 's|^bin/||' | sort -u)
+globs=$(grep -E '^bin/' "$droplist" | grep '[*?[]' | sed 's|^bin/||' || true)
+: > "$found"
+if [[ -n $names ]]; then
+  alt=$(paste -sd'|' <<<"$names")
+  ( cd "$dest" && grep -rIoHE "(^|[^a-z0-9-])($alt)([^a-z0-9-]|\$)" . 2>/dev/null \
+      | sed -E 's|^\./||; s/^([^:]+):[^a-z]*([a-z0-9-]+).*$/\1:\2/' ) >> "$found" || true
+fi
+while IFS= read -r g; do
+  [[ -z $g ]] && continue
+  re=${g//\*/[a-z0-9-]*}
+  ( cd "$dest" && grep -rIoHE "(^|[^a-z0-9-])($re)([^a-z0-9-]|\$)" . 2>/dev/null \
+      | sed -E 's|^\./||; s/^([^:]+):[^a-z]*([a-z0-9-]+).*$/\1:\2/' ) >> "$found" || true
+done <<<"$globs"
+sort -u -o "$found" "$found"
+compare_with_allowlist "$found" "$allow" "references to dropped commands"
