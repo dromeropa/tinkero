@@ -2,9 +2,19 @@ name: ci
 on:
   push:
   pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+defaults:
+  run:
+    shell: bash
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Floats on purpose: CI should notice when Fedora's ShellCheck, rpmlint or rpm change.
     container: fedora:44
     steps:
       - name: Tools

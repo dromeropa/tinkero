@@ -1,6 +1,8 @@
 # COPR "make_srpm" entry point. COPR runs, as root in a fresh chroot with network:
 #   make -f <clone>/.copr/Makefile srpm outdir=<dir> spec=<path>
 TOP := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))..
+outdir ?= $(CURDIR)
+# COPR also passes spec=<path>; it is ignored on purpose, the spec is always rendered from tinkero.spec.in.
 
 .PHONY: srpm
 srpm:
