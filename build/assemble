@@ -1,0 +1,88 @@
+#!/bin/bash
+# assemble TARBALL DEST: turn the upstream tarball into the tinkero payload
+# under DEST (a DESTDIR-style root). This is the whole of the RPM's %install,
+# kept outside the spec so it can be run and tested without rpmbuild.
+#
+# Inputs, relative to the repo root (override the root with TINKERO_ROOT):
+#   build/drop.list                      paths to delete from the tree
+#   patches/series + patches/*.patch     applied with git apply -p1 (strict, no fuzz)
+#   distro/fedora/replacements/*         copied over bin/<same name>
+#   distro/fedora/replacements.new       names allowed to have no upstream file
+#   session/tinkero.desktop              the GDM session entry
+set -euo pipefail
+here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+root=${TINKERO_ROOT:-$(dirname "$here")}
+# shellcheck source=build/lib.sh
+source "$here/lib.sh"
+
+[[ $# -eq 2 ]] || die "usage: assemble TARBALL DEST"
+tarball=$1; dest=$2
+[[ -f $tarball ]] || die "no such tarball: $tarball"
+[[ ! -e $dest || -z $(ls -A "$dest" 2>/dev/null) ]] || die "DEST must be empty: $dest"
+
+work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
+tree=$work/tree; mkdir -p "$tree"
+tar -xzf "$tarball" -C "$tree" --strip-components=1
+[[ -d $tree/bin && -f $tree/version ]] || die "tarball does not look like the Omarchy tree"
+
+# 1. Drop. Every line must match something, so an upstream rename is noticed.
+while IFS= read -r line; do
+  [[ -z $line || $line == \#* ]] && continue
+  matches=()
+  # shellcheck disable=SC2231  # unquoted on purpose: $line may be a glob
+  for m in "$tree"/$line; do
+    [[ -e $m || -L $m ]] && matches+=( "$m" )
+  done
+  (( ${#matches[@]} )) || die "drop.list: '$line' matches nothing in the tree"
+  rm -rf -- "${matches[@]}"
+done < "$root/build/drop.list"
+
+# 2. Patch. No fuzz: a patch that no longer applies cleanly must be looked at.
+if [[ -f $root/patches/series ]]; then
+  while IFS= read -r p; do
+    [[ -z $p || $p == \#* ]] && continue
+    # git apply has no fuzz and needs no repository; it is strict about context.
+    ( cd "$tree" && git apply -p1 "$root/patches/$p" ) || die "patch failed: $p"
+  done < "$root/patches/series"
+fi
+
+# 3. Replace. A replacement must shadow an upstream file unless declared new.
+repl=$root/distro/fedora/replacements
+if [[ -d $repl ]]; then
+  for f in "$repl"/*; do
+    [[ -f $f ]] || continue
+    name=$(basename "$f")
+    if [[ ! -f $tree/bin/$name ]] && ! grep -qxF "$name" "$root/distro/fedora/replacements.new" 2>/dev/null; then
+      die "replacement '$name' has no upstream file (renamed upstream? else add it to replacements.new)"
+    fi
+    install -m 0755 "$f" "$tree/bin/$name"
+  done
+fi
+
+# 4. Relocate the two etc/ files Tinkero keeps, then drop the rest of etc/.
+install -Dm 0644 "$tree/etc/fastfetch/config.jsonc" "$dest/usr/share/tinkero/fastfetch/config.jsonc"
+install -Dm 0644 "$tree/etc/mise/conf.d/omarchy.toml" "$dest/etc/mise/conf.d/omarchy.toml"
+rm -rf "$tree/etc"
+
+# 5. System files that live outside the tree.
+install -Dm 0644 "$tree/default/uwsm/env.d/10-omarchy" "$dest/usr/share/uwsm/env.d/10-omarchy"
+install -Dm 0644 "$root/session/tinkero.desktop" "$dest/usr/share/wayland-sessions/tinkero.desktop"
+install -Dm 0644 "$tree/default/fonts/omarchy/omarchy.ttf" "$dest/usr/share/fonts/omarchy/omarchy.ttf"
+install -Dm 0644 "$tree/default/fontconfig/conf.avail/50-omarchy.conf" "$dest/usr/share/fontconfig/conf.avail/50-omarchy.conf"
+mkdir -p "$dest/usr/lib/systemd/user"
+cp -a "$tree/default/systemd/user/." "$dest/usr/lib/systemd/user/"
+install -Dm 0644 "$tree/LICENSE" "$dest/usr/share/licenses/tinkero/LICENSE.omarchy"
+install -Dm 0644 "${TINKERO_LOCK:-$root/upstream.lock}" "$dest/usr/share/tinkero/upstream.lock"
+
+# 6. The tree, with upstream's own layout: commands in /usr/bin, symlinks in the tree.
+mkdir -p "$dest/usr/bin" "$dest/usr/share/omarchy"
+cp -a "$tree/." "$dest/usr/share/omarchy/"
+for f in "$dest/usr/share/omarchy/bin"/*; do
+  name=$(basename "$f")
+  mv "$f" "$dest/usr/bin/$name"
+  ln -s "/usr/bin/$name" "$f"
+done
+for f in "$root"/bin/tinkero-*; do
+  [[ -f $f ]] && install -m 0755 "$f" "$dest/usr/bin/$(basename "$f")"
+done
+echo "assembled $(ls "$dest/usr/bin" | wc -l) commands into $dest"
