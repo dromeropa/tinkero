@@ -11,7 +11,7 @@ Phase 2 of the design spec (section 7) is six independent subsystems. One plan e
 | **2C** menu rewrite | `menu/apply-overrides`, `menu/overrides.jsonc`, `tinkero-update`; `dropped-refs.allow` down to comment-only entries | 2A, and 2B's drop decisions | no | to write |
 | **2D** branding | font rebuild, wallpaper rendering, manifest rewrite, `branding/strings.tsv` and `images.tsv`, the branding gate | 2A, 2C (menu labels) | no, but needs the placeholder mark and one human pass over 92 wallpapers | to write |
 | **2E** provisioning and install | `tinkero-provision` with `seeded.tsv`, the two provisioning wrappers, `install.sh`, `host.md`, config overrides | 2A, 2B | no | to write |
-| **2F** session integration | lock-screen PAM variants and `tinkero-pam-sync`, `tinkero-gnome-restore`, `tinkero-inhibit-power-key`, `omarchy-apply-lock` patch, fingerprint replacements | 2A, 2E | **yes**: every piece is decided by the Phase 0 findings | to write after `docs/research/phase-0-findings.md` exists |
+| **2F** session integration | lock-screen PAM variants and `tinkero-pam-sync`, the dconf profile and `DCONF_PROFILE` export, `[Install]` stripping and session-started units with the fcitx5 drop-in, `tinkero-inhibit-power-key`, `omarchy-apply-lock` patch, fingerprint replacements | 2A, 2E | no longer: Phase 0 is done (GO, 2026-09-21) | to write; its VM check re-runs the Phase 0 GNOME cycle with the dconf profile |
 
 Milestones A, B and C of the spec (section 8) need 2A to 2F and the Phase 1 COPR. Nothing before 2F needs a running desktop: every plan up to 2E is verified by unit tests against a fixture tree and by the gates against the real tree.
 
@@ -37,6 +37,15 @@ Running the 2A prototype against the real tree while writing the plan produced 2
 4. **`omarchy-bar` and `default/bash/env-bootstrap`** mention dropped commands only in comments. They stay on the dropped-refs allowlist permanently, each with a trailing `# comment only` note, added when 2C makes the list final.
 5. **The tree's `version` file says `4.0.0.alpha` at tag `v4.0.4`**, so `omarchy-version` is patched to ask RPM, not to read that file (2A, Task 6).
 6. **The "every `omarchy-*` token resolves to a file" gate of spec section 8 is not workable**: on the untouched upstream tree it reports 110 false positives (PAM service names, CSS ids, window classes, unit names). 2A replaces it with the narrower dropped-reference gate, which has none. The spec and audit are updated to match.
+
+## What Phase 0 added (2026-09-21, `docs/research/phase-0-findings.md`)
+
+- **2F:** the GNOME invariant is met by a separate dconf profile for the session, not by save/restore (spec 4.9); the five upstream user units get their `[Install]` stripped at build and are started by `tinkero-provision --session`; `omarchy-fcitx5.service.d/tinkero.conf` adds a condition and a start limit; the autostart restore entry is gone.
+- **2B:** `omarchy-pkg-add` and `omarchy-pkg-drop` use `pkexec` inside a graphical session (spec 4.3): an agent cannot answer `sudo` in its own terminal.
+- **2B, `tinkero.spec.in`:** require `ppd-service` instead of `power-profiles-daemon` (Fedora 44 ships `tuned-ppd`); add `fcitx5` to the hard requirements.
+- **Phase 1:** drop the `Recommends: nwg-panel wofi playerctl newt` that the omedora-4 specs carry.
+- **2E:** seed the Tinkero dconf database from GNOME's at provisioning; `--reset dconf`; removal deletes it. README and `host.md` explain Hyprland Safe Mode after a crash.
+- **Bare metal, later:** suspend-to-lock timing; a dead-menu-entry pass (2C removes most by construction).
 
 ## What executing 2A added to the queue
 

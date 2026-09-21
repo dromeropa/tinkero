@@ -2,7 +2,7 @@
 
 Companion to the design spec, section 7 (Phase 0). Budget: one to two days. Nothing here touches your real machine beyond running a VM.
 
-**Status of this guide: derived, not executed.** Every command below was written from the upstream tree at `v4.0.4`, the research doc's section 4.4, the audit, and Fedora's documentation. None of it has been run end to end. Expect to correct it as you go, and record the corrections in the findings note (section 9): those corrections are part of what the spike is for.
+**Status: executed 2026-09-20 to 2026-09-21; findings in `docs/research/phase-0-findings.md`.** The corrections that run found are folded in below (marked "Phase 0:"). Originally derived, not executed: Every command below was written from the upstream tree at `v4.0.4`, the research doc's section 4.4, the audit, and Fedora's documentation. None of it has been run end to end. Expect to correct it as you go, and record the corrections in the findings note (section 9): those corrections are part of what the spike is for.
 
 ## 1. What the spike must answer
 
@@ -20,7 +20,9 @@ The decision at the end is go / no-go on Phase 1, plus the lock-screen mechanism
 
 ## 2. Make the VM
 
-Hyprland needs GPU acceleration; a VM without 3D will not start the compositor. On a Fedora host with an Intel or AMD GPU, virtio-gpu with virgl works. On a host running the proprietary NVIDIA driver, virgl is unreliable: use a spare machine or a second disk instead and skip to section 3.
+Hyprland needs GPU acceleration; a VM without 3D will not start the compositor. On a Fedora host with an Intel or AMD GPU, virtio-gpu with virgl works. Phase 0: on an Optimus laptop (Intel plus NVIDIA), pin virgl to the Intel render node with `rendernode=/dev/dri/by-path/pci-0000:00:02.0-render` in the `--graphics` line and it works; a host with only the proprietary NVIDIA driver is the case to avoid.
+
+Phase 0: run as an unprivileged user, `virt-install` creates the VM under the per-user `qemu:///session` daemon, so every `virsh`, `virt-clone` and `virt-viewer` call must target it: `export LIBVIRT_DEFAULT_URI=qemu:///session`. Disks live in `~/.local/share/libvirt/images/`; no sudo is needed; user-mode NAT gives the guest outbound network. The viewer needs `virt-viewer --connect qemu:///session --attach tinkero-spike` because the SPICE socket is local-only. Host-to-guest clipboard works under GNOME but not under Hyprland; use screenshots.
 
 ```bash
 sudo dnf install @virtualization virt-install virt-viewer
@@ -34,8 +36,10 @@ virt-install \
   --osinfo detect=on,require=off \
   --boot uefi \
   --video virtio,accel3d=yes \
-  --graphics spice,gl.enable=yes,listen=none
+  --graphics spice,gl.enable=yes,listen=none,rendernode=/dev/dri/by-path/pci-0000:00:02.0-render
 ```
+
+Phase 0: Fedora 44's web installer can look frozen at "Generating initramfs" when the install is actually complete (idle CPU, no journal progress for many minutes). Check `df` on `/mnt/sysroot`; if it is populated, force off and boot from disk.
 
 If the viewer shows a black screen or qemu logs `GL_DRAW_COOKIE_INVALID`, recreate the VM with `--graphics gtk,gl.enable=yes` instead of the spice line.
 
@@ -61,7 +65,7 @@ Optional 30-minute sanity check before anything else: on a throwaway clone of th
 
 ## 3. Record the GNOME baseline (for Q5)
 
-Log into GNOME as your user, set a non-default appearance so that a change would be visible (Settings, Appearance, Light), then:
+Log into GNOME as your user, set a non-default appearance so that a change would be visible (Phase 0: Fedora 44 defaults to Light, so choose **Dark**), then:
 
 ```bash
 mkdir -p ~/spike && cat > ~/spike/snap.sh <<'EOF'
@@ -163,6 +167,8 @@ sudo fc-cache -f
 ```
 
 That is upstream's `default/wayland-sessions/omarchy.desktop` with only `Name` and `Comment` changed.
+
+Phase 0: `tee`/`cp` may create the stand-ins without the execute bit; follow 5.3 and 5.4 with `sudo chmod +x /usr/bin/omarchy-pkg-present ... /usr/bin/omarchy-provision-user` and `sudo restorecon` on them. Also, pasting heredocs with indentation breaks them; write those files with an editor or one-line `printf | sudo tee` commands.
 
 Per-user setup, as your user (this is what `tinkero-provision` will do; note every file that already existed):
 
@@ -322,11 +328,8 @@ ExecStop=%h/.local/bin/tinkero-gnome-keys restore unit
 EOF
 systemctl --user daemon-reload
 # start it from inside the Tinkero session only, after Hyprland has imported its environment
-cat >> ~/.config/hypr/autostart.lua <<'EOF'
-hl.on("hyprland.start", function()
-  hl.exec_cmd("systemctl --user start tinkero-gnome-restore.service")
-end)
-EOF
+# Phase 0: the user file uses the o. API, not hl.on
+echo 'o.launch_on_start("systemctl --user start tinkero-gnome-restore.service")' >> ~/.config/hypr/autostart.lua
 
 mkdir -p ~/.config/autostart
 cat > ~/.config/autostart/tinkero-gnome-restore.desktop <<'EOF'
@@ -340,7 +343,7 @@ EOF
 sed -i "s|\$HOME|$HOME|" ~/.config/autostart/tinkero-gnome-restore.desktop
 ```
 
-That `hl.on("hyprland.start", ...)` form is copied from upstream's `default/hypr/autostart.lua`; if the user file wants `o.launch_on_start(...)` instead (its own comment suggests so), use that and note it. Check the guard holds: under GNOME, `systemctl --user status tinkero-gnome-restore` must show the unit inactive and no `gnome-interface.saved` file may appear; under Tinkero the unit must be active (exited) and the file must exist after the first theme switch.
+Phase 0 result for this section: the unit's `ExecStop` fired on all three session ends, the autostart entry never did, and two keys the script did not list leaked (`cursor-theme`, changed by the shell before the save ran; `text-scaling-factor`, changed by `omarchy-display-text-size`). The design moved to a separate dconf profile for the session (spec 4.9); re-running this section for Phase 2F means adding `DCONF_PROFILE=tinkero` to the uwsm env and diffing `~/.config/dconf/user`'s checksum instead of a key list.
 
 Run this cycle three times, ending the Tinkero session a different way each time: menu logout, `loginctl terminate-session`, and `pkill -9 Hyprland`.
 
