@@ -31,8 +31,8 @@ Milestones A, B and C of the spec (section 8) need 2A to 2F and the Phase 1 COPR
 
 Running the 2A prototype against the real tree while writing the plan produced 28 arch-leak findings and 50 dropped-reference findings. Most are exactly the audit's work list. These were not in the audit and need a decision in 2B:
 
-1. **`omarchy-launch-docker-tui` calls `omarchy-sudo-docker`**, which the audit drops. Recommendation: drop `omarchy-launch-docker-tui` as well and do not re-add the `Super+Shift+D` binding; Docker is a non-goal, and the seeded `bindings.lua` then re-adds only tmux and herdr. (Update the design spec, section 4.6, and the audit, section 7, when this is decided.)
-2. **`omarchy-default-agent` still has an `openclaw)` case** that names the dropped `omarchy-install-openclaw-cli` (line 35). The menu row is deleted, but `omarchy-default-agent openclaw` from a terminal would fail confusingly. Recommendation: a one-line patch removing the case and the name from the usage strings. That makes twelve patches, not eleven.
+1. **`omarchy-launch-docker-tui` calls `omarchy-sudo-docker`**, which the audit drops. Decided 2026-09-21: drop the launcher and `applications/Docker.desktop` too; the seeded `bindings.lua` re-adds only tmux and herdr. Docker is *deferred*, not Arch-specific: re-enabling is a drop-list edit, one name-map row and one binding (audit, section 4.3).
+2. **`omarchy-default-agent` has an `openclaw)` case.** Decided 2026-09-21: keep it, and keep `omarchy-install-openclaw-cli` (un-dropped). OpenClaw itself is not Arch-specific; only upstream's delivery is. The name-map row `openclaw none` makes the picker explain "install by hand". **Research item:** find OpenClaw's install route on Fedora (npm, pipx, a binary release?) and flip the row's kind; if it is a mise-installable tool, the name map may need a `mise` kind.
 3. **`omarchy-reinstall` and `omarchy-launch-battlenet`** were only reachable from dropped commands; 2A's drop list already removes them, with `default/applications/battlenet.desktop`.
 4. **`omarchy-bar` and `default/bash/env-bootstrap`** mention dropped commands only in comments. They stay on the dropped-refs allowlist permanently, each with a trailing `# comment only` note, added when 2C makes the list final.
 5. **The tree's `version` file says `4.0.0.alpha` at tag `v4.0.4`**, so `omarchy-version` is patched to ask RPM, not to read that file (2A, Task 6).
@@ -52,7 +52,7 @@ Running the 2A prototype against the real tree while writing the plan produced 2
 From the task reviews and the final review of 2A. Each is owned by the plan named.
 
 - **2C:** the arch-leak entry for `omarchy-menu.jsonc` is caused by the `learn.arch` row (an Arch wiki web-app link, line 43), which the audit's delete list did not cover. It is on the list now (audit, section 7); 2C must delete it.
-- **2B, needs an audit verdict first:** `config/autostart/limine-snapper-notify.desktop` (a `Hidden=true` mask for an Arch-only autostart entry; inert, invisible to the content-based gate), `bin/omarchy-dev-add-migration` and the other `omarchy-dev-*` developer scripts that still ship while `migrations/` is dropped.
+- **2B (decided):** drop `config/autostart/limine-snapper-notify.desktop` and `bin/omarchy-dev-add-migration`; keep the other `omarchy-dev-*` tools (`omarchy-dev-font` is what plan 2D's glyph work will use).
 - **2B:** `omarchy-version` now prints `VERSION-RELEASE` with the dist tag (`4.0.4-1.fc44`), and the About screen shows it. Decide whether the About line wants the bare tag.
 - **Phase 1:** the COPR's font package must be named `tinkero-nerd-fonts` (the spec template requires it by that name), or the template line is renamed then.
 - **First plan that ships a `bin/tinkero-*` command (2C, `tinkero-update`):** add `%{_bindir}/tinkero-*` to `%files`. It cannot be added earlier, because an unmatched glob fails `rpmbuild`.

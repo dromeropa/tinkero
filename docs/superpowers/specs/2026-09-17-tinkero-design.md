@@ -104,7 +104,7 @@ The upstream tree is never copied into this repo. The repo holds `upstream.lock`
 
 The authoritative, per-script classification is `docs/research/arch-coupling-audit.md` sections 4 to 6. Summary:
 
-**Patches** (a diff against upstream, so a rebase cost on every bump; this is the number to keep small). Eleven files, all but the first under ten changed lines:
+**Patches** (a diff against upstream, so a rebase cost on every bump; this is the number to keep small). Twelve files, all but the first under fifteen changed lines (patches 0001 to 0010 exist after plan 2B; `omarchy-apply-lock` is plan 2F's):
 
 | File | Change |
 |---|---|
@@ -113,7 +113,7 @@ The authoritative, per-script classification is `docs/research/arch-coupling-aud
 | `bin/omarchy-debug` | package inventory through `rpm -qa --qf`; product line from `rpm -q tinkero` |
 | `bin/omarchy-version` | version and release from `rpm -q tinkero`. The tree's own `version` file is not usable: at tag `v4.0.4` it still reads `4.0.0.alpha` |
 | `bin/omarchy-reinstall-configs` | upstream replays `/etc/skel` over `$HOME` and then calls `omarchy-refresh-limine` and `omarchy-refresh-plymouth`; none of the three exists in Tinkero, so the body becomes `tinkero-provision --reset-all`. The command name is kept because the `omarchy` skill documents it as the rollback |
-| `bin/omarchy-install-hermes-cli` | drops the `hermes-desktop` hand-over branch |
+| `bin/omarchy-setup-security-sshd`, `bin/omarchy-remove-security-sshd` | the `ufw` blocks become `firewall-cmd --add-service=ssh` / `--remove-service=ssh`; the other 170 lines are portable, so a patch beats a replacement |
 | `bin/omarchy-launch-about` | passes `-c /usr/share/tinkero/fastfetch/config.jsonc` on its two `fastfetch` calls, **only when the user has no `~/.config/fastfetch/config.jsonc`**: the script already has a `custom_fastfetch_config` test that it uses to skip its window-fit logic, and `-c` would otherwise override the user's own file. Upstream relies on a system-wide `/etc/fastfetch/config.jsonc`, which Tinkero does not install because it would change `fastfetch` for every session on the host |
 | `bin/omarchy-remove-launcher-entry` | `rpm -qf` and `dnf remove` instead of `pacman -Qqo` and `pacman -Rns` |
 | `bin/omarchy-remove-dev-env` | two direct `pacman -Rns` calls become `omarchy-pkg-drop` |
@@ -133,8 +133,6 @@ The authoritative, per-script classification is `docs/research/arch-coupling-aud
 | `omarchy-version-pkgs` | last dnf transaction time |
 | `omarchy-hibernation-available` | false, so the menu row hides itself |
 | `omarchy-setup-security-fingerprint`, `omarchy-remove-security-fingerprint` | upstream edits `/etc/pam.d/sudo` and `polkit-1` with `sed -i`, which authselect owns on Fedora. Setup: `dnf install fprintd fprintd-pam`, enrol, `authselect enable-feature with-fingerprint`, then `omarchy-apply-lock`. Remove: `authselect disable-feature with-fingerprint`, `omarchy-apply-lock`, `omarchy-pkg-drop fprintd-pam` |
-| `omarchy-setup-security-sshd`, `omarchy-remove-security-sshd` | `firewall-cmd` instead of `ufw` |
-| `omarchy-theme-set-gnome` | sets the same three `gsettings` keys, but saves and restores the GNOME values (4.9) |
 | `omarchy-provision-first-run`, `omarchy-provision-user` | thin wrappers over `tinkero-provision` (4.6) |
 
 Dropped for the same reason, until authselect-based replacements exist: `omarchy-setup-security-fido2` and `omarchy-remove-security-fido2` (they `sed` `pam_u2f.so` into PAM files; the Fedora route is `authselect enable-feature with-pam-u2f`). Dropped outright: `omarchy-sudo-passwordless` (writes sudoers), `omarchy-toggle-hybrid-gpu` (`supergfxd` is not packaged for Fedora), `omarchy-dev-link`/`-unlink`/`-status` (a root-level redirect of the package-owned tree).
@@ -182,7 +180,7 @@ Re-running is safe: stage 3 is a no-op when current, stage 4 is idempotent by co
 
 Seeding rules:
 
-- Source is `/usr/share/omarchy/config/**` plus Tinkero's own overrides in `/usr/share/tinkero/config/**` (notably `hypr/bindings.lua`, which re-adds the three host-neutral bindings that sit inside upstream's gate: tmux on `Super+Alt+Return`, herdr on `Super+Ctrl+Return`, Docker TUI on `Super+Shift+D`. The gate's fourth terminal program, the `cliamp` music TUI on `Super+Shift+Alt+M`, is not re-added because `cliamp` is an Omarchy-repo package that Tinkero does not build. Terminal, browser, file manager and editor are declared outside the gate upstream and need nothing).
+- Source is `/usr/share/omarchy/config/**` plus Tinkero's own overrides in `/usr/share/tinkero/config/**` (notably `hypr/bindings.lua`, which re-adds the two host-neutral bindings that sit inside upstream's gate: tmux on `Super+Alt+Return` and herdr on `Super+Ctrl+Return`. Not re-added: the Docker TUI on `Super+Shift+D` (Docker is deferred with its whole script family, not Arch-specific; the audit, section 4.3, says what re-enabling takes) and the `cliamp` music TUI on `Super+Shift+Alt+M` (`cliamp` is an Omarchy-repo package that Tinkero does not build). Terminal, browser, file manager and editor are declared outside the gate upstream and need nothing).
 - The gate itself is closed with upstream's own switch, not a forked config file: `tinkero-provision` creates `~/.local/state/omarchy/preinstalls-removed`, the marker `o.preinstalled_bindings_enabled()` checks (`default/hypr/helpers.lua:84-89`). Its only other readers are the two `preinstalls` menu rows, which are deleted.
 - **Per file, never overwrite.** A target that exists is left alone and reported as a conflict with a diff command. `--plan` prints the full list without writing; `install.sh` shows it in step 2.
 - Every file written is recorded in `~/.local/state/tinkero/seeded.tsv` with its sha256 and the tag it came from.
