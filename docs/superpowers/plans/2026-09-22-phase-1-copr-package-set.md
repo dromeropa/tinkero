@@ -850,6 +850,13 @@ git push origin task/425e16e7
   to a single `mkdir -p ~/.config && install` line and added a comment
   clarifying that `copr-cli whoami` only reads the config; the token is first
   validated by the API in the Submit step.
+- Task 3, fix round 2: fix round 1 broke dry-run for `register` and `all`:
+  the dry-run command printed by `run()` to stdout was captured by the
+  `add_err=$(run copr-cli add-package-scm ... 2>&1)` substitution, making the
+  code think the command succeeded. Reverted `run()` to print to stdout, and
+  added a dry-run branch in `register_one()` that prints the command and
+  returns early before attempting to capture output. Added tests for dry-run
+  register and dry-run all.
 
 ## What this plan deliberately leaves out
 
