@@ -48,6 +48,11 @@ jobs:
           mkdir -p "$PWD/.cache/srpm-glaze"
           make -f .copr/Makefile srpm spec=distro/fedora/specs/glaze.spec outdir="$PWD/.cache/srpm-glaze"
           ls -l .cache/srpm-glaze/*.src.rpm
+      - name: A vendored (Rust) package SRPM builds the way COPR builds it (ttfx)
+        run: |
+          mkdir -p "$PWD/.cache/srpm-ttfx"
+          make -f .copr/Makefile srpm spec=distro/fedora/specs/ttfx.spec outdir="$PWD/.cache/srpm-ttfx"
+          ls -l .cache/srpm-ttfx/*.src.rpm
       - name: SRPM builds the way COPR builds it
         run: |
           mkdir -p "$PWD/.cache/srpm"

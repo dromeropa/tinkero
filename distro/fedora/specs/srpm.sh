@@ -117,7 +117,7 @@ grep -iE '^Source[0-9]*:' "$spec_dir/$spec_base" | sed -E 's/^[^:]+:[[:space:]]*
       rm -rf "$work"
       ;;
   esac
-done
+done || true   # never trip set -e on a source-less spec
 
 # Herdr's vendored libghostty-vt uses Zig's package manager. Seal its global
 # dependency cache in the networked SRPM phase when requested by Source3, using
@@ -153,9 +153,9 @@ grep -iE '^Source[0-9]*:' "$spec_dir/$spec_base" | sed -E 's/^[^:]+:[[:space:]]*
       rm -rf "$work"
       ;;
   esac
-done
+done || true   # never trip set -e on a source-less spec
 
 # Build the source RPM and hand it to COPR.
 mkdir -p "$outdir"
 rpmbuild -bs "$TOPDIR/SPECS/$spec_base"
-cp -v "$TOPDIR"/SRPMS/*.src.rpm "$outdir"/
+cp -v "$TOPDIR/SRPMS/${spec_base%.spec}"-*.src.rpm "$outdir"/
