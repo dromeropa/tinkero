@@ -18,7 +18,7 @@ jobs:
     container: fedora:44
     steps:
       - name: Tools
-        run: dnf -y install git-core curl diffutils findutils ShellCheck rpmlint rpm-build make nodejs
+        run: dnf -y install git-core curl diffutils findutils ShellCheck rpmlint rpm-build rpmdevtools make nodejs
       - uses: actions/checkout@v4
       - name: Trust the workspace
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
@@ -29,6 +29,7 @@ jobs:
           ci/gate-arch-leak ci/gate-dropped-refs ci/gate-single-copy ci/gate-name-map ci/lib-gate.sh
           tests/run tests/lib.sh tests/test-*.sh tests/fixtures/make-tree.sh
           distro/fedora/replacements/* distro/fedora/lib/pkg.sh
+          distro/fedora/specs/srpm.sh
       - name: Unit tests
         run: ./dev check
       - name: Gates on the real upstream tree
@@ -38,6 +39,15 @@ jobs:
           ./dev spec
           rpmspec -P tinkero.spec > /dev/null
           rpmlint tinkero.spec
+      - name: Package specs parse and lint
+        run: |
+          for s in distro/fedora/specs/*.spec; do rpmspec -P "$s" > /dev/null || exit 1; done
+          rpmlint distro/fedora/specs/*.spec
+      - name: One package SRPM builds the way COPR builds it (glaze, the smallest)
+        run: |
+          mkdir -p "$PWD/.cache/srpm-glaze"
+          make -f .copr/Makefile srpm spec=distro/fedora/specs/glaze.spec outdir="$PWD/.cache/srpm-glaze"
+          ls -l .cache/srpm-glaze/*.src.rpm
       - name: SRPM builds the way COPR builds it
         run: |
           mkdir -p "$PWD/.cache/srpm"

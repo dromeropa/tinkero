@@ -1,16 +1,14 @@
 #!/bin/bash
 #
-# COPR SRPM-generation for the omedora package set. Invoked by .copr/Makefile's
-# `srpm` target, which COPR runs per configured package:
-#     make -f .copr/Makefile srpm outdir="<dir>" spec="<spec>"
-# $1 = the package's "Spec File", $2 = where the produced .src.rpm must land.
+# COPR SRPM generation for the Tinkero package set (distro/fedora/specs/*.spec).
+# Forked from Omedora's .copr/srpm.sh (AndrewGaspar/omedora, MIT, commit 9672f96);
+# the self-source mode is gone (the tinkero RPM has its own path in .copr/Makefile).
+# .copr/Makefile calls this for every spec that is not tinkero.spec:
+#     srpm.sh <spec-path> <outdir>
 #
-# The mock BUILD phase that follows on COPR is OFFLINE, so everything that needs
-# the network happens HERE, in the SRPM step: fetching the declared sources and
-# regenerating the Rust cargo-vendor tarball. This mirrors the SRPM-gen flow in
-# omedora/packaging/copr/build-local.sh (the local stand-in) but stops at the
-# source RPM (rpmbuild -bs). build-local.sh is the source of truth for the
-# spectool -> pin-verify -> cargo-vendor sequence; keep the two in sync.
+# COPR's mock BUILD phase is OFFLINE, so everything that needs the network happens
+# here in the SRPM step: fetching the declared sources, verifying them against the
+# sha256 pins in <spec>.sources, and vendoring Rust crates or Zig packages.
 
 set -euo pipefail
 
@@ -61,16 +59,17 @@ spectool -g -R "$TOPDIR/SPECS/$spec_base"
 # aborts here rather than silently flowing into the SRPM. Pins live in
 # <spec>.sources ("<hash>  <fetched-basename>", `sha256sum -c` format). We do not
 # pin the locally generated *-vendor.tar.* (cargo's per-crate checksums anchor it
-# to the pinned Source0's Cargo.lock). See OMEDORA-SOURCES.md.
+# to the pinned Source0's Cargo.lock). See README.md in this directory.
 sources_pin="$spec_dir/$spec_base.sources"
 if [[ -f "$sources_pin" ]]; then
   echo "==> Verifying fetched sources against $(basename "$sources_pin")"
+  pin_name=$(basename "$sources_pin")
   while read -r want_hash want_file; do
     [[ -z "$want_hash" || "$want_hash" == \#* ]] && continue
     got_path="$TOPDIR/SOURCES/$want_file"
     if [[ ! -f "$got_path" ]]; then
       echo "SOURCE PIN ERROR: pinned source not fetched: $want_file" >&2
-      echo "  (declared in $(basename "$sources_pin") but missing from SOURCES/)" >&2
+      echo "  (declared in $pin_name but missing from SOURCES/)" >&2
       exit 1
     fi
     got_hash=$(sha256sum "$got_path" | awk '{print $1}')
@@ -78,7 +77,7 @@ if [[ -f "$sources_pin" ]]; then
       echo "SOURCE PIN MISMATCH: $want_file" >&2
       echo "  expected sha256: $want_hash" >&2
       echo "  got sha256:      $got_hash" >&2
-      echo "  Upstream changed since pinned; verify + re-pin (OMEDORA-SOURCES.md). Aborting." >&2
+      echo "  Upstream changed since pinned; verify + re-pin (see README.md). Aborting." >&2
       exit 1
     fi
     echo "    ok: $want_file"
@@ -108,15 +107,10 @@ grep -iE '^Source[0-9]*:' "$spec_dir/$spec_base" | sed -E 's/^[^:]+:[[:space:]]*
       src0_file="$TOPDIR/SOURCES/$(basename "$src0")"
       tar -C "$work" -xf "$src0_file"
       crate_top=$(find "$work" -mindepth 1 -maxdepth 1 -type d | head -n1)
-      # Keep the release lock immutable. SwayOSD is the one historical
-      # exception: its lock pins its own root version below Cargo.toml.
+      # Keep the release lock immutable.
       vendor_dir=vendor
       [[ -d "$crate_top/vendor/portable-pty" ]] && vendor_dir=cargo-vendor
-      if [[ $nv_name == "swayosd" ]]; then
-        ( cd "$crate_top" && cargo vendor "$vendor_dir" >/dev/null )
-      else
-        ( cd "$crate_top" && cargo vendor --locked "$vendor_dir" >/dev/null )
-      fi
+      ( cd "$crate_top" && cargo vendor --locked "$vendor_dir" >/dev/null )
       # Reproducible tar (normalized metadata) so re-runs are byte-identical.
       tar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner \
         -C "$crate_top" -caf "$vendor_tar" "$vendor_dir"
