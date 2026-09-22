@@ -10,6 +10,7 @@ export LC_ALL=C
 dest=$1; map=$2
 [[ -d $dest/usr/bin ]] || { echo "FAIL: no payload at $dest (run ./dev payload first)" >&2; exit 2; }
 [[ -r $map ]] || { echo "FAIL: cannot read name map: $map" >&2; exit 2; }
+if grep -q $'\r' "$map"; then echo "FAIL: name map has CRLF line endings: $map" >&2; exit 2; fi
 rc=0
 
 # 1. The map itself: three tab-separated fields, a known kind, sorted, no duplicates.

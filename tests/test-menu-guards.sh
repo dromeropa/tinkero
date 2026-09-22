@@ -27,4 +27,7 @@ q vim;            assert_eq "$?" 1 "dnf-mapped but not installed is absent"
 q openclaw;       assert_eq "$?" 1 "kind none is absent"
 q nope;           assert_eq "$?" 1 "unmapped is absent"
 assert_eq "$(grep -c pacman "$d/prelude.sh")" 0 "no pacman left in the prelude"
+sed "s|/usr/share/tinkero/pkgmap.tsv|$d/no-such-map|" "$d/prelude.sh" > "$d/p2.sh"
+PATH=$d/bin:$PATH bash -c "set -e; source '$d/p2.sh'; __omarchy_pkg_has foot && exit 3; exit 0" 2>/dev/null; rc=$?
+assert_eq "$rc" 0 "a missing name map does not abort the guard batch under errexit, and every name is absent"
 rm -rf "$d"; finish

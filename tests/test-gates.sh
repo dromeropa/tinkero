@@ -98,4 +98,6 @@ if [[ $out != *ollama_pkg* && $out != *Ollama* ]]; then ok "name-map ignores a v
 printf '# empty\n' > "$d/map5"
 out=$("$ROOT/ci/gate-name-map" "$p" "$d/map5" 2>&1) && rc=0 || rc=$?
 assert_eq "$rc" 1 "name-map fails on a map with no rows"; assert_contains "$out" "has no rows" "and says so"
+printf 'foot\tdnf\tfoot\r\n' > "$d/map6"
+"$ROOT/ci/gate-name-map" "$p" "$d/map6" >/dev/null 2>&1; assert_eq "$?" 2 "name-map exits 2 on a CRLF map"
 rm -rf "$d"; finish

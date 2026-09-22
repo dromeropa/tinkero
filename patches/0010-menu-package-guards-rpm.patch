@@ -42,7 +42,7 @@ rpm and flatpak, translated back to the Arch names the guards use.
 +    + 'while IFS=$\'\\t\' read -r __a __k __t; do [[ -z $__a || $__a == \\#* ]] && continue; '
 +    + 'case $__k in dnf) [[ -n ${__tinkero_rpm[$__t]-} ]] && __omarchy_pkgs[$__a]=1 ;; '
 +    + 'flatpak) [[ -n ${__tinkero_flatpak[$__t]-} ]] && __omarchy_pkgs[$__a]=1 ;; esac; '
-+    + 'done < /usr/share/tinkero/pkgmap.tsv\n'
++    + 'done < /usr/share/tinkero/pkgmap.tsv 2>/dev/null || :\n'
 +    + '__omarchy_pkg_has() { [[ -n ${__omarchy_pkgs[$1]-} ]]; }\n'
      + 'omarchy-pkg-present() { local p; for p in "$@"; do __omarchy_pkg_has "$p" || return 1; done; return 0; }\n'
      + 'omarchy-pkg-missing() { local p; for p in "$@"; do __omarchy_pkg_has "$p" || return 0; done; return 1; }\n'

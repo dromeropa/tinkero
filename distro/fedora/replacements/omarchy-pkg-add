@@ -25,6 +25,9 @@ fi
 if (( ${#flatpak_targets[@]} )); then
   if flatpak remotes --columns=name 2>/dev/null | grep -qx flathub; then
     flatpak install -y flathub "${flatpak_targets[@]}" || failed=1
+  elif ! command -v flatpak >/dev/null; then
+    echo "Tinkero: flatpak is not installed; 'dnf install flatpak' first, then add Flathub." >&2
+    failed=1
   else
     echo "Tinkero: Flathub is not configured; add it with 'flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo' and retry." >&2
     failed=1

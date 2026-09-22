@@ -36,8 +36,10 @@ EOF
 # elevate CMD...: run as root. pkexec inside a graphical session (the shell's polkit
 # dialog answers it, which an agent's terminal cannot); sudo over SSH or on a console.
 elevate() {
-  local euid=${TINKERO_EUID:-$EUID}   # TINKERO_EUID: test seam, so the suite can run as root (CI does)
-  if (( euid == 0 )); then "$@"
+  # TINKERO_EUID is a test seam (the suite runs as root in CI). A string comparison, not
+  # arithmetic, so an odd value in the environment cannot be evaluated as an expression.
+  # pkexec runs the command in / with a scrubbed environment: pass everything as arguments.
+  if [[ ${TINKERO_EUID:-$EUID} == 0 ]]; then "$@"
   elif [[ -n ${WAYLAND_DISPLAY:-} || -n ${DISPLAY:-} ]]; then pkexec "$@"
   else sudo "$@"
   fi

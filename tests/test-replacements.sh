@@ -65,6 +65,10 @@ out=$("$R/omarchy-pkg-add" nope 2>&1); assert_contains "$out" "no Fedora package
 assert_contains "$(cat "$LOG")" "flatpak install -y flathub org.signal.Signal" "add: flatpak target installs from flathub"
 printf 'fedora\n' > "$REMOTES"; out=$("$R/omarchy-pkg-add" signal-desktop 2>&1); rc=$?
 assert_eq "$rc" 1 "add: no flathub remote fails"; assert_contains "$out" "Flathub is not configured" "add: and says so"
+mv "$d/bin/flatpak" "$d/bin/flatpak.off"
+out=$("$R/omarchy-pkg-add" signal-desktop 2>&1)
+assert_contains "$out" "flatpak is not installed" "add: distinguishes a missing flatpak from a missing remote"
+mv "$d/bin/flatpak.off" "$d/bin/flatpak"
 
 # drop
 printf 'foot\n' > "$RPMS"; printf 'org.signal.Signal\n' > "$FLATPAKS"
