@@ -45,7 +45,12 @@ jobs:
         env:
           COPR_CONFIG: ${{ secrets.COPR_CONFIG }}
       - name: Submit
+        # the inputs reach the shell through the environment, never spliced into the script
+        env:
+          PACKAGES: ${{ inputs.packages }}
+          COMMAND: ${{ inputs.command }}
+          TINKERO_COPR_COMMIT: ${{ github.ref_name }}
         run: |
-          pkgs=""; [[ "${{ inputs.packages }}" != all ]] && pkgs="${{ inputs.packages }}"
+          pkgs=""; [[ $PACKAGES != all ]] && pkgs=$PACKAGES
           # shellcheck disable=SC2086  # pkgs is a space-separated list by design
-          TINKERO_COPR_COMMIT="${{ github.ref_name }}" bin/tinkero-copr "${{ inputs.command }}" $pkgs
+          bin/tinkero-copr "$COMMAND" $pkgs
