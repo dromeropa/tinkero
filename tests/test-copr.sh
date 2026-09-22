@@ -31,6 +31,10 @@ assert_eq "$(grep -c build-package "$LOG")" 2 "build: one build-package call per
 assert_eq "$(grep build-package "$LOG" | head -n1)" "copr-cli build-package dromero/tinkero --name glaze" "build: in order, waiting (no --nowait)"
 : > "$LOG"; out=$(TINKERO_COPR_DRY_RUN=1 "$T" build glaze 2>&1)
 assert_eq "$(wc -l < "$LOG")" 0 "dry run calls nothing"; assert_contains "$out" "copr-cli build-package dromero/tinkero --name glaze" "dry run prints the command"
+out=$(TINKERO_COPR_DRY_RUN=1 "$T" register glaze 2>&1)
+assert_contains "$out" "copr-cli add-package-scm dromero/tinkero --name glaze" "dry run: register prints the add command"
+assert_contains "$out" "registered: glaze (dry run)" "dry run: register says it is a dry run"
+assert_eq "$(TINKERO_COPR_DRY_RUN=1 "$T" all 2>&1 | grep -c '^copr-cli ')" 50 "dry run: all prints 25 register and 25 build commands"
 out=$(FAIL_ALL=1 "$T" register glaze 2>&1); rc=$?
 assert_eq "$rc" 1 "register: both calls failing is an error"
 assert_contains "$out" "add-package-scm said: auth failed" "register: shows add's own error when both calls fail"

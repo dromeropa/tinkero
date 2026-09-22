@@ -24,7 +24,7 @@ commit=${TINKERO_COPR_COMMIT:-master}
 
 die() { echo "error: $*" >&2; exit 1; }
 run() {
-  if [[ ${TINKERO_COPR_DRY_RUN:-0} == 1 ]]; then printf '%q ' "$@" >&2; echo >&2; else "$@"; fi
+  if [[ ${TINKERO_COPR_DRY_RUN:-0} == 1 ]]; then printf '%q ' "$@"; echo; else "$@"; fi
 }
 
 mapfile -t all < <(grep -vE '^\s*(#|$)' "$order_file")
@@ -52,6 +52,9 @@ register_one() {
               --type git --method make_srpm --timeout 18000 --webhook-rebuild off)
   # add fails when the package exists, edit fails when it does not: try both, and
   # if both fail show both messages (an auth or network error hits add first)
+  if [[ ${TINKERO_COPR_DRY_RUN:-0} == 1 ]]; then
+    run copr-cli add-package-scm "$project" "${args[@]}"; echo "registered: $name (dry run)"; return 0
+  fi
   if add_err=$(run copr-cli add-package-scm "$project" "${args[@]}" 2>&1); then echo "registered: $name"
   elif run copr-cli edit-package-scm "$project" "${args[@]}"; then echo "updated:    $name"
   else printf 'add-package-scm said: %s\n' "$add_err" >&2; die "could not register $name"; fi
