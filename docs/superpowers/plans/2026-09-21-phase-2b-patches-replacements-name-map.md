@@ -1482,7 +1482,8 @@ Expected: the CI run is green, including the ShellCheck step over the new script
 
 ## Deviations
 
-(empty at the time of writing)
+- Task 6: `tests/test-gates.sh`, `tests/test-render-spec.sh`, `tests/test-replacements.sh` rewritten to satisfy ShellCheck (SC2015 `[[ ]] && ok || not_ok` one-liners converted to `if/then/else` with identical conditions and messages; SC2016 findings on `printf` lines that deliberately write literal `$*`/`$@`/quoted text into stub scripts silenced with `# shellcheck disable=SC2016` comments). No assertion, condition, or stub content changed.
+- Task 6: `distro/fedora/lib/pkg.sh`'s `elevate()` takes a `TINKERO_EUID` test seam (`local euid=${TINKERO_EUID:-$EUID}`) so `tests/test-replacements.sh` can force non-root and root elevation paths regardless of the real EUID the suite runs under; the CI `check` job's `fedora:44` container runs as root (no `user:` set), which the bare `EUID` check could not simulate as non-root. `tests/test-replacements.sh` now exports `TINKERO_EUID=1000` for the suite and adds one more case (`TINKERO_EUID=0`) asserting `elevate` calls the command directly with no `pkexec`/`sudo` prefix when already root.
 
 ## What this plan deliberately leaves out
 
