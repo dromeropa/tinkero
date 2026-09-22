@@ -871,3 +871,19 @@ git push origin task/425e16e7
   `if: github.event_name == 'workflow_dispatch'`, so the registering push
   builds nothing. The guard can stay after the merge; the push trigger is
   harmless.
+- Task 4, steps 1 and 2: no spec changes were needed. All 25 packages built
+  green on the first pass (COPR builds 11020001 to 11020747, workflow runs
+  35705791197 and 35723260396); COPR's import queue was slow for the first
+  two packages (about 40 minutes each), then normal.
+- Task 4, step 3: `dnf repoquery` lists all 25 names at the expected versions
+  (77 entries with subpackages). The milestone depsolve
+  (`dnf install --assumeno hyprland quickshell uwsm mise herdr` against the
+  COPR) pulls no `wofi` and no `newt`, but still lists `nwg-panel` and
+  `playerctl` under weak dependencies. The cause is not in our specs:
+  Fedora's `nwg-panel` declares `Supplements: hyprland`, so any package named
+  `hyprland` attracts it, and `nwg-panel` itself recommends `playerctl`.
+  Ruling: Phase 1 is complete (the package set is what this plan owns); the
+  install-side answer belongs to the plan that ships the `tinkero` RPM and
+  `install.sh` (a `Conflicts: nwg-panel` on the `tinkero` package makes dnf
+  skip the weak dependency without touching dnf's global settings). Task 5
+  records this in the spec and the roadmap.
