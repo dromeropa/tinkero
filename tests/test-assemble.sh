@@ -2,7 +2,8 @@
 source "$(dirname "$0")/lib.sh"
 d=$(mktmp); tb=$("$ROOT/tests/fixtures/make-tree.sh" "$d/src")
 # a private repo root so the test controls drop.list, patches and replacements
-r=$d/root; mkdir -p "$r"/{build,patches,distro/fedora/replacements,session,bin}
+r=$d/root; mkdir -p "$r"/{build,patches,distro/fedora/replacements,distro/fedora/lib,session,bin}
+printf '# lib\n' > "$r/distro/fedora/lib/pkg.sh"; printf 'foot\tdnf\tfoot\n' > "$r/distro/fedora/pkgmap.tsv"
 cp "$ROOT/session/tinkero.desktop" "$r/session/"
 printf 'omarchy_tag=v0\n' > "$r/upstream.lock"
 printf '# comment\nmigrations\ndefault/pacman\nbin/omarchy-snapshot\nbin/omarchy-plymouth-*\ndefault/systemd/user/omarchy-migrate-notify.service\n' > "$r/build/drop.list"
@@ -36,13 +37,26 @@ assert_file "$d/dest/usr/lib/systemd/user/omarchy-keep.service" "user units inst
 assert_no_path "$d/dest/usr/lib/systemd/user/omarchy-migrate-notify.service" "dropped unit not installed"
 assert_file "$d/dest/usr/share/licenses/tinkero/LICENSE.omarchy" "upstream license shipped"
 assert_file "$d/dest/usr/share/tinkero/upstream.lock" "lock shipped"
+assert_file "$d/dest/usr/share/tinkero/pkg.sh" "package library shipped"
+assert_file "$d/dest/usr/share/tinkero/pkgmap.tsv" "name map shipped"
 
+# assert_fails cannot tell the guard from the pre-existing "matches nothing" failure,
+# so these two pin the guard by its message.
 echo '../outside' >> "$r/build/drop.list"
-assert_fails "a drop line escaping the tree with .. fails the build" run "$d/dest6"
+out=$(run "$d/dest6" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 1 "a drop line escaping the tree with .. fails the build"
+assert_contains "$out" "must be a relative path inside the tree" "and names the guard, not a later failure"
 sed -i '$d' "$r/build/drop.list"
 
 echo '/etc' >> "$r/build/drop.list"
-assert_fails "a drop line starting with / fails the build" run "$d/dest7"
+out=$(run "$d/dest7" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 1 "a drop line starting with / fails the build"
+assert_contains "$out" "must be a relative path inside the tree" "and names the guard"
+sed -i '$d' "$r/build/drop.list"
+
+echo 'default/foo..bar' >> "$r/build/drop.list"
+out=$(run "$d/dest10" 2>&1) && rc=0 || rc=$?
+assert_contains "$out" "matches nothing" "a name that merely contains .. is not treated as an escape"
 sed -i '$d' "$r/build/drop.list"
 
 mkdir -p "$d/x"
@@ -60,6 +74,12 @@ printf '#!/bin/bash\n' > "$r/distro/fedora/replacements/omarchy-brand-new"
 assert_fails "a replacement with no upstream namesake fails" run "$d/dest3"
 echo omarchy-brand-new > "$r/distro/fedora/replacements.new"
 run "$d/dest4" >/dev/null; assert_file "$d/dest4/usr/bin/omarchy-brand-new" "unless declared in replacements.new"
+# destructive: corrupt the patch, then restore it, so a case added below still sees a working fixture
+cp "$r/patches/0001-version.patch" "$d/patch.bak"
 sed -i 's/pacman -Q omarchy/pacman -Q something-else/' "$r/patches/0001-version.patch"
-assert_fails "a patch that no longer applies fails the build" run "$d/dest5"
+out=$(run "$d/dest5" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 1 "a patch that no longer applies fails the build"
+assert_contains "$out" "patch failed: 0001-version.patch" "and names the patch"
+cp "$d/patch.bak" "$r/patches/0001-version.patch"
+run "$d/dest9" >/dev/null 2>&1; assert_eq "$?" 0 "the fixture is intact again after the destructive case"
 rm -rf "$d"; finish

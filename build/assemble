@@ -28,7 +28,8 @@ tar -xzf "$tarball" -C "$tree" --strip-components=1
 # 1. Drop. Every line must match something, so an upstream rename is noticed.
 while IFS= read -r line; do
   [[ -z $line || $line == \#* ]] && continue
-  [[ $line == /* || $line == *..* ]] && die "drop.list: '$line' must be a relative path inside the tree"
+  # a ".." path component (not a name that merely contains "..") or an absolute path could leave the tree
+  [[ $line == /* || $line == .. || $line == ../* || $line == */.. || $line == */../* ]] && die "drop.list: '$line' must be a relative path inside the tree"
   matches=()
   # shellcheck disable=SC2231  # unquoted on purpose: $line may be a glob
   for m in "$tree"/$line; do
@@ -74,6 +75,9 @@ mkdir -p "$dest/usr/lib/systemd/user"
 cp -a "$tree/default/systemd/user/." "$dest/usr/lib/systemd/user/"
 install -Dm 0644 "$tree/LICENSE" "$dest/usr/share/licenses/tinkero/LICENSE.omarchy"
 install -Dm 0644 "${TINKERO_LOCK:-$root/upstream.lock}" "$dest/usr/share/tinkero/upstream.lock"
+# The package wrappers' library and name map (distro/fedora, plan 2B).
+install -Dm 0644 "$root/distro/fedora/lib/pkg.sh" "$dest/usr/share/tinkero/pkg.sh"
+install -Dm 0644 "$root/distro/fedora/pkgmap.tsv" "$dest/usr/share/tinkero/pkgmap.tsv"
 
 # 6. The tree, with upstream's own layout: commands in /usr/bin, symlinks in the tree.
 mkdir -p "$dest/usr/bin" "$dest/usr/share/omarchy"

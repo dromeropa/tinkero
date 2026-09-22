@@ -24,6 +24,9 @@ assert_contains "$s" "Release:        3%{?dist}" "release is tinkero_rev"
 assert_contains "$s" "Requires:       (hyprland >= 0.56.2 with hyprland < 0.57)" "hyprland range is derived from the lock"
 assert_contains "$s" "Requires:       quickshell = 0.3.0^20.git28771c7" "quickshell pin is verbatim"
 assert_contains "$s" "tinkero-nerd-fonts" "the Nerd font from the COPR is a hard requirement"
+assert_contains "$s" "ppd-service" "power profiles through the virtual provide, not power-profiles-daemon"
+[[ $s != *power-profiles-daemon* ]] && ok "power-profiles-daemon is not required by name" || not_ok "power-profiles-daemon is not required by name"
+assert_contains "$s" " fcitx5" "fcitx5 is a hard requirement"
 assert_contains "$s" "Source0:        omarchy-c668141e9c42b13c80c9ca4ea108e11708c5e8a5.tar.gz" "source names the commit"
 assert_eq "$(grep -c '@[A-Z_]*@' "$d/out.spec")" "0" "no placeholder left"
 sed -i 's/^hyprland=.*/hyprland=0.56/' "$d/lock"
@@ -35,11 +38,14 @@ assert_fails "a truncated omarchy_commit is rejected" r
 
 reset_lock
 sed -i 's/^quickshell=.*/quickshell=0.3|x/' "$d/lock"
-assert_fails "a quickshell value with unsupported characters is rejected" r
+out=$(r 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 1 "a quickshell value with unsupported characters is rejected"
+assert_contains "$out" "quickshell has characters that cannot appear in an RPM version" "by the validator, not by sed"
 
 reset_lock
 sed -i 's/^hyprland=.*/hyprland=0.09.1/' "$d/lock"
 r >/dev/null; s2=$(cat "$d/out.spec")
 assert_contains "$s2" "hyprland < 0.10" "a zero-padded minor is not read as octal"
 
+TINKERO_LOCK=$d/lock TINKERO_BUILD_DATE='Thu|Sep' "$ROOT/build/render-spec" "$d/o2.spec" >/dev/null 2>&1; assert_eq "$?" 1 "a build date with unsupported characters is rejected"
 rm -rf "$d"; finish
