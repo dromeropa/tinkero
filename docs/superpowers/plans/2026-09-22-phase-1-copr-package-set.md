@@ -838,6 +838,18 @@ git push origin task/425e16e7
   (`ttfx.spec`, one of the five vendored specs) in addition to the
   no-vendoring `glaze` SRPM smoke test, so CI covers the `cargo vendor`
   branch that COPR will also exercise.
+- Task 3, fix round 1: `bin/tinkero-copr` function `register_one()` was
+  suppressing `add-package-scm`'s stderr with `2>/dev/null`, so if it failed
+  for a reason other than "already exists" (auth error, network, etc.), the
+  operator only saw the message from `edit-package-scm`. Changed to capture
+  `add-package-scm`'s output and print it if both calls fail, revealing the
+  real cause. Also changed `run()` to print dry-run commands to stderr so
+  they don't get captured by a command substitution.
+- Task 3, fix round 1: `.github/workflows/copr-build.yml` COPR token step
+  had an overly complex file creation line with a fallback mkdir. Simplified
+  to a single `mkdir -p ~/.config && install` line and added a comment
+  clarifying that `copr-cli whoami` only reads the config; the token is first
+  validated by the API in the Submit step.
 
 ## What this plan deliberately leaves out
 
