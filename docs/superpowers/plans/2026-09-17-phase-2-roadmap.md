@@ -7,7 +7,7 @@ Phase 2 of the design spec (section 7) is six independent subsystems. One plan e
 | Plan | Delivers | Depends on | Blocked by Phase 0? | Status |
 |---|---|---|---|---|
 | **2A** build skeleton, payload assembly, CI gates | `./dev gates` green on the real `v4.0.4` tree; SRPM builds in CI | nothing | no | **done** 2026-09-17: `2026-09-17-phase-2a-build-skeleton-and-gates.md`; CI green on the branch |
-| **2B** patches, replacements, name map | the remaining patches and replacement scripts; `distro/fedora/pkgmap.tsv`; the name-map gate; `arch-leak.allow` down to its five permanent entries | 2A | no, except `omarchy-apply-lock` and the fingerprint pair, which wait for 2F | to write |
+| **2B** patches, replacements, name map | patches 0002 to 0010, 13 replacements, `distro/fedora/pkgmap.tsv` (71 rows), `ci/gate-name-map`; `arch-leak.allow` at 8 entries (6 permanent, 1 for 2C, 1 for 2F) | 2A | no | **done** 2026-09-22: `2026-09-21-phase-2b-patches-replacements-name-map.md`; CI green |
 | **2C** menu rewrite | `menu/apply-overrides`, `menu/overrides.jsonc`, `tinkero-update`; `dropped-refs.allow` down to comment-only entries | 2A, and 2B's drop decisions | no | to write |
 | **2D** branding | font rebuild, wallpaper rendering, manifest rewrite, `branding/strings.tsv` and `images.tsv`, the branding gate | 2A, 2C (menu labels) | no, but needs the placeholder mark and one human pass over 92 wallpapers | to write |
 | **2E** provisioning and install | `tinkero-provision` with `seeded.tsv`, the two provisioning wrappers, `install.sh`, `host.md`, config overrides | 2A, 2B | no | to write |
@@ -46,6 +46,16 @@ Running the 2A prototype against the real tree while writing the plan produced 2
 - **Phase 1:** drop the `Recommends: nwg-panel wofi playerctl newt` that the omedora-4 specs carry.
 - **2E:** seed the Tinkero dconf database from GNOME's at provisioning; `--reset dconf`; removal deletes it. README and `host.md` explain Hyprland Safe Mode after a crash.
 - **Bare metal, later:** suspend-to-lock timing; a dead-menu-entry pass (2C removes most by construction).
+
+## What executing 2B added to the queue (2026-09-22)
+
+- **2C:** the 43 dropped-refs entries are almost all menu rows; the `learn.arch` arch-leak entry too. Both allowlists carry trailing comments naming the owner.
+- **2E:** `omarchy-reinstall-configs` now calls `tinkero-provision --reset-all` (patch 0003) and fails fast with exit 127 until 2E delivers it; `host.md` documents the name map (`/usr/share/tinkero/pkgmap.tsv`, kinds dnf/flatpak/none, how to add a row).
+- **First host with Flathub:** verify the eleven `flatpak` rows with `flatpak search`; consider flatpak rows for steam, minecraft-launcher, heroic, sublime-text-4 (now `none`).
+- **Phase 1:** the `voxtype dnf voxtype` row assumes the COPR package.
+- **Research:** OpenClaw's Fedora install route (row is `none`); if it is a mise tool, the map may need a `mise` kind.
+- **Gate limits, accepted:** `gate-name-map` counts a trailing `# omarchy-pkg-add x` comment as a use (a visible false positive, never a silent miss) and cannot follow shell variables (the Ollama trio is listed by hand).
+- **Process:** CI runs the suite as root; any new elevation logic must respect the `TINKERO_EUID` seam. Tests are ShellCheck-ed in CI: avoid `A && ok || not_ok` one-liners and put `# shellcheck disable=SC2016` above printf lines that write literal `$*` into stub scripts.
 
 ## What creating the COPR project added (2026-09-22)
 
