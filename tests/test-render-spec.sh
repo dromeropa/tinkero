@@ -25,7 +25,7 @@ assert_contains "$s" "Requires:       (hyprland >= 0.56.2 with hyprland < 0.57)"
 assert_contains "$s" "Requires:       quickshell = 0.3.0^20.git28771c7" "quickshell pin is verbatim"
 assert_contains "$s" "tinkero-nerd-fonts" "the Nerd font from the COPR is a hard requirement"
 assert_contains "$s" "ppd-service" "power profiles through the virtual provide, not power-profiles-daemon"
-[[ $s != *power-profiles-daemon* ]] && ok "power-profiles-daemon is not required by name" || not_ok "power-profiles-daemon is not required by name"
+if [[ $s != *power-profiles-daemon* ]]; then ok "power-profiles-daemon is not required by name"; else not_ok "power-profiles-daemon is not required by name"; fi
 assert_contains "$s" " fcitx5" "fcitx5 is a hard requirement"
 assert_contains "$s" "Source0:        omarchy-c668141e9c42b13c80c9ca4ea108e11708c5e8a5.tar.gz" "source names the commit"
 assert_eq "$(grep -c '@[A-Z_]*@' "$d/out.spec")" "0" "no placeholder left"

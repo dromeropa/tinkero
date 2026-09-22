@@ -81,7 +81,7 @@ printf 'foot\tdnf\tfoot\n' > "$d/map2"
 out=$("$ROOT/ci/gate-name-map" "$p" "$d/map2" 2>&1) && rc=0 || rc=$?
 assert_eq "$rc" 1 "name-map fails on a used name with no row"
 assert_contains "$out" "  vim" "and names it"
-[[ $out != *commented* ]] && ok "name-map ignores comment lines in scripts" || not_ok "name-map ignores comment lines in scripts" "$out"
+if [[ $out != *commented* ]]; then ok "name-map ignores comment lines in scripts"; else not_ok "name-map ignores comment lines in scripts" "$out"; fi
 printf 'vim\tdnf\tvim-enhanced\nfoot\tdnf\tfoot\n' > "$d/map3"
 out=$("$ROOT/ci/gate-name-map" "$p" "$d/map3" 2>&1) && rc=0 || rc=$?
 assert_eq "$rc" 1 "name-map fails when the map is not sorted"; assert_contains "$out" "not sorted" "and says so"
@@ -89,11 +89,12 @@ printf 'foot\tdnf\tfoot\nvim\tapt\tvim\n' > "$d/map4"
 out=$("$ROOT/ci/gate-name-map" "$p" "$d/map4" 2>&1) && rc=0 || rc=$?
 assert_eq "$rc" 1 "name-map fails on an unknown kind"; assert_contains "$out" "malformed" "and says so"
 "$ROOT/ci/gate-name-map" "$p" "$d/nope" >/dev/null 2>&1; assert_eq "$?" 2 "name-map exits 2 on an unreadable map"
+# shellcheck disable=SC2016  # the single-quoted literals and $ollama_pkg below belong to the stub script being written, not to this shell
 printf '#!/bin/bash\nomarchy-pkg-present "brave-bin" && omarchy-install-and-launch '"'"'Grok Bot'"'"' grok-bot grok-bot\nomarchy-install-font '"'"'Fira Code'"'"' ttf-firacode-nerd '"'"'FiraCode Nerd Font'"'"'\nomarchy-install-app Ollama "$ollama_pkg"\n' > "$p/usr/bin/omarchy-installer2"
 out=$("$ROOT/ci/gate-name-map" "$p" "$d/map" 2>&1) && rc=0 || rc=$?
 assert_eq "$rc" 1 "name-map sees quoted literals and the installers' package argument"
 for n in brave-bin grok-bot ttf-firacode-nerd; do assert_contains "$out" "  $n" "  reports $n"; done
-[[ $out != *ollama_pkg* && $out != *Ollama* ]] && ok "name-map ignores a variable argument and the display name" || not_ok "name-map ignores a variable argument and the display name" "$out"
+if [[ $out != *ollama_pkg* && $out != *Ollama* ]]; then ok "name-map ignores a variable argument and the display name"; else not_ok "name-map ignores a variable argument and the display name" "$out"; fi
 printf '# empty\n' > "$d/map5"
 out=$("$ROOT/ci/gate-name-map" "$p" "$d/map5" 2>&1) && rc=0 || rc=$?
 assert_eq "$rc" 1 "name-map fails on a map with no rows"; assert_contains "$out" "has no rows" "and says so"

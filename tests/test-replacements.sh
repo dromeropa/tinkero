@@ -23,8 +23,11 @@ case $1 in
   install|uninstall) exit 0 ;;
 esac
 S
+# shellcheck disable=SC2016  # the $* and $@ below belong to the stub scripts being written, not to this shell
 printf '#!/bin/bash\necho "pkexec $*" >> "$LOG"; exec "$@"\n' > "$d/bin/pkexec"
+# shellcheck disable=SC2016  # the $* and $@ below belong to the stub scripts being written, not to this shell
 printf '#!/bin/bash\necho "sudo $*" >> "$LOG"; exec "$@"\n' > "$d/bin/sudo"
+# shellcheck disable=SC2016  # the $* and $@ below belong to the stub scripts being written, not to this shell
 printf '#!/bin/bash\necho "dnf $*" >> "$LOG"\n' > "$d/bin/dnf"
 chmod +x "$d/bin"/*
 export PATH=$d/bin:$PATH RPMS=$d/rpms FLATPAKS=$d/flatpaks REMOTES=$d/remotes
