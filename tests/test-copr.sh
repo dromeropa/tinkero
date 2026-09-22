@@ -6,6 +6,8 @@ d=$(mktmp); mkdir -p "$d/bin"; export LOG=$d/log
 cat > "$d/bin/copr-cli" <<'S'
 #!/bin/bash
 echo "copr-cli $*" >> "$LOG"
+# fail all commands if FAIL_ALL is set
+[[ ${FAIL_ALL:-} == 1 ]] && { echo "auth failed" >&2; exit 1; }
 # add-package-scm fails for a package listed in $EXISTING, edit succeeds for it
 if [[ $1 == add-package-scm ]]; then
   for a in "$@"; do [[ $a == --name ]] && next=1 && continue; [[ ${next:-} == 1 ]] && { name=$a; break; }; done
@@ -27,7 +29,10 @@ assert_contains "$out" "updated:    glaze" "and says so"
 : > "$LOG"; TINKERO_COPR_COMMIT=task/x "$T" build glaze hyprutils >/dev/null
 assert_eq "$(grep -c build-package "$LOG")" 2 "build: one build-package call per package"
 assert_eq "$(grep build-package "$LOG" | head -n1)" "copr-cli build-package dromero/tinkero --name glaze" "build: in order, waiting (no --nowait)"
-: > "$LOG"; out=$(TINKERO_COPR_DRY_RUN=1 "$T" build glaze)
+: > "$LOG"; out=$(TINKERO_COPR_DRY_RUN=1 "$T" build glaze 2>&1)
 assert_eq "$(wc -l < "$LOG")" 0 "dry run calls nothing"; assert_contains "$out" "copr-cli build-package dromero/tinkero --name glaze" "dry run prints the command"
+out=$(FAIL_ALL=1 "$T" register glaze 2>&1); rc=$?
+assert_eq "$rc" 1 "register: both calls failing is an error"
+assert_contains "$out" "add-package-scm said: auth failed" "register: shows add's own error when both calls fail"
 "$T" >/dev/null 2>&1; assert_eq "$?" 2 "no command prints usage and exits 2"
 rm -rf "$d"; finish

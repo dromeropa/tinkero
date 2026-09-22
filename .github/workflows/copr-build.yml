@@ -31,8 +31,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: COPR token
         run: |
-          install -m 0600 /dev/null ~/.config/copr 2>/dev/null || { mkdir -p ~/.config; install -m 0600 /dev/null ~/.config/copr; }
+          mkdir -p ~/.config && install -m 0600 /dev/null ~/.config/copr
           printf '%s\n' "$COPR_CONFIG" > ~/.config/copr
+          # whoami reads the config; the token is first checked by the API in the Submit step, which stops at the first failure
           copr-cli whoami
         env:
           COPR_CONFIG: ${{ secrets.COPR_CONFIG }}
