@@ -43,7 +43,7 @@ Running the 2A prototype against the real tree while writing the plan produced 2
 - **2F:** the GNOME invariant is met by a separate dconf profile for the session, not by save/restore (spec 4.9); the five upstream user units get their `[Install]` stripped at build and are started by `tinkero-provision --session`; `omarchy-fcitx5.service.d/tinkero.conf` adds a condition and a start limit; the autostart restore entry is gone.
 - **2B:** `omarchy-pkg-add` and `omarchy-pkg-drop` use `pkexec` inside a graphical session (spec 4.3): an agent cannot answer `sudo` in its own terminal.
 - **2B, `tinkero.spec.in`:** require `ppd-service` instead of `power-profiles-daemon` (Fedora 44 ships `tuned-ppd`); add `fcitx5` to the hard requirements.
-- **Phase 1:** drop the `Recommends: nwg-panel wofi playerctl newt` that the omedora-4 specs carry.
+- **Phase 1 (done):** drop the `Recommends: nwg-panel wofi playerctl newt` that the omedora-4 specs carry. Done for `wofi` and `newt` (the two `uwsm` lines); `nwg-panel` and `playerctl` come from Fedora's `Supplements: hyprland`, see the Phase 1 section below.
 - **2E:** seed the Tinkero dconf database from GNOME's at provisioning; `--reset dconf`; removal deletes it. README and `host.md` explain Hyprland Safe Mode after a crash.
 - **Bare metal, later:** suspend-to-lock timing; a dead-menu-entry pass (2C removes most by construction).
 
@@ -52,7 +52,7 @@ Running the 2A prototype against the real tree while writing the plan produced 2
 - **2C:** the 43 dropped-refs entries are almost all menu rows; the `learn.arch` arch-leak entry too. Both allowlists carry trailing comments naming the owner.
 - **2E:** `omarchy-reinstall-configs` now calls `tinkero-provision --reset-all` (patch 0003) and fails fast with exit 127 until 2E delivers it; `host.md` documents the name map (`/usr/share/tinkero/pkgmap.tsv`, kinds dnf/flatpak/none, how to add a row).
 - **First host with Flathub:** verify the eleven `flatpak` rows with `flatpak search`; consider flatpak rows for steam, minecraft-launcher, heroic, sublime-text-4 (now `none`).
-- **Phase 1:** the `voxtype dnf voxtype` row assumes the COPR package.
+- **Phase 1 (done):** the `voxtype dnf voxtype` row assumes the COPR package. It builds.
 - **Research:** OpenClaw's Fedora install route (row is `none`); if it is a mise tool, the map may need a `mise` kind.
 - **Gate limits, accepted:** `gate-name-map` counts a trailing `# omarchy-pkg-add x` comment as a use (a visible false positive, never a silent miss) and cannot follow shell variables (the Ollama trio is listed by hand).
 - **Process:** CI runs the suite as root; any new elevation logic must respect the `TINKERO_EUID` seam. Tests are ShellCheck-ed in CI: avoid `A && ok || not_ok` one-liners and put `# shellcheck disable=SC2016` above printf lines that write literal `$*` into stub scripts.
@@ -61,6 +61,15 @@ Running the 2A prototype against the real tree while writing the plan produced 2
 
 - **Phase 3 (workflow):** COPR's `auto_prune` cannot be disabled by a normal user, so the release workflow must download each tagged release's RPM set from the COPR and attach it to the GitHub release; `tinkero-status` prints the `dnf downgrade` command against those files (spec 4.11).
 
+## What executing Phase 1 added to the queue (2026-09-22)
+
+- **Phase 1 done:** the 25 packages build in `dromero/tinkero` (chroot `fedora-44-x86_64`); `bin/tinkero-copr` and the manual `copr-build` workflow are the only submission path; CI lints every spec and smoke-builds two SRPMs.
+- **After the merge to master:** the COPR packages are registered against branch `task/425e16e7`; run the `copr-build` workflow once from master with `command=register` and `packages=all` so the SCM source points at master. The workflow's `push` trigger (limited to its own file, job skipped) exists only so GitHub lists the workflow before it is on master; it can be removed then.
+- **Plan that ships the `tinkero` RPM and `install.sh` (2E or 2F):** add `Conflicts: nwg-panel` to `tinkero.spec.in` and re-run the Phase 1 depsolve check (`dnf install --assumeno` against the COPR): Fedora's `nwg-panel` declares `Supplements: hyprland`, which is why the milestone install still lists `nwg-panel` and `playerctl` under weak dependencies (spec 6). Not a spec fix: no `Recommends:` of ours names them.
+- **Bump checklist (Phase 3):** `herdr` is packaged at `0.8.0^13.git0766aa5` (Omedora's pin) while upstream is at 0.9.1; the first real bump should take it. `voxtype 1.0.1` builds from Omedora's fork source; review whether upstream's own release builds before bumping.
+- **Name map:** the `voxtype dnf voxtype` row is now backed by a real package.
+- **COPR operations:** the import queue can hold a build in `importing` for 40 minutes; nothing to fix, just do not read it as a hang. A full run of the set takes about four hours (two dispatches, `voxtype` and `hyprland` are the long builds).
+
 ## What executing 2A added to the queue
 
 From the task reviews and the final review of 2A. Each is owned by the plan named.
@@ -68,7 +77,7 @@ From the task reviews and the final review of 2A. Each is owned by the plan name
 - **2C:** the arch-leak entry for `omarchy-menu.jsonc` is caused by the `learn.arch` row (an Arch wiki web-app link, line 43), which the audit's delete list did not cover. It is on the list now (audit, section 7); 2C must delete it.
 - **2B (decided):** drop `config/autostart/limine-snapper-notify.desktop` and `bin/omarchy-dev-add-migration`; keep the other `omarchy-dev-*` tools (`omarchy-dev-font` is what plan 2D's glyph work will use).
 - **2B:** `omarchy-version` now prints `VERSION-RELEASE` with the dist tag (`4.0.4-1.fc44`), and the About screen shows it. Decide whether the About line wants the bare tag.
-- **Phase 1:** the COPR's font package must be named `tinkero-nerd-fonts` (the spec template requires it by that name), or the template line is renamed then.
+- **Phase 1 (done):** the COPR's font package must be named `tinkero-nerd-fonts` (the spec template requires it by that name), or the template line is renamed then. It is named `tinkero-nerd-fonts`.
 - **First plan that ships a `bin/tinkero-*` command (2C, `tinkero-update`):** add `%{_bindir}/tinkero-*` to `%files`. It cannot be added earlier, because an unmatched glob fails `rpmbuild`.
 - **2B, first task (test hygiene, found by the final re-review):** three regression tests do not pin the guard they were written for, because `assert_fails` discards output and the command fails for another reason even without the guard: the two drop-line escape cases in `tests/test-assemble.sh` and the `quickshell=0.3|x` case in `tests/test-render-spec.sh`. Assert on the `die` message instead (the idiom is already used throughout `tests/test-gates.sh`). Also, `tests/test-assemble.sh` mutates one shared fixture root and its last case corrupts the patch without restoring it, so a case appended at the end passes for the wrong reason; restore the fixture after each destructive case. Smaller: the drop-line guard's `*..*` also refuses a legitimate name containing `..`; `gate-single-copy` exits 1 where the other bad-input paths exit 2; `render-spec` still splices `TINKERO_BUILD_DATE` unvalidated.
 - **Whenever convenient:** `assert_fails` checks only the exit status, not the message; `gate-dropped-refs` would mis-split a payload path containing a colon; CI discards the SRPM it builds (uploading it is a 125 MB artifact); `actions/checkout@v4` is a mutable tag.
