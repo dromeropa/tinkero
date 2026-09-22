@@ -1,0 +1,20 @@
+Symbolize crashes through Fedora's debuginfod server.
+
+--- a/default/agents/skills/diagnose-crash/SKILL.md
++++ b/default/agents/skills/diagnose-crash/SKILL.md
+@@ -53,13 +53,13 @@
+ 
+ ## Symbolize when you can
+ 
+-This is Arch, which runs a public debuginfod server:
++This is Fedora, which runs a public debuginfod server:
+ 
+ ```bash
+ core=$(mktemp -t crash-XXXXXX.core)
+ trap 'rm -f "$core"' EXIT
+ coredumpctl dump <pid> --output="$core"
+-DEBUGINFOD_URLS="https://debuginfod.archlinux.org" \
++DEBUGINFOD_URLS="https://debuginfod.fedoraproject.org/" \
+   gdb -q <executable> "$core" \
+   -batch -ex 'set debuginfod enabled on' -ex 'bt'
+ ```

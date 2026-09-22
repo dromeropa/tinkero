@@ -1,1 +1,10 @@
 0001-omarchy-version-from-rpm.patch
+0002-omarchy-debug-rpm-inventory.patch
+0003-omarchy-reinstall-configs-provision-reset.patch
+0004-omarchy-remove-launcher-entry-rpm.patch
+0005-omarchy-remove-dev-env-pkg-drop.patch
+0006-omarchy-skill-host-guide.patch
+0007-diagnose-crash-fedora-debuginfod.patch
+0008-omarchy-launch-about-fastfetch-config.patch
+0009-sshd-firewalld.patch
+0010-menu-package-guards-rpm.patch

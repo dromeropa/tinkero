@@ -1,0 +1,35 @@
+Use Tinkero's relocated fastfetch config unless the user has their own.
+
+--- a/bin/omarchy-launch-about
++++ b/bin/omarchy-launch-about
+@@ -17,6 +17,12 @@
+   [[ -f $HOME/.config/fastfetch/config.jsonc ]]
+ }
+ 
++# Tinkero installs no /etc/fastfetch/config.jsonc (it would change fastfetch for
++# every session on the host); the shipped config lives under /usr/share/tinkero.
++fastfetch_args() {
++  custom_fastfetch_config || echo "-c /usr/share/tinkero/fastfetch/config.jsonc"
++}
++
+ # wc -L counts display columns only in a UTF-8 locale. A session that never set
+ # one counts every box-drawing and Nerd Font glyph in the About layout as
+ # nothing, which measures the content narrower than it renders.
+@@ -101,7 +107,7 @@
+   # The guard character keeps command substitution from eating the trailing
+   # break line, which provides the bottom padding row.
+   local modules module_w module_h
+-  modules=$(fastfetch --logo none | sed 's/\x1b\[[0-9;?]*[a-zA-Z]//g'; printf X)
++  modules=$(fastfetch $(fastfetch_args) --logo none | sed 's/\x1b\[[0-9;?]*[a-zA-Z]//g'; printf X)
+   modules=${modules%X}
+   module_w=$(printf '%s' "$modules" | display_columns)
+   module_h=$(printf '%s' "$modules" | wc -l)
+@@ -158,7 +164,7 @@
+     size=$(stty size)
+     logo_stamp=$(stat -c %Y "$LOGO_FILE" 2>/dev/null)
+     clear
+-    fastfetch
++    fastfetch $(fastfetch_args)
+     # A second pass picks up a fit that could not measure the window the first
+     # time. Beyond that, a window that will not settle would be fitted again on
+     # every repaint.

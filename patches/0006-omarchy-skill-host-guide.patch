@@ -1,0 +1,31 @@
+Point the omarchy skill's package idiom and fastfetch row at the Fedora host guide.
+
+--- a/default/agents/skills/omarchy/SKILL.md
++++ b/default/agents/skills/omarchy/SKILL.md
+@@ -146,7 +146,7 @@
+ | `omarchy launch` | Launch apps | `omarchy launch browser` |
+ | `omarchy capture` | Screenshots and recordings | `omarchy capture screenshot` |
+ | `omarchy reminder` | Desktop notification reminders | `omarchy reminder 15 "Pickup Jack"` |
+-| `omarchy pkg` | Package management | `omarchy pkg add <pkg>` |
++| `omarchy pkg` | Package management (Fedora: see `host.md`) | `omarchy pkg add <pkg>` |
+ | `omarchy setup` | Interactive setup wizards | `omarchy setup security fingerprint` |
+ | `omarchy update` | System updates | `omarchy update` |
+ 
+@@ -172,7 +172,7 @@
+ | App | Location |
+ |-----|----------|
+ | btop | `~/.config/btop/btop.conf` |
+-| fastfetch | `/etc/fastfetch/config.jsonc` default; `~/.config/fastfetch/config.jsonc` user override |
++| fastfetch | `/usr/share/tinkero/fastfetch/config.jsonc` default; `~/.config/fastfetch/config.jsonc` user override |
+ | lazygit | `~/.config/lazygit/config.yml` |
+ | starship | `~/.config/starship.toml` |
+ | git | `~/.config/git/config` |
+@@ -253,7 +253,7 @@
+ 2. **Is it a config edit?** Edit in `~/.config/`, never `/usr/share/omarchy/`
+ 3. **Is it a theme customization?** Follow [`theming.md`](theming.md); create a NEW custom theme directory
+ 4. **Is it automation?** Follow [`hooks.md`](hooks.md); use `omarchy hook install` and the hook `.d` directories
+-5. **Is it a package install?** Use `omarchy pkg add <pkgs...>` (or `omarchy pkg aur add <pkgs...>` for AUR-only packages)
++5. **Is it a package install?** Use `omarchy pkg add <pkgs...>`. There is no AUR on this host; if the name is unknown, `host.md` explains how packages are mapped
+ 6. **Is it built-in shell/plugin code?** Follow [`plugins.md`](plugins.md); clone it with `omarchy plugin clone`, never edit the packaged copy
+ 7. **Unsure if command exists?** Run `omarchy commands` (or `omarchy <group> --help` for one group)
+ 

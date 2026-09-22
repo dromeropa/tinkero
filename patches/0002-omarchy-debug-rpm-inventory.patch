@@ -1,0 +1,22 @@
+Report the package inventory with rpm instead of pacman and expac.
+
+--- a/bin/omarchy-debug
++++ b/bin/omarchy-debug
+@@ -37,7 +37,7 @@
+ cat > "$LOG_FILE" <<EOF
+ Date: $(date)
+ Hostname: $(hostname)
+-Omarchy Package: $(pacman -Q omarchy-dev 2>/dev/null || pacman -Q omarchy 2>/dev/null || echo "unknown")
++Tinkero Package: $(rpm -q tinkero 2>/dev/null || echo "unknown")
+ 
+ =========================================
+ SYSTEM INFORMATION
+@@ -57,7 +57,7 @@
+ =========================================
+ INSTALLED PACKAGES
+ =========================================
+-$({ expac -S '%n %v (%r)' $(pacman -Qqe) 2>/dev/null; comm -13 <(pacman -Sql | sort) <(pacman -Qqe | sort) | xargs -r expac -Q '%n %v (AUR)'; } | sort)
++$(rpm -qa --qf '%{NAME} %{VERSION}-%{RELEASE} (%{VENDOR})\n' 2>/dev/null | sort)
+ EOF
+ 
+ if [[ $PRINT_ONLY = "true" ]]; then

@@ -1,0 +1,49 @@
+Open and close the SSH port with firewalld instead of ufw.
+
+--- a/bin/omarchy-setup-security-sshd
++++ b/bin/omarchy-setup-security-sshd
+@@ -16,7 +16,7 @@
+   -h | --help)
+     echo "Usage: omarchy-setup-security-sshd [--key=<public-key>]"
+     echo
+-    echo "Sets up the OpenSSH server, opens the SSH port in the UFW firewall,"
++    echo "Sets up the OpenSSH server, opens the SSH port in firewalld,"
+     echo "and authorizes an SSH key (from GitHub, pasted, or passed via --key)."
+     exit 0
+     ;;
+@@ -34,14 +34,14 @@
+ }
+ 
+ open_firewall() {
+-  if omarchy-cmd-missing ufw; then
+-    echo "UFW is not installed; skipping firewall rule."
++  if omarchy-cmd-missing firewall-cmd; then
++    echo "firewalld is not installed; skipping firewall rule."
+     return
+   fi
+ 
+-  echo "Opening the SSH port in the firewall (rate limited against brute force)..."
+-  sudo ufw limit 22/tcp comment "omarchy-sshd" >/dev/null
+-  sudo ufw reload >/dev/null
++  echo "Opening the SSH port in the firewall..."
++  sudo firewall-cmd --permanent --add-service=ssh >/dev/null
++  sudo firewall-cmd --reload >/dev/null
+ }
+ 
+ valid_key() {
+--- a/bin/omarchy-remove-security-sshd
++++ b/bin/omarchy-remove-security-sshd
+@@ -12,10 +12,10 @@
+ echo "Stopping and disabling the OpenSSH server..."
+ sudo systemctl disable --now sshd.service 2>/dev/null || true
+ 
+-if omarchy-cmd-present ufw; then
++if omarchy-cmd-present firewall-cmd; then
+   echo "Closing the SSH port in the firewall..."
+-  sudo ufw --force delete limit 22/tcp >/dev/null 2>&1 || true
+-  sudo ufw reload >/dev/null
++  sudo firewall-cmd --permanent --remove-service=ssh >/dev/null 2>&1 || true
++  sudo firewall-cmd --reload >/dev/null
+ fi
+ 
+ if [[ -s $AUTHORIZED_KEYS ]]; then

@@ -1,0 +1,17 @@
+Reset configs through tinkero-provision: Tinkero ships no /etc/skel and drops the Limine and Plymouth refreshers.
+
+--- a/bin/omarchy-reinstall-configs
++++ b/bin/omarchy-reinstall-configs
+@@ -16,10 +16,8 @@
+ # default in one pass: .bashrc, .config/**, .local/share/applications,
+ # nautilus-python extensions, branding, hypr toggles, and migration markers.
+ # Trailing dot copies dotfiles; the shell wouldn't glob them with /etc/skel/*.
+-cp -af /etc/skel/. ~/
+-
+-omarchy-refresh-limine
+-omarchy-refresh-plymouth
++# Tinkero: no /etc/skel; the seeded files and their hashes are tracked by tinkero-provision.
++tinkero-provision --reset-all
+ 
+ if omarchy-cmd-present omarchy-nvim-refresh; then
+   omarchy-nvim-refresh
