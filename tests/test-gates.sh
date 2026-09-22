@@ -72,4 +72,21 @@ out=$("$ROOT/ci/gate-single-copy" "$d/empty-dest" 2>&1) && rc=0 || rc=$?
 assert_eq "$rc" "1" "single-copy fails when there are no commands"
 assert_contains "$out" "no commands in usr/share/omarchy/bin" "and says so"
 
+# name-map
+mkdir -p "$p/usr/share/omarchy/default"
+printf '#!/bin/bash\nomarchy-pkg-add foot vim 2>/dev/null\n# omarchy-pkg-add commented out\n' > "$p/usr/bin/omarchy-installer"
+printf 'foot\tdnf\tfoot\nvim\tdnf\tvim-enhanced\n' > "$d/map"
+"$ROOT/ci/gate-name-map" "$p" "$d/map" >/dev/null 2>&1; assert_eq "$?" 0 "name-map passes when every used name has a row"
+printf 'foot\tdnf\tfoot\n' > "$d/map2"
+out=$("$ROOT/ci/gate-name-map" "$p" "$d/map2" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 1 "name-map fails on a used name with no row"
+assert_contains "$out" "  vim" "and names it"
+[[ $out != *commented* ]] && ok "name-map ignores comment lines in scripts" || not_ok "name-map ignores comment lines in scripts" "$out"
+printf 'vim\tdnf\tvim-enhanced\nfoot\tdnf\tfoot\n' > "$d/map3"
+out=$("$ROOT/ci/gate-name-map" "$p" "$d/map3" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 1 "name-map fails when the map is not sorted"; assert_contains "$out" "not sorted" "and says so"
+printf 'foot\tdnf\tfoot\nvim\tapt\tvim\n' > "$d/map4"
+out=$("$ROOT/ci/gate-name-map" "$p" "$d/map4" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 1 "name-map fails on an unknown kind"; assert_contains "$out" "malformed" "and says so"
+"$ROOT/ci/gate-name-map" "$p" "$d/nope" >/dev/null 2>&1; assert_eq "$?" 2 "name-map exits 2 on an unreadable map"
 rm -rf "$d"; finish

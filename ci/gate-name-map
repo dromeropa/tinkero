@@ -1,0 +1,31 @@
+#!/bin/bash
+# gate-name-map DEST PKGMAP: every literal package name that the payload passes to
+# omarchy-pkg-add, -drop, -present or -missing (in scripts and in the menu's guards)
+# must have a row in the name map, and the map must be well-formed and sorted.
+set -euo pipefail
+export LC_ALL=C
+[[ $# -eq 2 ]] || { echo "usage: gate-name-map DEST PKGMAP" >&2; exit 2; }
+dest=$1; map=$2
+[[ -d $dest/usr/bin ]] || { echo "FAIL: no payload at $dest (run ./dev payload first)"; exit 2; }
+[[ -r $map ]] || { echo "FAIL: cannot read name map: $map"; exit 2; }
+rc=0
+
+# 1. The map itself: three tab-separated fields, a known kind, sorted, no duplicates.
+rows=$(grep -vE '^\s*(#|$)' "$map" || true)
+bad=$(awk -F'\t' 'NF != 3 || $2 !~ /^(dnf|flatpak|none)$/ || $1 == "" || $3 == "" { print NR": "$0 }' <<<"$rows")
+if [[ -n $bad ]]; then echo "FAIL: malformed name map rows:"; printf '  %s\n' "${bad//$'\n'/$'\n'  }"; rc=1; fi
+names=$(cut -f1 <<<"$rows")
+if [[ $(sort -u <<<"$names") != "$(sort <<<"$names")" ]]; then echo "FAIL: duplicate names in the name map"; rc=1; fi
+if [[ $(sort <<<"$names") != "$names" ]]; then echo "FAIL: name map is not sorted by name (LC_ALL=C sort)"; rc=1; fi
+
+# 2. Names used by the payload: literal arguments on non-comment lines.
+# Comment lines (shell # and JS //) are skipped, a trailing "2>/dev/null" is cut off, and a bare number is not a name.
+used=$(grep -rhE "omarchy-pkg-(add|drop|present|missing) +[A-Za-z0-9._+@:-]" "$dest/usr/bin" "$dest/usr/share/omarchy" 2>/dev/null \
+  | grep -vE '^\s*(#|//)' | sed -E 's/[0-9]+>.*$//' \
+  | grep -oE "omarchy-pkg-(add|drop|present|missing)( +[A-Za-z0-9._+@:-]+)+" \
+  | sed -E 's/^omarchy-pkg-(add|drop|present|missing) +//' | tr ' ' '\n' | grep -vE '^([0-9]+)?$' | sort -u || true)
+missing=$(comm -23 <(printf '%s\n' "$used") <(sort <<<"$names"))
+if [[ -n $missing ]]; then echo "FAIL: package names used by the payload with no row in $map:"; printf '  %s\n' "${missing//$'\n'/$'\n'  }"; rc=1; fi
+
+[[ $rc -eq 0 ]] && echo "PASS: name map covers $(wc -l <<<"$used") package name(s) used by the payload"
+exit $rc

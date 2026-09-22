@@ -1,0 +1,66 @@
+# Tinkero package name map: Arch package name (as upstream's scripts and menu guards use it),
+# kind, target. kind: dnf (Fedora or Tinkero COPR package), flatpak (Flathub application id),
+# none (no route yet: the wrappers explain how to install by hand). One row per name that the
+# payload passes to omarchy-pkg-add/drop/present/missing; ci/gate-name-map enforces that.
+# Keep the rows sorted by name. Tab-separated.
+1password	none	-
+1password-cli	none	-
+alacritty	dnf	alacritty
+bitwarden	flatpak	com.bitwarden.desktop
+brave-bin	flatpak	com.brave.Browser
+brave-origin-bin	none	-
+composer	dnf	composer
+cursor-bin	none	-
+dropbox	none	-
+dropbox-cli	none	-
+firefox	dnf	firefox
+foot	dnf	foot
+fprintd	dnf	fprintd
+fwupd	dnf	fwupd
+ghostty	none	-
+google-chrome	flatpak	com.google.Chrome
+grok-bot	none	-
+helix	dnf	helix
+hermes-desktop	none	-
+heroic-games-launcher-bin	none	-
+kitty	dnf	kitty
+libappindicator-gtk3	dnf	libappindicator-gtk3
+libfprint	dnf	libfprint
+libfprint-git	dnf	libfprint
+libyaml	dnf	libyaml
+lmstudio-bin	none	-
+lutris	dnf	lutris
+microsoft-edge-stable-bin	flatpak	com.microsoft.Edge
+minecraft-launcher	none	-
+nautilus-dropbox	none	-
+nordvpn-bin	none	-
+omarchy-emacs	none	-
+omazed	none	-
+once-bin	none	-
+openai-codex-desktop	none	-
+openclaw	none	-
+openssh	dnf	openssh-server
+pam-u2f	dnf	pam-u2f
+perplexity	none	-
+php	dnf	php
+php-sqlite	dnf	php-pdo
+python-gpgme	dnf	python3-gpg
+retroarch	dnf	retroarch
+rlwrap	dnf	rlwrap
+signal-desktop	flatpak	org.signal.Signal
+spotify	flatpak	com.spotify.Client
+steam	none	-
+sublime-text-4	none	-
+symfony-cli	none	-
+t3code-bin	none	-
+tailscale	dnf	tailscale
+usbutils	dnf	usbutils
+vim	dnf	vim-enhanced
+visual-studio-code-bin	flatpak	com.visualstudio.code
+voxtype-bin	dnf	voxtype
+wtype	dnf	wtype
+xdebug	dnf	php-pecl-xdebug3
+xpadneo-dkms	none	-
+ydotool	dnf	ydotool
+zed	flatpak	dev.zed.Zed
+zen-browser-bin	flatpak	app.zen_browser.zen

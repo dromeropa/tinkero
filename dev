@@ -22,6 +22,7 @@ gates() {
   ci/gate-single-copy "$payload" || rc=1
   ci/gate-arch-leak "$payload" "$allow/arch-leak.allow" || rc=1
   ci/gate-dropped-refs "$payload" build/drop.list "$allow/dropped-refs.allow" || rc=1
+  ci/gate-name-map "$payload" distro/fedora/pkgmap.tsv || rc=1
   return $rc
 }
 
