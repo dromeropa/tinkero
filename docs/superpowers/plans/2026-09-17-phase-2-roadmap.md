@@ -47,6 +47,10 @@ Running the 2A prototype against the real tree while writing the plan produced 2
 - **2E:** seed the Tinkero dconf database from GNOME's at provisioning; `--reset dconf`; removal deletes it. README and `host.md` explain Hyprland Safe Mode after a crash.
 - **Bare metal, later:** suspend-to-lock timing; a dead-menu-entry pass (2C removes most by construction).
 
+## What creating the COPR project added (2026-09-22)
+
+- **Phase 3 (workflow):** COPR's `auto_prune` cannot be disabled by a normal user, so the release workflow must download each tagged release's RPM set from the COPR and attach it to the GitHub release; `tinkero-status` prints the `dnf downgrade` command against those files (spec 4.11).
+
 ## What executing 2A added to the queue
 
 From the task reviews and the final review of 2A. Each is owned by the plan named.
