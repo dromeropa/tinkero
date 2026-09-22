@@ -1,0 +1,43 @@
+name: copr-build
+# Register and build packages of the Tinkero package set on COPR, in dependency
+# order, one at a time. Manual only: builds cost COPR time and publish to the repo.
+on:
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: "Space-separated package names from distro/fedora/specs/build-order.txt, or 'all'"
+        required: true
+        default: all
+      command:
+        description: "register, build or all"
+        required: true
+        default: all
+permissions:
+  contents: read
+concurrency:
+  group: copr-build
+  cancel-in-progress: false
+defaults:
+  run:
+    shell: bash
+jobs:
+  copr:
+    runs-on: ubuntu-latest
+    container: fedora:44
+    timeout-minutes: 360
+    steps:
+      - name: Tools
+        run: dnf -y install git-core copr-cli
+      - uses: actions/checkout@v4
+      - name: COPR token
+        run: |
+          install -m 0600 /dev/null ~/.config/copr 2>/dev/null || { mkdir -p ~/.config; install -m 0600 /dev/null ~/.config/copr; }
+          printf '%s\n' "$COPR_CONFIG" > ~/.config/copr
+          copr-cli whoami
+        env:
+          COPR_CONFIG: ${{ secrets.COPR_CONFIG }}
+      - name: Submit
+        run: |
+          pkgs=""; [[ "${{ inputs.packages }}" != all ]] && pkgs="${{ inputs.packages }}"
+          # shellcheck disable=SC2086  # pkgs is a space-separated list by design
+          TINKERO_COPR_COMMIT="${{ github.ref_name }}" bin/tinkero-copr "${{ inputs.command }}" $pkgs

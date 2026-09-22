@@ -1,0 +1,69 @@
+#!/bin/bash
+# tinkero-copr: register and build the Tinkero package set on COPR, in order.
+#
+#   tinkero-copr register [PKG...]   (re)register packages as SCM/make_srpm sources
+#   tinkero-copr build [PKG...]      build one at a time, waiting for each (the Hyprland
+#                                    stack needs each -devel published before the next)
+#   tinkero-copr all [PKG...]        register, then build
+#   tinkero-copr order [PKG...]      print the build order and exit
+#
+# Without PKG arguments every package in distro/fedora/specs/build-order.txt is
+# used; with them, only those, still in canonical order. Environment:
+#   TINKERO_COPR_PROJECT  owner/project      (default dromero/tinkero)
+#   TINKERO_COPR_CLONE    git clone URL      (default https://github.com/dromeropa/tinkero.git)
+#   TINKERO_COPR_COMMIT   branch or commit   (default master)
+#   TINKERO_COPR_DRY_RUN  1 prints the copr-cli commands instead of running them
+# Needs copr-cli with a token in ~/.config/copr (or COPR_CONFIG pointing at one).
+set -euo pipefail
+here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+root=${TINKERO_ROOT:-$(dirname "$here")}
+order_file=$root/distro/fedora/specs/build-order.txt
+project=${TINKERO_COPR_PROJECT:-dromero/tinkero}
+clone=${TINKERO_COPR_CLONE:-https://github.com/dromeropa/tinkero.git}
+commit=${TINKERO_COPR_COMMIT:-master}
+
+die() { echo "error: $*" >&2; exit 1; }
+run() {
+  if [[ ${TINKERO_COPR_DRY_RUN:-0} == 1 ]]; then printf '%q ' "$@"; echo; else "$@"; fi
+}
+
+mapfile -t all < <(grep -vE '^\s*(#|$)' "$order_file")
+(( ${#all[@]} )) || die "no packages in $order_file"
+for p in "${all[@]}"; do
+  [[ -f $root/distro/fedora/specs/$p.spec ]] || die "$p is in build-order.txt but distro/fedora/specs/$p.spec does not exist"
+done
+
+cmd=${1:-}; shift || true
+if (( $# )); then
+  declare -A want=()
+  for p in "$@"; do
+    printf '%s\n' "${all[@]}" | grep -qx "$p" || die "unknown package: $p (not in build-order.txt)"
+    want[$p]=1
+  done
+  pkgs=(); for p in "${all[@]}"; do [[ -n ${want[$p]-} ]] && pkgs+=("$p"); done
+else
+  pkgs=("${all[@]}")
+fi
+
+register_one() {
+  local name=$1
+  local args=(--name "$name" --clone-url "$clone" --commit "$commit"
+              --subdir distro/fedora/specs --spec "$name.spec"
+              --type git --method make_srpm --timeout 18000 --webhook-rebuild off)
+  # add fails when the package exists, edit fails when it does not: try both
+  if run copr-cli add-package-scm "$project" "${args[@]}" 2>/dev/null; then echo "registered: $name"
+  elif run copr-cli edit-package-scm "$project" "${args[@]}"; then echo "updated:    $name"
+  else die "could not register $name"; fi
+}
+build_one() {
+  echo "==> building $1 in $project (waits for the build to finish)"
+  run copr-cli build-package "$project" --name "$1"
+}
+
+case $cmd in
+  order)    printf '%s\n' "${pkgs[@]}" ;;
+  register) for p in "${pkgs[@]}"; do register_one "$p"; done ;;
+  build)    for p in "${pkgs[@]}"; do build_one "$p"; done ;;
+  all)      for p in "${pkgs[@]}"; do register_one "$p"; done; for p in "${pkgs[@]}"; do build_one "$p"; done ;;
+  *)        sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac
