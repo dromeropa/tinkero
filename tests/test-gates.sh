@@ -89,4 +89,12 @@ printf 'foot\tdnf\tfoot\nvim\tapt\tvim\n' > "$d/map4"
 out=$("$ROOT/ci/gate-name-map" "$p" "$d/map4" 2>&1) && rc=0 || rc=$?
 assert_eq "$rc" 1 "name-map fails on an unknown kind"; assert_contains "$out" "malformed" "and says so"
 "$ROOT/ci/gate-name-map" "$p" "$d/nope" >/dev/null 2>&1; assert_eq "$?" 2 "name-map exits 2 on an unreadable map"
+printf '#!/bin/bash\nomarchy-pkg-present "brave-bin" && omarchy-install-and-launch '"'"'Grok Bot'"'"' grok-bot grok-bot\nomarchy-install-font '"'"'Fira Code'"'"' ttf-firacode-nerd '"'"'FiraCode Nerd Font'"'"'\nomarchy-install-app Ollama "$ollama_pkg"\n' > "$p/usr/bin/omarchy-installer2"
+out=$("$ROOT/ci/gate-name-map" "$p" "$d/map" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 1 "name-map sees quoted literals and the installers' package argument"
+for n in brave-bin grok-bot ttf-firacode-nerd; do assert_contains "$out" "  $n" "  reports $n"; done
+[[ $out != *ollama_pkg* && $out != *Ollama* ]] && ok "name-map ignores a variable argument and the display name" || not_ok "name-map ignores a variable argument and the display name" "$out"
+printf '# empty\n' > "$d/map5"
+out=$("$ROOT/ci/gate-name-map" "$p" "$d/map5" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 1 "name-map fails on a map with no rows"; assert_contains "$out" "has no rows" "and says so"
 rm -rf "$d"; finish

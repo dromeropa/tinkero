@@ -1,12 +1,15 @@
 # Tinkero package name map: Arch package name (as upstream's scripts and menu guards use it),
 # kind, target. kind: dnf (Fedora or Tinkero COPR package), flatpak (Flathub application id),
 # none (no route yet: the wrappers explain how to install by hand). One row per name that the
-# payload passes to omarchy-pkg-add/drop/present/missing; ci/gate-name-map enforces that.
+# payload passes to omarchy-pkg-add/drop/present/missing, directly or through
+# omarchy-install-app, -and-launch and -font; ci/gate-name-map enforces that. Names that
+# reach a wrapper only through a shell variable (the Ollama trio in the menu) are listed by hand.
 # Keep the rows sorted by name. Tab-separated.
 1password	none	-
 1password-cli	none	-
 alacritty	dnf	alacritty
 bitwarden	flatpak	com.bitwarden.desktop
+bitwarden-cli	none	-
 brave-bin	flatpak	com.brave.Browser
 brave-origin-bin	none	-
 composer	dnf	composer
@@ -34,6 +37,9 @@ microsoft-edge-stable-bin	flatpak	com.microsoft.Edge
 minecraft-launcher	none	-
 nautilus-dropbox	none	-
 nordvpn-bin	none	-
+ollama	none	-
+ollama-cuda	none	-
+ollama-rocm	none	-
 omarchy-emacs	none	-
 omazed	none	-
 once-bin	none	-
@@ -54,6 +60,12 @@ sublime-text-4	none	-
 symfony-cli	none	-
 t3code-bin	none	-
 tailscale	dnf	tailscale
+ttf-bitstream-vera-mono-nerd	none	-
+ttf-cascadia-mono-nerd	none	-
+ttf-firacode-nerd	none	-
+ttf-iosevka-nerd	none	-
+ttf-meslo-nerd	none	-
+ttf-victor-mono-nerd	none	-
 usbutils	dnf	usbutils
 vim	dnf	vim-enhanced
 visual-studio-code-bin	flatpak	com.visualstudio.code
