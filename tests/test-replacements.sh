@@ -3,7 +3,7 @@
 # Each stub appends its argv to $LOG; rpm/flatpak answer from files the test writes.
 source "$(dirname "$0")/lib.sh"
 d=$(mktmp); mkdir -p "$d/bin"; export LOG=$d/log
-export TINKERO_PKG_LIB=$ROOT/distro/fedora/lib/pkg.sh TINKERO_PKGMAP=$d/map
+export TINKERO_PKG_LIB=$ROOT/distro/fedora/lib/pkg.sh TINKERO_PKGMAP=$d/map TINKERO_EUID=1000
 printf 'foot\tdnf\tfoot\nvim\tdnf\tvim-enhanced\nsignal-desktop\tflatpak\torg.signal.Signal\nopenclaw\tnone\t-\n' > "$d/map"
 # rpm -q NAME: installed if NAME is listed in $d/rpms; rpm -qa --qf: print $d/rpms lines
 cat > "$d/bin/rpm" <<'S'
@@ -54,6 +54,9 @@ assert_eq "$(cat "$LOG" | grep -c dnf)" 0 "add: no dnf call when nothing is miss
 printf 'foot\n' > "$RPMS"
 : > "$LOG"; env -u WAYLAND_DISPLAY -u DISPLAY "$R/omarchy-pkg-add" vim >/dev/null 2>&1
 assert_contains "$(cat "$LOG")" "sudo dnf install -y vim-enhanced" "add: sudo outside a graphical session"
+: > "$LOG"; TINKERO_EUID=0 "$R/omarchy-pkg-add" vim >/dev/null 2>&1
+assert_contains "$(cat "$LOG")" "dnf install -y vim-enhanced" "add: runs dnf directly when already root"
+if grep -qE "^(pkexec|sudo) " "$LOG"; then not_ok "add: no pkexec or sudo when already root"; else ok "add: no pkexec or sudo when already root"; fi
 : > "$LOG"; out=$("$R/omarchy-pkg-add" openclaw 2>&1); rc=$?
 assert_eq "$rc" 1 "add: kind none fails"
 assert_contains "$out" "no Fedora package is mapped for 'openclaw'" "add: and explains how to install by hand"

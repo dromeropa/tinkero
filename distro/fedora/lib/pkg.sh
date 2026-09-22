@@ -36,7 +36,8 @@ EOF
 # elevate CMD...: run as root. pkexec inside a graphical session (the shell's polkit
 # dialog answers it, which an agent's terminal cannot); sudo over SSH or on a console.
 elevate() {
-  if (( EUID == 0 )); then "$@"
+  local euid=${TINKERO_EUID:-$EUID}   # TINKERO_EUID: test seam, so the suite can run as root (CI does)
+  if (( euid == 0 )); then "$@"
   elif [[ -n ${WAYLAND_DISPLAY:-} || -n ${DISPLAY:-} ]]; then pkexec "$@"
   else sudo "$@"
   fi
