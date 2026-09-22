@@ -1,0 +1,31 @@
+# COPR build order for the Tinkero package set: one package per line, top to bottom.
+# Each package's -devel must be published in the COPR before the next one builds, so
+# bin/tinkero-copr submits them one at a time and waits. Lines starting with # are ignored.
+# The Hyprland stack has deep intra-stack BuildRequires; the rest is order-free but
+# listed first because it is quick and independent.
+tinkero-nerd-fonts
+mise
+quickshell
+uwsm
+gpu-screen-recorder
+hyprland-preview-share-picker
+tensaku
+ttfx
+herdr
+voxtype
+# the Hyprland stack, in dependency order
+glaze
+hyprland-protocols
+hyprutils
+hyprwayland-scanner
+hyprlang
+hyprgraphics
+hyprwire
+hyprcursor
+aquamarine
+hyprtoolkit
+hyprland
+hyprland-guiutils
+hyprpicker
+hyprsunset
+xdg-desktop-portal-hyprland
