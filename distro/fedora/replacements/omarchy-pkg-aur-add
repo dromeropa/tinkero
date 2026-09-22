@@ -1,0 +1,6 @@
+#!/bin/bash
+
+# omarchy:summary=No AUR on this host; always fails
+
+echo "Tinkero: there is no AUR on Fedora. Use 'omarchy pkg add' with a name from the map, or install by hand." >&2
+exit 1

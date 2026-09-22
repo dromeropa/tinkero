@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# omarchy:summary=Print the active mirror and package channel
+
+echo tinkero

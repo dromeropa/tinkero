@@ -1,0 +1,40 @@
+#!/bin/bash
+
+# omarchy:summary=Install the named packages if they are missing (Fedora: dnf or Flatpak through the name map)
+# omarchy:args=<packages...>
+
+set -uo pipefail
+# shellcheck source=distro/fedora/lib/pkg.sh
+source "${TINKERO_PKG_LIB:-/usr/share/tinkero/pkg.sh}"
+
+dnf_targets=() flatpak_targets=() failed=0
+for pkg in "$@"; do
+  pkg_installed "$pkg" && continue
+  if ! mapped=$(pkg_map "$pkg"); then pkg_unmapped_notice "$pkg"; failed=1; continue; fi
+  IFS=$'\t' read -r kind target <<<"$mapped"
+  case $kind in
+    dnf)     dnf_targets+=("$target") ;;
+    flatpak) flatpak_targets+=("$target") ;;
+    *)       pkg_unmapped_notice "$pkg"; failed=1 ;;
+  esac
+done
+
+if (( ${#dnf_targets[@]} )); then
+  elevate dnf install -y "${dnf_targets[@]}" || failed=1
+fi
+if (( ${#flatpak_targets[@]} )); then
+  if flatpak remotes --columns=name 2>/dev/null | grep -qx flathub; then
+    flatpak install -y flathub "${flatpak_targets[@]}" || failed=1
+  else
+    echo "Tinkero: Flathub is not configured; add it with 'flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo' and retry." >&2
+    failed=1
+  fi
+fi
+
+for pkg in "$@"; do
+  if ! pkg_installed "$pkg"; then
+    echo -e "\033[31mError: Package '$pkg' did not install\033[0m" >&2
+    failed=1
+  fi
+done
+exit $failed

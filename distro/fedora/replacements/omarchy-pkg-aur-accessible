@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# omarchy:summary=Returns true if the AUR is up and available (never, on Fedora)
+
+exit 1

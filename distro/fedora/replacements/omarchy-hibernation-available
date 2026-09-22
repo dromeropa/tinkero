@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# omarchy:summary=Check if hibernation is supported (Tinkero does not set it up)
+
+exit 1

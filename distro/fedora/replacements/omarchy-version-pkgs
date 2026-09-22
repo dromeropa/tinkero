@@ -1,0 +1,7 @@
+#!/bin/bash
+
+# omarchy:summary=Print when system packages were last upgraded
+
+latest=$(rpm -qa --qf '%{INSTALLTIME}\n' 2>/dev/null | sort -n | tail -n1)
+[[ -n $latest ]] || exit 1
+date -d "@$latest" '+%Y-%m-%d %H:%M'

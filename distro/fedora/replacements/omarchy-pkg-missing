@@ -1,0 +1,10 @@
+#!/bin/bash
+
+# omarchy:summary=Returns true if any of the named packages are missing from the system
+
+# shellcheck source=distro/fedora/lib/pkg.sh
+source "${TINKERO_PKG_LIB:-/usr/share/tinkero/pkg.sh}"
+for pkg in "$@"; do
+  pkg_installed "$pkg" || exit 0
+done
+exit 1

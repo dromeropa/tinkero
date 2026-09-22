@@ -1,0 +1,7 @@
+#!/bin/bash
+
+# omarchy:summary=Set the package channel (Tinkero has none)
+# omarchy:args=<stable|rc|edge|dev>
+
+echo "Tinkero has no channels: the tree is pinned by upstream.lock and updated with dnf upgrade." >&2
+exit 1

@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# omarchy:summary=Print the active package channel
+
+echo tinkero

@@ -1,0 +1,22 @@
+#!/bin/bash
+
+# omarchy:summary=Remove the named packages if they are installed (Fedora: dnf or Flatpak through the name map)
+# omarchy:args=<packages...>
+
+set -uo pipefail
+# shellcheck source=distro/fedora/lib/pkg.sh
+source "${TINKERO_PKG_LIB:-/usr/share/tinkero/pkg.sh}"
+
+dnf_targets=() flatpak_targets=()
+for pkg in "$@"; do
+  pkg_installed "$pkg" || continue
+  IFS=$'\t' read -r kind target < <(pkg_map "$pkg")
+  case $kind in
+    dnf)     dnf_targets+=("$target") ;;
+    flatpak) flatpak_targets+=("$target") ;;
+  esac
+done
+rc=0
+(( ${#dnf_targets[@]} )) && { elevate dnf remove -y "${dnf_targets[@]}" || rc=1; }
+(( ${#flatpak_targets[@]} )) && { flatpak uninstall -y "${flatpak_targets[@]}" || rc=1; }
+exit $rc

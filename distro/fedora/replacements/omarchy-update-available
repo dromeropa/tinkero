@@ -1,0 +1,6 @@
+#!/bin/bash
+
+# omarchy:summary=Check whether Omarchy updates are available (Tinkero: never through this path)
+
+# Updates arrive through dnf upgrade; nothing for the bar to announce here.
+exit 1
