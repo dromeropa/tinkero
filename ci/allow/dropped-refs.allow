@@ -1,17 +1,10 @@
 # Baseline written by './dev baseline'. Entries may only be removed, never added by hand.
-# Each one is work owed by a later plan; see docs/superpowers/plans/.
-usr/bin/omarchy-bar:omarchy-migrate
-usr/bin/omarchy-channel-set:omarchy-dev-link
-usr/bin/omarchy-channel-set:omarchy-dev-unlink
-usr/bin/omarchy-channel-set:omarchy-refresh-pacman
-usr/bin/omarchy-default-agent:omarchy-install-openclaw-cli
-usr/bin/omarchy-launch-docker-tui:omarchy-setup-security-sudoless-docker
-usr/bin/omarchy-launch-docker-tui:omarchy-sudo-docker
-usr/bin/omarchy-provision-user:omarchy-provision-owner
-usr/bin/omarchy-reinstall-configs:omarchy-refresh-limine
-usr/bin/omarchy-reinstall-configs:omarchy-refresh-plymouth
-usr/share/omarchy/default/bash/env-bootstrap:omarchy-dev-link
-usr/share/omarchy/default/bash/env-bootstrap:omarchy-dev-unlink
+# Most are work owed by a later plan; a few are permanent (comment-only mentions). See the audit.
+usr/bin/omarchy-bar:omarchy-migrate   # comment only, permanent
+usr/bin/omarchy-provision-user:omarchy-provision-owner   # plan 2E
+usr/share/omarchy/default/bash/env-bootstrap:omarchy-dev-link   # comment only, permanent
+usr/share/omarchy/default/bash/env-bootstrap:omarchy-dev-unlink   # comment only, permanent
+usr/share/omarchy/default/hypr/bindings/applications.lua:omarchy-launch-docker-tui   # gated binding; returns with Docker
 usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-install-docker-dbs
 usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-install-gaming-battlenet
 usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-install-gaming-geforce-now
@@ -48,5 +41,5 @@ usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-sudo-passwordless
 usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-system-factory-reset
 usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-toggle-hybrid-gpu
 usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-windows-vm
-usr/share/omarchy/default/systemd/zram-generator.conf.d/90-omarchy.conf:omarchy-hibernation-setup
-usr/share/omarchy/install/user/mise-work.sh:omarchy-provision-owner
+usr/share/omarchy/default/systemd/zram-generator.conf.d/90-omarchy.conf:omarchy-hibernation-setup   # comment only, permanent
+usr/share/omarchy/install/user/mise-work.sh:omarchy-provision-owner   # comment only, permanent

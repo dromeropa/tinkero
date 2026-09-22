@@ -66,7 +66,6 @@ bin/omarchy-install-gaming-retroarch
 bin/omarchy-install-gaming-steam
 bin/omarchy-install-gaming-xbox-cloud
 bin/omarchy-install-gaming-xbox-controllers
-bin/omarchy-install-openclaw-cli
 bin/omarchy-install-preinstalls
 bin/omarchy-install-service-sunshine
 bin/omarchy-migrate
@@ -132,3 +131,13 @@ bin/omarchy-windows-vm
 bin/omarchy-reinstall
 bin/omarchy-launch-battlenet
 default/applications/battlenet.desktop
+
+# --- plan 2B decisions (docs/superpowers/plans/2026-09-17-phase-2-roadmap.md)
+# Docker is deferred, not Arch-specific: re-enabling means removing the docker lines above and
+# here, adding a name-map row for the Docker package, and re-adding the Super+Shift+D binding.
+bin/omarchy-launch-docker-tui
+# creates files under the dropped migrations/ directory
+bin/omarchy-dev-add-migration
+applications/Docker.desktop
+# a Hidden=true mask for an Arch-only autostart entry; inert on Fedora
+config/autostart/limine-snapper-notify.desktop

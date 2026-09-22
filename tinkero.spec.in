@@ -21,7 +21,7 @@ Requires:       uwsm xdg-desktop-portal-hyprland xdg-desktop-portal-gtk hyprland
 Requires:       qt6-qtwayland qt6-qtmultimedia qt6-qtimageformats qt6-qtsvg gtk4-layer-shell
 Requires:       fontawesome-fonts-all yaru-icon-theme tinkero-nerd-fonts
 Requires:       polkit gnome-keyring pipewire wireplumber pipewire-pulseaudio pamixer brightnessctl
-Requires:       power-profiles-daemon bluez NetworkManager udiskie socat inotify-tools jq gum git-core
+Requires:       ppd-service bluez NetworkManager udiskie socat inotify-tools jq gum git-core fcitx5
 Requires:       foot xdg-terminal-exec tmux herdr mise
 Requires:       grim slurp wl-clipboard wtype tensaku hyprland-preview-share-picker ttfx
 
