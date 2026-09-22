@@ -864,3 +864,10 @@ git push origin task/425e16e7
 - The release archive on GitHub releases and the Qt-watch rebuild trigger: Phase 3.
 - Bumping `herdr` to 0.9.1 and reviewing `voxtype`'s fork source: later, with the bump checklist.
 - A second Fedora chroot: when Fedora 45 branches.
+- Task 4, step 1: `gh workflow run copr-build.yml` answered "workflow not found
+  on the default branch"; GitHub only lists a `workflow_dispatch` workflow once
+  an event has run it, and this file is not on master yet. Added a `push`
+  trigger limited to the workflow file itself, with the job guarded by
+  `if: github.event_name == 'workflow_dispatch'`, so the registering push
+  builds nothing. The guard can stay after the merge; the push trigger is
+  harmless.

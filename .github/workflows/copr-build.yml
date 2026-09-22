@@ -2,6 +2,12 @@ name: copr-build
 # Register and build packages of the Tinkero package set on COPR, in dependency
 # order, one at a time. Manual only: builds cost COPR time and publish to the repo.
 on:
+  # GitHub only lists a workflow for `gh workflow run` once some event has run it
+  # on a branch; until this file is on master, a push that touches it registers it.
+  # The job below is skipped on push, so nothing is built.
+  push:
+    paths:
+      - .github/workflows/copr-build.yml
   workflow_dispatch:
     inputs:
       packages:
@@ -22,6 +28,7 @@ defaults:
     shell: bash
 jobs:
   copr:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     container: fedora:44
     timeout-minutes: 360
