@@ -822,7 +822,22 @@ git push origin task/425e16e7
 
 ## Deviations
 
-(empty at the time of writing; Tasks 2 and 4 append here)
+- Task 2, fix round 1: `distro/fedora/specs/srpm.sh`'s two `while read` loops
+  that generate the vendor tarball and the Zig cache (the `*-vendor.tar.*`
+  and `*-zig-cache.tar.*` case arms) were missing the `|| true` guard the
+  brief's two earlier loops already had; under `set -euo pipefail` a spec
+  with no `Source` lines would abort the pipeline silently. Appended
+  `|| true   # never trip set -e on a source-less spec` after each `done`.
+- Task 2, fix round 1: `srpm.sh`'s final `cp -v "$TOPDIR"/SRPMS/*.src.rpm
+  "$outdir"/` copied every SRPM ever built into that rpmbuild tree, which
+  persists across CI steps; a later package's outdir would pick up earlier
+  packages' SRPMs too. Narrowed to `cp -v "$TOPDIR/SRPMS/${spec_base%.spec}"-*.src.rpm
+  "$outdir"/`, relying on `tests/test-specs.sh` guaranteeing spec `Name`
+  matches the spec's file name.
+- Task 2, fix round 1: added a CI step exercising the Rust-vendoring path
+  (`ttfx.spec`, one of the five vendored specs) in addition to the
+  no-vendoring `glaze` SRPM smoke test, so CI covers the `cargo vendor`
+  branch that COPR will also exercise.
 
 ## What this plan deliberately leaves out
 
