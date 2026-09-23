@@ -18,7 +18,7 @@ jobs:
     container: fedora:44
     steps:
       - name: Tools
-        run: dnf -y install git-core curl diffutils findutils ShellCheck rpmlint rpm-build rpmdevtools make nodejs
+        run: dnf -y install git-core curl diffutils findutils ShellCheck rpmlint rpm-build rpmdevtools make nodejs python3
       - uses: actions/checkout@v4
       - name: Trust the workspace
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
@@ -29,7 +29,7 @@ jobs:
           ci/gate-arch-leak ci/gate-dropped-refs ci/gate-single-copy ci/gate-name-map ci/lib-gate.sh
           tests/run tests/lib.sh tests/test-*.sh tests/fixtures/make-tree.sh
           distro/fedora/replacements/* distro/fedora/lib/pkg.sh
-          distro/fedora/specs/srpm.sh build/tinkero-copr
+          distro/fedora/specs/srpm.sh build/tinkero-copr bin/tinkero-*
       - name: Unit tests
         run: ./dev check
       - name: Gates on the real upstream tree

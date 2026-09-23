@@ -61,6 +61,15 @@ if [[ -d $repl ]]; then
   done
 fi
 
+# 3b. Menu. Upstream's default menu, rewritten by menu/overrides.jsonc (design spec 4.4).
+# Rows that call a dropped command go too, so the drop list and the menu cannot disagree.
+menu=$tree/default/omarchy/omarchy-menu.jsonc
+if [[ -f $root/menu/overrides.jsonc ]]; then
+  python3 "$root/menu/apply-overrides" "$menu" "$root/menu/overrides.jsonc" "$root/build/drop.list" "$menu.tinkero" \
+    || die "menu rewrite failed (see apply-overrides output above)"
+  mv "$menu.tinkero" "$menu"
+fi
+
 # 4. Relocate the two etc/ files Tinkero keeps, then drop the rest of etc/.
 install -Dm 0644 "$tree/etc/fastfetch/config.jsonc" "$dest/usr/share/tinkero/fastfetch/config.jsonc"
 install -Dm 0644 "$tree/etc/mise/conf.d/omarchy.toml" "$dest/etc/mise/conf.d/omarchy.toml"

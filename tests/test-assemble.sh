@@ -17,9 +17,13 @@ cat > "$r/patches/0001-version.patch" <<'P'
 P
 echo 0001-version.patch > "$r/patches/series"
 printf '#!/bin/bash\necho "dnf upgrade"\n' > "$r/distro/fedora/replacements/omarchy-update"
+mkdir -p "$r/menu"; cp "$ROOT/menu/apply-overrides" "$r/menu/"
+cat > "$r/menu/overrides.jsonc" <<'J'
+{"delete": ["learn.arch"], "expect_rows": 2}
+J
 run() { TINKERO_ROOT=$r "$ROOT/build/assemble" "$tb" "$1"; }
 
-run "$d/dest" >/dev/null
+out=$(run "$d/dest")
 o=$d/dest/usr/share/omarchy
 assert_file "$d/dest/usr/bin/omarchy-keep-me" "commands land in /usr/bin"
 assert_symlink "$o/bin/omarchy-keep-me" /usr/bin/omarchy-keep-me "tree bin/ holds symlinks"
@@ -39,6 +43,18 @@ assert_file "$d/dest/usr/share/licenses/tinkero/LICENSE.omarchy" "upstream licen
 assert_file "$d/dest/usr/share/tinkero/upstream.lock" "lock shipped"
 assert_file "$d/dest/usr/share/tinkero/pkg.sh" "package library shipped"
 assert_file "$d/dest/usr/share/tinkero/pkgmap.tsv" "name map shipped"
+
+# 3b. Menu: the default menu is rewritten in place, in the tree, before relocation
+menu=$d/dest/usr/share/omarchy/default/omarchy/omarchy-menu.jsonc
+assert_file "$menu" "menu: still shipped at upstream's path"
+assert_eq "$(grep -c '^\s*"' "$menu")" 2 "menu: two rows survive the fixture overrides"
+assert_contains "$(cat "$menu")" "// fixture menu" "menu: upstream's comment survives"
+if grep -q "learn.arch\|omarchy-snapshot" "$menu"; then not_ok "menu: deleted rows are gone"; else ok "menu: deleted rows are gone"; fi
+assert_contains "$out" "apply-overrides: 4 rows in, 1 deleted by prefix, 1 deleted for a dropped command, 0 replaced, 0 added, 2 rows out" "menu: assemble logs the summary"
+# a wrong expect_rows fails the build
+sed -i 's/"expect_rows": 2/"expect_rows": 3/' "$r/menu/overrides.jsonc"
+assert_fails "menu: expect_rows mismatch fails assemble" run "$d/dest-badmenu"
+sed -i 's/"expect_rows": 3/"expect_rows": 2/' "$r/menu/overrides.jsonc"
 
 # assert_fails cannot tell the guard from the pre-existing "matches nothing" failure,
 # so these two pin the guard by its message.
