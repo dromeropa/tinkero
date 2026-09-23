@@ -30,10 +30,10 @@
   ],
   "replace": {
     // update.omarchy ran omarchy-update; Tinkero updates through dnf, mise and flatpak (spec 4.7)
-    "update.omarchy": {"icon":"","iconFont":"omarchy","label":"Packages","action":"omarchy-launch-floating-terminal-with-presentation tinkero-update"},
+    "update.omarchy": {"icon":"","iconFont":"omarchy","label":"Packages","action":"omarchy-launch-floating-terminal-with-presentation tinkero-update"},
   },
   "add": {
-    "learn.fedora": {"icon":"","label":"Fedora","action":"omarchy-launch-webapp 'https://docs.fedoraproject.org/'"},
+    "learn.fedora": {"icon":"","label":"Fedora","action":"omarchy-launch-webapp 'https://docs.fedoraproject.org/'"},
   },
   "expect_rows": 258,
 }
