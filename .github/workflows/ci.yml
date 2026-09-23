@@ -27,7 +27,7 @@ jobs:
           shellcheck -x -e SC1090,SC1091
           dev build/assemble build/fetch-upstream build/render-spec build/lib.sh
           ci/gate-arch-leak ci/gate-dropped-refs ci/gate-single-copy ci/gate-name-map ci/lib-gate.sh
-          tests/run tests/lib.sh tests/test-*.sh tests/fixtures/make-tree.sh
+          tests/run tests/lib.sh tests/test-*.sh tests/fixtures/make-tree.sh install.sh tests/fixtures/make-payload.sh
           distro/fedora/replacements/* distro/fedora/lib/pkg.sh
           distro/fedora/specs/srpm.sh build/tinkero-copr bin/tinkero-*
       - name: Unit tests
