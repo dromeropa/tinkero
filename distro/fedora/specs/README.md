@@ -20,7 +20,7 @@ Omedora's; their comments still say "omedora" where they describe history.
 - `srpm.sh`: what COPR runs (through `.copr/Makefile`) in its networked SRPM step:
   fetch the sources with `spectool`, verify them against the pins, vendor Rust crates
   (`*-vendor.tar.zst`) or Zig packages (`*-zig-cache.tar.zst`), then `rpmbuild -bs`.
-- `build-order.txt`: the order `bin/tinkero-copr` submits builds in. The Hyprland stack
+- `build-order.txt`: the order `build/tinkero-copr` submits builds in. The Hyprland stack
   has deep intra-stack BuildRequires; each `-devel` must be published before the next
   package builds.
 - `macros.hyprland`, `herdr-libvt-only.patch`: local sources two specs need.
@@ -31,5 +31,5 @@ Omedora's; their comments still say "omedora" where they describe history.
 2. Download the new source tarball(s) with `spectool -g -R <spec>` into a scratch
    directory, compute `sha256sum`, and replace the lines in `<name>.spec.sources`.
 3. `./dev check` (the static checks) and push: CI lints the spec and builds one SRPM.
-4. Build on COPR: the `copr-build` workflow, or `bin/tinkero-copr build <name>` locally
+4. Build on COPR: the `copr-build` workflow, or `build/tinkero-copr build <name>` locally
    with a token in `~/.config/copr`. Dependents of a bumped library need rebuilding too.

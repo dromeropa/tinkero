@@ -1,5 +1,5 @@
 #!/bin/bash
-# bin/tinkero-copr against a stub copr-cli that logs its argv and fails "add" for
+# build/tinkero-copr against a stub copr-cli that logs its argv and fails "add" for
 # packages already registered.
 source "$(dirname "$0")/lib.sh"
 d=$(mktmp); mkdir -p "$d/bin"; export LOG=$d/log
@@ -16,7 +16,7 @@ fi
 exit 0
 S
 chmod +x "$d/bin/copr-cli"; export PATH=$d/bin:$PATH EXISTING=$d/existing; : > "$EXISTING"
-T=$ROOT/bin/tinkero-copr
+T=$ROOT/build/tinkero-copr
 assert_eq "$("$T" order | head -n1)" tinkero-nerd-fonts "order: first package"
 assert_eq "$("$T" order | wc -l)" 25 "order: all 25"
 assert_eq "$("$T" order hyprutils glaze | paste -sd' ')" "glaze hyprutils" "order: subset keeps canonical order"

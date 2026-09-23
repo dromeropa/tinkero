@@ -63,7 +63,7 @@ Running the 2A prototype against the real tree while writing the plan produced 2
 
 ## What executing Phase 1 added to the queue (2026-09-22)
 
-- **Phase 1 done:** the 25 packages build in `dromero/tinkero` (chroot `fedora-44-x86_64`); `bin/tinkero-copr` and the manual `copr-build` workflow are the only submission path; CI lints every spec and smoke-builds two SRPMs.
+- **Phase 1 done:** the 25 packages build in `dromero/tinkero` (chroot `fedora-44-x86_64`); `build/tinkero-copr` and the manual `copr-build` workflow are the only submission path; CI lints every spec and smoke-builds two SRPMs.
 - **After the merge to master:** the COPR packages are registered against branch `task/425e16e7`; run the `copr-build` workflow once from master with `command=register` and `packages=all` so the SCM source points at master. The workflow's `push` trigger (limited to its own file, job skipped) exists only so GitHub lists the workflow before it is on master; it can be removed then.
 - **Plan that ships the `tinkero` RPM and `install.sh` (2E or 2F):** add `Conflicts: nwg-panel` to `tinkero.spec.in` and re-run the Phase 1 depsolve check (`dnf install --assumeno` against the COPR): Fedora's `nwg-panel` declares `Supplements: hyprland`, which is why the milestone install still lists `nwg-panel` and `playerctl` under weak dependencies (spec 6). Not a spec fix: no `Recommends:` of ours names them.
 - **Bump checklist (Phase 3):** `herdr` is packaged at `0.8.0^13.git0766aa5` (Omedora's pin) while upstream is at 0.9.1; the first real bump should take it. `voxtype 1.0.1` builds from Omedora's fork source; review whether upstream's own release builds before bumping.

@@ -29,7 +29,7 @@ jobs:
           ci/gate-arch-leak ci/gate-dropped-refs ci/gate-single-copy ci/gate-name-map ci/lib-gate.sh
           tests/run tests/lib.sh tests/test-*.sh tests/fixtures/make-tree.sh
           distro/fedora/replacements/* distro/fedora/lib/pkg.sh
-          distro/fedora/specs/srpm.sh bin/tinkero-copr
+          distro/fedora/specs/srpm.sh build/tinkero-copr
       - name: Unit tests
         run: ./dev check
       - name: Gates on the real upstream tree

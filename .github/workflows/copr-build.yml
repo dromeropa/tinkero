@@ -53,4 +53,4 @@ jobs:
         run: |
           pkgs=""; [[ $PACKAGES != all ]] && pkgs=$PACKAGES
           # shellcheck disable=SC2086  # pkgs is a space-separated list by design
-          bin/tinkero-copr "$COMMAND" $pkgs
+          build/tinkero-copr "$COMMAND" $pkgs
