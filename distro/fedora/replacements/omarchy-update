@@ -2,4 +2,4 @@
 
 # omarchy:summary=Explain how Tinkero is updated
 
-echo "Tinkero updates through 'sudo dnf upgrade' and 'mise up'; see tinkero-status."
+echo "Tinkero updates through 'tinkero-update' (dnf, mise and flatpak); see tinkero-status."
