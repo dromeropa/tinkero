@@ -1,0 +1,5 @@
+# provision/skip.list: paths under the packaged config/ that tinkero-provision never seeds
+# (design 2E, D1). A line ending in / is a directory prefix; any other line is an exact path.
+# Chromium is not part of Tinkero (spec 3), and its profile is shared with GNOME's Chromium.
+chromium/
+chromium-flags.conf

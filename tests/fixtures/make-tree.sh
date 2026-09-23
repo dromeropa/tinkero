@@ -4,7 +4,8 @@
 set -euo pipefail
 out=$1; top=$out/omarchy-fixture
 mkdir -p "$top"/{bin,shell/plugins/menu,migrations,etc/fastfetch,etc/mise/conf.d,etc/sudoers.d} \
-         "$top"/default/{pacman,uwsm/env.d,systemd/user,fonts/omarchy,fontconfig/conf.avail,omarchy}
+         "$top"/default/{pacman,uwsm/env.d,systemd/user,fonts/omarchy,fontconfig/conf.avail,omarchy,agents/skills/omarchy} \
+         "$top"/applications/icons
 mk() { printf '#!/bin/bash\n%s\n' "$2" > "$top/bin/$1"; chmod 755 "$top/bin/$1"; }
 mk omarchy-keep-me      'echo kept'
 mk omarchy-version      'pacman -Q omarchy'
@@ -20,6 +21,9 @@ printf '[Service]\nExecStart=/usr/bin/omarchy-keep-me\n' > "$top/default/systemd
 printf '[Service]\nExecStart=/usr/bin/omarchy-migrate-notify\n' > "$top/default/systemd/user/omarchy-migrate-notify.service"
 echo font > "$top/default/fonts/omarchy/omarchy.ttf"
 echo '<fontconfig/>' > "$top/default/fontconfig/conf.avail/50-omarchy.conf"
+echo '# fixture skill' > "$top/default/agents/skills/omarchy/SKILL.md"
+echo 'png' > "$top/applications/icons/Disk Usage.png"
+echo 'png' > "$top/applications/icons/imv.png"
 cat > "$top/default/omarchy/omarchy-menu.jsonc" <<'J'
 {
   // fixture menu
