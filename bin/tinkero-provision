@@ -184,13 +184,20 @@ print_plan() {
   local t
   for t in "${!DECISION[@]}"; do printf '%s\t%s\n' "${DECISION[$t]}" "$(rel_of "$t")"; done | LC_ALL=C sort -t "$(printf '\t')" -k2
 }
-print_steps() {   # Task 4 replaces this
+print_steps() {
+  local st
   printf 'step\tskills: link the agent skills into the harness directories\n'
   printf 'step\ttheme: install/user/theme.sh (headless outside a Tinkero session)\n'
   printf 'step\tmise-work: install/user/mise-work.sh\n'
   printf 'step\tmise: install/user/mise.sh\n'
-  printf 'step\tdconf: seed ~/.config/dconf/tinkero from the GNOME settings\n'
-  printf 'step\tbashrc: the guarded line in ~/.bashrc\n'
+  st=pending; if [[ -f $state/done/hardware ]]; then st="done"; fi
+  printf 'step\thardware: install/user/hardware/*.sh (in a Tinkero session, once) %s\n' "$st"
+  st=pending; if [[ -f $state/done/audio-tuning ]]; then st="done"; fi
+  printf 'step\taudio-tuning: install/user/first-run/audio-tuning.sh (in a Tinkero session, once) %s\n' "$st"
+  st=pending; if [[ -f $state/done/dconf ]]; then st="done"; fi
+  printf 'step\tdconf: seed ~/.config/dconf/tinkero from the GNOME settings %s\n' "$st"
+  st=pending; if [[ -f $HOME/.bashrc ]] && grep -qF -- "$bashrc_tag" "$HOME/.bashrc"; then st=present; fi
+  printf 'step\tbashrc: the guarded line in ~/.bashrc %s\n' "$st"
 }
 write_file() {   # SRC TGT
   local mode=0644
@@ -254,8 +261,195 @@ show_notes() {
   echo; echo "Configuration notes for $tag ($f):"; cat "$f"; echo
   mark "notes-$tag"
 }
-run_steps() {   # Task 4 replaces this
-  :
+# --- the upstream leaves ---------------------------------------------------------------------
+# leaf FILE: source an install/user leaf the way upstream's run_logged does.
+leaf() {
+  [[ -f $1 ]] || { echo "missing leaf: $1"; return 1; }
+  bash -eE -c 'source "$1"' bash "$1"
+}
+# run_step NAME CMD...: run in a subshell with the output appended to the log. A failure is
+# recorded in FAILED and does not stop the other steps (design 2E, D9).
+run_step() {
+  local name=$1; shift
+  printf '[%s] step %s\n' "$(date '+%F %T')" "$name" >> "$log"
+  if ( "$@" ) >> "$log" 2>&1; then say "step $name: ok"
+  else FAILED+=("$name"); say "step $name: failed (see $log)"; fi
+}
+# step_skills: upstream's loop, omarchy-provision-user:87-103 at v4.0.4, verbatim. Every skill
+# directory is linked, so a skill a later tag adds is linked by the next run.
+step_skills() {
+  local skill name profile
+  mkdir -p ~/.agents/skills ~/.claude/skills ~/.codex/skills ~/.pi/agent/skills ~/.hermes/skills
+  for skill in "$OMARCHY_PATH"/default/agents/skills/*/; do
+    skill=${skill%/}
+    name=${skill##*/}
+    ln -sfn "$skill" ~/.agents/skills/"$name"
+    ln -sfn "$skill" ~/.claude/skills/"$name"
+    ln -sfn "$skill" ~/.codex/skills/"$name"
+    ln -sfn "$skill" ~/.pi/agent/skills/"$name"
+    ln -sfn "$skill" ~/.hermes/skills/"$name"
+    if [[ -d ~/.hermes/profiles ]]; then
+      for profile in ~/.hermes/profiles/*/; do
+        [[ -d $profile ]] || continue
+        mkdir -p "$profile/skills"
+        ln -sfn "$skill" "$profile/skills/$name"
+      done
+    fi
+  done
+}
+# step_theme: the first theme. Outside a Tinkero session there is no shell to talk to, so
+# upstream's headless mode stages the theme and runs none of the post-theme commands (nothing
+# touches GNOME's dconf or an application's settings from GNOME). Inside, the full switch.
+step_theme() {
+  if in_session; then
+    export OMARCHY_THEME_HEADLESS=0
+    leaf "$OMARCHY_PATH/install/user/theme.sh" && mark theme-in-session
+  else
+    export OMARCHY_THEME_HEADLESS=1
+    leaf "$OMARCHY_PATH/install/user/theme.sh"
+  fi
+}
+run_steps() {
+  run_step skills step_skills
+  run_step theme step_theme
+  run_step mise-work leaf "$OMARCHY_PATH/install/user/mise-work.sh"
+  run_step mise leaf "$OMARCHY_PATH/install/user/mise.sh"
+  seed_dconf 0
+  if in_session; then in_session_steps; fi
+}
+# in_session_steps: once per home, inside a Tinkero session (design 2E, D4): the hardware
+# fixes, the speaker tuning, and one real application of a theme that was set headless.
+in_session_steps() {
+  local before f name
+  if [[ ! -f $state/done/hardware ]]; then
+    before=${#FAILED[@]}
+    for f in "$OMARCHY_PATH"/install/user/hardware/*.sh "$OMARCHY_PATH"/install/user/hardware/*/*.sh; do
+      [[ -f $f ]] || continue
+      run_step "hardware/$(basename "$f")" leaf "$f"
+    done
+    if [[ ${#FAILED[@]} == "$before" ]]; then mark hardware; fi
+  fi
+  if [[ ! -f $state/done/audio-tuning ]]; then
+    before=${#FAILED[@]}
+    run_step audio-tuning leaf "$OMARCHY_PATH/install/user/first-run/audio-tuning.sh"
+    if [[ ${#FAILED[@]} == "$before" ]]; then mark audio-tuning; fi
+  fi
+  name=$state_home/omarchy/current/theme.name
+  if [[ ! -f $state/done/theme-in-session && -s $name ]]; then
+    before=${#FAILED[@]}
+    run_step theme-in-session omarchy-theme-set "$(<"$name")"
+    if [[ ${#FAILED[@]} == "$before" ]]; then mark theme-in-session; fi
+  fi
+}
+
+# --- the session's dconf database (spec 4.9) ---------------------------------------------------
+# seed_dconf FORCE (0|1): GNOME's settings, read through Fedora's "user" profile, loaded into
+# the "tinkero" profile the package ships. Once, unless forced (--reset dconf backs the file up).
+seed_dconf() {
+  local db=$config_home/dconf/tinkero
+  if [[ $1 == 0 && -f $state/done/dconf ]]; then return 0; fi
+  if [[ ! -f $TINKERO_DCONF_PROFILE ]]; then say "dconf: $TINKERO_DCONF_PROFILE is missing; skipped"; return 0; fi
+  if ! command -v dconf >/dev/null 2>&1; then say "dconf: dconf is not installed; skipped"; return 0; fi
+  if [[ -z ${DBUS_SESSION_BUS_ADDRESS:-} ]]; then
+    say "dconf: no session bus; run tinkero-provision again from a graphical session to seed the session's settings"
+    return 0
+  fi
+  if [[ $1 == 1 && -f $db ]]; then cp -p -- "$db" "$db.bak.$(date +%s)"; fi
+  if DCONF_PROFILE=user dconf dump / | DCONF_PROFILE=tinkero dconf load /; then
+    mark dconf; say "dconf: seeded the session's settings from GNOME's"
+  else
+    FAILED+=(dconf); say "dconf: seeding failed"
+  fi
+}
+
+# --- the session ------------------------------------------------------------------------------
+unit_list() {
+  local f=$TINKERO_SHARE/provision/session-units.list
+  [[ -f $f ]] || return 0
+  grep -vE '^[[:space:]]*(#|$)' "$f" || true
+}
+start_units() {
+  local u
+  while IFS= read -r u; do
+    [[ -z $u ]] && continue
+    if [[ -f $TINKERO_UNIT_DIR/$u || -f $config_home/systemd/user/$u ]]; then
+      systemctl --user start "$u" || say "unit $u failed to start"
+    else
+      say "unit $u is not installed; skipped"
+    fi
+  done < <(unit_list)
+}
+stop_units() {
+  local u
+  while IFS= read -r u; do
+    [[ -z $u ]] && continue
+    systemctl --user stop "$u" >/dev/null 2>&1 || true
+  done < <(unit_list)
+}
+# first_session_notices: the welcome toast and, when no default agent is chosen, the invitation
+# upstream ships as a post-update hook (which never fires here). Once each.
+first_session_notices() {
+  if [[ -f $state/done/welcome && -f $state/done/agent-invite ]]; then return 0; fi
+  omarchy-notification-wait || true
+  if [[ ! -f $state/done/welcome ]]; then
+    omarchy-notification-send -u critical "Welcome to Tinkero" $'Super + K for the cheat sheet.\nSuper + Space for the Tinkero menu.' --exec omarchy-menu-keybindings && mark welcome
+  fi
+  if [[ ! -f $state/done/agent-invite ]]; then
+    if [[ -z $(omarchy-default-agent 2>/dev/null || true) ]]; then
+      omarchy-notification-send -u critical "Set your default agent" "Let your favorite agent help with Tinkero." --exec omarchy menu summon setup.default.agent && mark agent-invite
+    else
+      mark agent-invite
+    fi
+  fi
+  return 0
+}
+session_mode() {   # FORCE (0|1)
+  local rc=0
+  if [[ $1 == 1 || ! -f $state/release || $(cat "$state/release") != "$RELEASE" ]]; then
+    provision skip || rc=1
+  else
+    FAILED=(); mkdir -p "$state/done"
+    in_session_steps
+    seed_dconf 0
+    if ((${#FAILED[@]})); then rc=1; fi
+  fi
+  start_units
+  first_session_notices
+  return $rc
+}
+
+# --- removal (spec 4.11) ------------------------------------------------------------------------
+do_remove() {
+  local dir p t f kept=()
+  load_rows
+  stop_units
+  rm -f -- "$config_home/dconf/tinkero"
+  for dir in ~/.agents/skills ~/.claude/skills ~/.codex/skills ~/.pi/agent/skills ~/.hermes/skills ~/.hermes/profiles/*/skills; do
+    [[ -d $dir ]] || continue
+    for p in "$dir"/*; do
+      if [[ -L $p && $(readlink -- "$p") == "$OMARCHY_PATH"/* ]]; then rm -f -- "$p"; fi
+    done
+  done
+  if [[ -f $HOME/.bashrc ]] && grep -qF -- "$bashrc_tag" "$HOME/.bashrc"; then
+    grep -vF -- "$bashrc_tag" "$HOME/.bashrc" > "$HOME/.bashrc.tinkero-tmp" || true
+    mv -- "$HOME/.bashrc.tinkero-tmp" "$HOME/.bashrc"
+  fi
+  for p in "${!ROW_HASH[@]}"; do
+    [[ ${ROW_STATE[$p]} == seeded ]] || continue
+    t=$(abs_of "$p")
+    if [[ $(hash_of "$t") == "${ROW_HASH[$p]}" ]]; then rm -f -- "$t"
+    elif [[ -e $t || -L $t ]]; then kept+=("$p"); fi
+  done
+  say "removed the files Tinkero wrote and you did not change, the skill links, the bashrc line and the session's dconf database"
+  for p in "${kept[@]}"; do say "kept (you changed it): $p"; done
+  for f in "$HOME"/.local/bin/*; do
+    if [[ -f $f ]] && grep -q 'mise x' "$f" 2>/dev/null; then say "kept (mise stub, remove by hand if unwanted): $(rel_of "$f")"; fi
+  done
+  for p in Work .local/state/omarchy .config/omarchy/themes .cache/omarchy; do
+    if [[ -e $HOME/$p ]]; then say "kept (yours to delete): $p"; fi
+  done
+  rm -rf -- "$state"
+  say "then: sudo dnf remove tinkero && sudo dnf copr remove dromero/tinkero"
 }
 
 # --- modes -----------------------------------------------------------------------------------
@@ -290,7 +484,6 @@ do_reset() {   # REL...
   save_rows
 }
 
-# shellcheck disable=SC2034  # force is parsed but unused until Task 4
 main() {
   local mode=provision consent=ask force=0 arg="" targets
   while (($#)); do
@@ -316,9 +509,16 @@ main() {
   case $mode in
     plan)      load_rows; collect_sources; compute_plan; print_plan; print_steps ;;
     provision) provision "$consent" ;;
-    reset)     load_rows; collect_sources all; do_reset "$arg" ;;
+    session)   session_mode "$force" ;;
+    reset)
+      if [[ $arg == dconf ]]; then
+        mkdir -p "$state"; FAILED=(); seed_dconf 1
+        [[ ${#FAILED[@]} == 0 ]] || exit 1
+      else
+        load_rows; collect_sources all; do_reset "$arg"
+      fi ;;
     reset-all) load_rows; collect_sources all; mapfile -t targets < <(for t in "${!SRC[@]}"; do rel_of "$t"; done | LC_ALL=C sort); do_reset "${targets[@]}" ;;
-    session|remove) die "$mode is not implemented yet (plan 2E, Task 4)" ;;
+    remove)    do_remove ;;
   esac
 }
 [[ ${TINKERO_PROVISION_SOURCED:-} == 1 ]] || main "$@"

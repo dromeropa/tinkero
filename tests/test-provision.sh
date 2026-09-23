@@ -220,5 +220,86 @@ mkdir -p "$HOME/.config/hypr"; echo mine > "$HOME/.config/hypr/hyprland.lua"
 out=$("$T" --yes 2>&1)
 assert_contains "$out" "diff $OMARCHY_PATH/config/hypr/hyprland.lua $HOME/.config/hypr/hyprland.lua" "robustness: %q leaves plain paths unquoted in the diff command"
 
-# Task 4 appends its cases here.
+# 9. The upstream leaves run in order, headless outside a session, and one failure does not stop the rest
+newhome 6
+out=$("$T" --yes 2>&1)
+assert_eq "$(grep -o '^leaf [a-z-]*' "$LOG" | paste -sd' ')" "leaf theme leaf mise-work leaf mise" "steps: skills, theme, mise-work, mise; nothing in-session"
+assert_contains "$(cat "$LOG")" "leaf theme headless=1" "steps: the first theme is headless outside a session"
+assert_symlink "$HOME/.claude/skills/omarchy" "$OMARCHY_PATH/default/agents/skills/omarchy" "steps: skills linked (claude)"
+assert_symlink "$HOME/.hermes/skills/diagnose-crash" "$OMARCHY_PATH/default/agents/skills/diagnose-crash" "steps: skills linked (hermes)"
+assert_contains "$(cat "$LOG")" "dconf dump / profile=user" "dconf: GNOME's settings are dumped from the user profile"
+assert_contains "$(cat "$LOG")" "dconf load / profile=tinkero" "dconf: and loaded into the tinkero profile"
+assert_eq "$(cat "$DCONF_IN")" $'[org/gnome]\nk=1' "dconf: the dump is what gets loaded"
+assert_contains "$out" "step mise: ok" "steps: reported"
+: > "$LOG"; "$T" --yes >/dev/null 2>&1
+assert_eq "$(grep -c '^dconf' "$LOG")" 0 "dconf: seeded once"
+assert_contains "$("$T" --plan)" $'step\tdconf: seed ~/.config/dconf/tinkero from the GNOME settings done' "plan: the dconf step shows done"
+: > "$LOG"; "$T" --reset dconf >/dev/null 2>&1
+assert_eq "$(grep -c '^dconf' "$LOG")" 2 "reset dconf: dumped and loaded again"
+newhome 7
+out=$(FAIL_MISE_WORK=1 "$T" --yes 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 1 "a failing leaf makes the run fail"
+assert_contains "$out" "not complete: mise-work failed" "and names it"
+assert_eq "$(grep -o '^leaf [a-z-]*' "$LOG" | paste -sd' ')" "leaf theme leaf mise-work leaf mise" "but the later leaves still ran"
+assert_no_path "$HOME/.local/state/tinkero/release" "and the release is not recorded"
+"$T" --yes >/dev/null 2>&1; assert_file "$HOME/.local/state/tinkero/release" "a later run completes and records it"
+newhome 10
+out=$(env -u DBUS_SESSION_BUS_ADDRESS "$T" --yes 2>&1)
+assert_contains "$out" "dconf: no session bus" "dconf: no bus is a skip with the reason, not a failure"
+assert_eq "$(grep -c '^dconf' "$LOG")" 0 "dconf: nothing ran without a bus"
+assert_file "$HOME/.local/state/tinkero/release" "dconf: a skip does not stop provisioning"
+: > "$LOG"; "$T" --session >/dev/null 2>&1
+assert_contains "$(cat "$LOG")" "dconf load / profile=tinkero" "dconf: the next session start seeds it"
+
+# 10. --session: provision when stale, in-session steps once, units, notices once
+newhome 8
+out=$("$T" --session 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 0 "session: a fresh home is provisioned"
+assert_contains "$(cat "$LOG")" "leaf theme headless=0" "session: the first theme is applied for real inside the session"
+assert_eq "$(grep -c '^leaf hardware' "$LOG")" 2 "session: the hardware fixes run"
+assert_eq "$(grep -c '^leaf audio-tuning' "$LOG")" 1 "session: the speaker tuning runs"
+assert_contains "$(cat "$LOG")" "systemctl --user start omarchy-keep.service" "session: listed units are started"
+assert_contains "$out" "unit missing.service is not installed; skipped" "session: a missing unit is skipped and named"
+assert_eq "$(grep -c '^omarchy-notification-send' "$LOG")" 2 "session: the welcome and the agent invitation"
+assert_eq "$(grep -c '^omarchy-notification-wait' "$LOG")" 1 "session: after waiting for the notification service"
+assert_eq "$(grep -c '^omarchy-theme-set' "$LOG")" 0 "session: no second theme application when the first was in-session"
+assert_contains "$out" "bashrc: the guarded line is not in" "session: the bashrc line is never appended at session start"
+: > "$LOG"; out=$("$T" --session 2>&1)
+assert_eq "$(grep -c '^leaf' "$LOG")" 0 "session: current release, no leaves"
+assert_contains "$(cat "$LOG")" "systemctl --user start omarchy-keep.service" "session: units are started every time"
+assert_eq "$(grep -c '^omarchy-notification-send' "$LOG")" 0 "session: notices are sent once"
+: > "$LOG"; "$T" --session --force >/dev/null 2>&1
+assert_eq "$(grep -o '^leaf [a-z-]*' "$LOG" | paste -sd' ')" "leaf theme leaf mise-work leaf mise" "session --force: reprovisions, the once-only steps stay done"
+newhome 9; AGENT=claude "$T" --session >/dev/null 2>&1
+assert_eq "$(grep -c '^omarchy-notification-send' "$LOG")" 1 "session: no agent invitation when a default agent is set"
+export HOME=$d/home6; : > "$LOG"   # provisioned outside a session above
+mkdir -p "$HOME/.local/state/omarchy/current"; echo "Tokyo Night" > "$HOME/.local/state/omarchy/current/theme.name"
+"$T" --session >/dev/null 2>&1
+assert_contains "$(cat "$LOG")" "omarchy-theme-set Tokyo Night" "session: a theme set headless at install is applied once inside the session"
+: > "$LOG"; "$T" --session >/dev/null 2>&1
+assert_eq "$(grep -c '^omarchy-theme-set' "$LOG")" 0 "session: and only once"
+
+# 11. --remove undoes what was written and keeps what the user changed
+export HOME=$d/home8; : > "$LOG"
+echo 'edited' >> "$HOME/.config/hypr/hyprland.lua"
+mkdir -p "$HOME/.config/dconf"; echo db > "$HOME/.config/dconf/tinkero"
+mkdir -p "$HOME/.local/bin"; printf '#!/bin/bash\nexec mise x claude -- claude "$@"\n' > "$HOME/.local/bin/claude"
+# shellcheck disable=SC2016  # the guarded line is written literally, as tinkero-provision writes it
+printf 'echo mine\n%s\n' '[[ ${XDG_SESSION_DESKTOP:-} == Hyprland && -r /usr/share/omarchy/default/bash/rc ]] && source /usr/share/omarchy/default/bash/rc  # tinkero-provision' > "$HOME/.bashrc"
+out=$("$T" --remove 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 0 "remove: exit 0"
+assert_no_path "$HOME/.config/hypr/bindings.lua" "remove: an unchanged seeded file is deleted"
+assert_no_path "$HOME/.local/state/omarchy/preinstalls-removed" "remove: the preinstalls marker is deleted"
+assert_no_path "$HOME/.XCompose" "remove: the XCompose file is deleted"
+assert_file "$HOME/.config/hypr/hyprland.lua" "remove: a changed file is kept"
+assert_contains "$out" "kept (you changed it): .config/hypr/hyprland.lua" "remove: and listed"
+assert_no_path "$HOME/.claude/skills/omarchy" "remove: skill links are removed"
+assert_eq "$(cat "$HOME/.bashrc")" "echo mine" "remove: only the tagged bashrc line goes"
+assert_no_path "$HOME/.config/dconf/tinkero" "remove: the session's dconf database is deleted"
+assert_file "$HOME/.local/bin/claude" "remove: mise stubs are kept"
+assert_contains "$out" "kept (mise stub, remove by hand if unwanted): .local/bin/claude" "remove: and listed"
+assert_contains "$(cat "$LOG")" "systemctl --user stop omarchy-keep.service" "remove: the session units are stopped"
+assert_no_path "$HOME/.local/state/tinkero" "remove: the state directory is gone"
+assert_contains "$out" "sudo dnf remove tinkero" "remove: says what comes next"
+
 rm -rf "$d"; finish
