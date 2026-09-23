@@ -1,7 +1,7 @@
 # Tinkero design spec
 
 **Tagline:** a tinkerable desktop for Hyprland, bring your own distro.
-**Status:** revision 2.1, 2026-09-21. Phase 0 spike done (`docs/research/phase-0-findings.md`, GO on Phase 1); plans 2A and 2B executed; Phase 1 done 2026-09-22 (the package set builds in `dromero/tinkero`). Fedora 44 x86_64 is the first target.
+**Status:** revision 2.1, 2026-09-21. Phase 0 spike done (`docs/research/phase-0-findings.md`, GO on Phase 1); plans 2A and 2B executed; Phase 1 done 2026-09-22 (the package set builds in `dromero/tinkero`); 2C (menu rewrite) done 2026-09-23. Fedora 44 x86_64 is the first target.
 **Pronunciation:** tin-KEH-ro.
 
 This document records what Tinkero is, why it is shaped the way it is, and the decisions behind it. It is the input to the implementation plans.
@@ -147,9 +147,12 @@ Revision 1 planned a system-level extension file. Upstream has none: `Menu.qml` 
 
 So `menu/apply-overrides` rewrites `default/omarchy/omarchy-menu.jsonc` during `%install`, driven by `menu/overrides.jsonc`:
 
-- **delete by id prefix**: the Arch-only and out-of-scope groups listed in the audit, section 7 (77 of 333 entries at `v4.0.4`);
+- **delete by id prefix**: the Arch-only and out-of-scope groups listed in the audit, section 7 (75 of 333 entries at `v4.0.4`; one more goes by action);
 - **delete by action**: any remaining entry whose action or guard names a dropped script. This list is computed, so a new upstream entry that calls a dropped script is removed automatically, and the build log names it;
-- **replace**: `update.omarchy` becomes "Update (dnf + mise)" and runs `tinkero-update` in a floating terminal (`sudo dnf upgrade`, then `mise up`).
+- **replace**: `update.omarchy` becomes "Packages" and runs `tinkero-update` in a floating terminal (4.7);
+- **add**: rows upstream lacks, appended as a Tinkero block; 2C adds `learn.fedora` (the Fedora docs) where `learn.arch` was.
+
+The rewrite is line-oriented, because every upstream row is one line keyed by its id: upstream's comments and layout survive, and a diff against upstream shows exactly Tinkero's rows. `expect_rows` in `menu/overrides.jsonc` pins the row count at the pinned tag (258 at `v4.0.4`, from 333), so an upstream change to the menu fails the build until the bump checklist has looked at it. Done 2026-09-23 (plan 2C).
 
 The user's own extension file is untouched and layers on top exactly as upstream documents. There is no QML patch and nothing to conflict textually; ids that stop matching after an upstream rename are reported by the build. A system-level extension path will be offered upstream as a PR, since any port would use it; if it lands, this mechanism can shrink.
 
@@ -195,7 +198,7 @@ After a tree bump, `tinkero-provision` (run by the user, or on the next session 
 
 ### 4.7 Maintenance model
 
-On every machine: `sudo dnf upgrade` and `mise up`. Nothing else, ever. The menu's Update entry runs exactly that.
+On every machine: `sudo dnf upgrade --refresh`, `mise up`, and `flatpak update` when Flatpak is installed (the menu installs eleven applications as Flatpaks through the name map, so they update through the same entry). Nothing else, ever. `tinkero-update` is exactly that, and the menu's Update > Packages row runs it in a floating terminal.
 
 For the packager:
 
