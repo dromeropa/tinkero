@@ -279,20 +279,20 @@ run_step() {
 # directory is linked, so a skill a later tag adds is linked by the next run.
 step_skills() {
   local skill name profile
-  mkdir -p ~/.agents/skills ~/.claude/skills ~/.codex/skills ~/.pi/agent/skills ~/.hermes/skills
+  mkdir -p ~/.agents/skills ~/.claude/skills ~/.codex/skills ~/.pi/agent/skills ~/.hermes/skills || return 1
   for skill in "$OMARCHY_PATH"/default/agents/skills/*/; do
     skill=${skill%/}
     name=${skill##*/}
-    ln -sfn "$skill" ~/.agents/skills/"$name"
-    ln -sfn "$skill" ~/.claude/skills/"$name"
-    ln -sfn "$skill" ~/.codex/skills/"$name"
-    ln -sfn "$skill" ~/.pi/agent/skills/"$name"
-    ln -sfn "$skill" ~/.hermes/skills/"$name"
+    ln -sfn "$skill" ~/.agents/skills/"$name" || return 1
+    ln -sfn "$skill" ~/.claude/skills/"$name" || return 1
+    ln -sfn "$skill" ~/.codex/skills/"$name" || return 1
+    ln -sfn "$skill" ~/.pi/agent/skills/"$name" || return 1
+    ln -sfn "$skill" ~/.hermes/skills/"$name" || return 1
     if [[ -d ~/.hermes/profiles ]]; then
       for profile in ~/.hermes/profiles/*/; do
         [[ -d $profile ]] || continue
-        mkdir -p "$profile/skills"
-        ln -sfn "$skill" "$profile/skills/$name"
+        mkdir -p "$profile/skills" || return 1
+        ln -sfn "$skill" "$profile/skills/$name" || return 1
       done
     fi
   done
@@ -302,8 +302,11 @@ step_skills() {
 # touches GNOME's dconf or an application's settings from GNOME). Inside, the full switch.
 step_theme() {
   if in_session; then
+    local name=$state_home/omarchy/current/theme.name had=0
+    [[ -s $name ]] && had=1
     export OMARCHY_THEME_HEADLESS=0
-    leaf "$OMARCHY_PATH/install/user/theme.sh" && mark theme-in-session
+    leaf "$OMARCHY_PATH/install/user/theme.sh" || return 1
+    [[ $had == 0 ]] && mark theme-in-session
   else
     export OMARCHY_THEME_HEADLESS=1
     leaf "$OMARCHY_PATH/install/user/theme.sh"
@@ -409,8 +412,8 @@ session_mode() {   # FORCE (0|1)
     provision skip || rc=1
   else
     FAILED=(); mkdir -p "$state/done"
-    in_session_steps
     seed_dconf 0
+    in_session_steps
     if ((${#FAILED[@]})); then rc=1; fi
   fi
   start_units
@@ -431,14 +434,19 @@ do_remove() {
     done
   done
   if [[ -f $HOME/.bashrc ]] && grep -qF -- "$bashrc_tag" "$HOME/.bashrc"; then
-    grep -vF -- "$bashrc_tag" "$HOME/.bashrc" > "$HOME/.bashrc.tinkero-tmp" || true
-    mv -- "$HOME/.bashrc.tinkero-tmp" "$HOME/.bashrc"
+    grep -vxF -- "$bashrc_line" "$HOME/.bashrc" > "$HOME/.bashrc.tinkero-tmp" || true
+    cat "$HOME/.bashrc.tinkero-tmp" > "$HOME/.bashrc"
+    rm -f -- "$HOME/.bashrc.tinkero-tmp"
   fi
   for p in "${!ROW_HASH[@]}"; do
-    [[ ${ROW_STATE[$p]} == seeded ]] || continue
     t=$(abs_of "$p")
-    if [[ $(hash_of "$t") == "${ROW_HASH[$p]}" ]]; then rm -f -- "$t"
-    elif [[ -e $t || -L $t ]]; then kept+=("$p"); fi
+    case ${ROW_STATE[$p]} in
+      seeded)
+        if [[ $(hash_of "$t") == "${ROW_HASH[$p]}" ]]; then rm -f -- "$t"
+        elif [[ -e $t || -L $t ]]; then kept+=("$p"); fi ;;
+      orphaned)
+        [[ -e $t || -L $t ]] && kept+=("$p") ;;
+    esac
   done
   say "removed the files Tinkero wrote and you did not change, the skill links, the bashrc line and the session's dconf database"
   for p in "${kept[@]}"; do say "kept (you changed it): $p"; done
@@ -455,9 +463,10 @@ do_remove() {
 # --- modes -----------------------------------------------------------------------------------
 provision() {   # CONSENT (yes|ask|skip)
   FAILED=()
-  mkdir -p "$state/done"; : >> "$log"
+  mkdir -p "$state/done" || die "cannot create $state"
+  : >> "$log" || die "cannot write $log"
   load_rows; collect_sources; compute_plan
-  apply_plan; save_rows; report
+  apply_plan; save_rows || die "cannot write $seeded"; report
   seed_bashrc "$1"
   run_steps
   show_notes
@@ -465,7 +474,7 @@ provision() {   # CONSENT (yes|ask|skip)
     say "not complete: ${FAILED[*]} failed (see $log); fix and run again, or the next session start retries"
     return 1
   fi
-  echo "$RELEASE" > "$state/release"
+  echo "$RELEASE" > "$state/release" || die "cannot write $state/release"
   say "provisioned for $RELEASE"
 }
 do_reset() {   # REL...

@@ -302,4 +302,62 @@ assert_contains "$(cat "$LOG")" "systemctl --user stop omarchy-keep.service" "re
 assert_no_path "$HOME/.local/state/tinkero" "remove: the state directory is gone"
 assert_contains "$out" "sudo dnf remove tinkero" "remove: says what comes next"
 
+# 11b. Robustness (review of plan 2E, Task 4)
+# (1) a theme staged headless before a full in-session provision is still applied for real
+newhome 16
+mkdir -p "$HOME/.local/state/omarchy/current"; echo "Tokyo Night" > "$HOME/.local/state/omarchy/current/theme.name"
+FAIL_MISE_WORK=1 "$T" --yes >/dev/null 2>&1 || true
+: > "$LOG"; "$T" --session >/dev/null 2>&1 || true
+assert_contains "$(cat "$LOG")" "omarchy-theme-set Tokyo Night" "in-session theme: staged headless, applied for real even though the session run was a full provision"
+assert_file "$HOME/.local/state/tinkero/done/theme-in-session" "in-session theme: the marker is set"
+: > "$LOG"; "$T" --session >/dev/null 2>&1
+assert_eq "$(grep -c '^omarchy-theme-set' "$LOG")" 0 "in-session theme: and only once"
+
+# (2) step_skills fails explicitly (errexit does not cross run_step's subshell on its own)
+newhome 17
+mkdir -p "$HOME/.claude"; : > "$HOME/.claude/skills"
+out=$("$T" --yes 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 1 "robustness: a step_skills failure fails the run"
+assert_contains "$out" "not complete: skills failed" "robustness: and names it"
+assert_no_path "$HOME/.local/state/tinkero/release" "robustness: no release recorded"
+: > "$LOG"; "$T" --session >/dev/null 2>&1 && rc=0 || rc=$?
+assert_eq "$rc" 1 "robustness: session start still fails when skills keeps failing"
+assert_contains "$(cat "$LOG")" "systemctl --user start omarchy-keep.service" "robustness: but the units still start"
+
+# (3) dconf is seeded before the in-session steps run
+export HOME=$d/home10   # the no-bus home, provisioned then session-started in block 9
+rm -f "$HOME/.local/state/tinkero/done/dconf" "$HOME/.local/state/tinkero/done/hardware"
+: > "$LOG"; "$T" --session >/dev/null 2>&1
+dconf_line=$(grep -n '^dconf load' "$LOG" | head -n1 | cut -d: -f1)
+hw_line=$(grep -n '^leaf hardware' "$LOG" | head -n1 | cut -d: -f1)
+if [[ -n $dconf_line && -n $hw_line && $dconf_line -lt $hw_line ]]; then
+  ok "robustness: dconf is seeded before the in-session steps run"
+else
+  not_ok "robustness: dconf is seeded before the in-session steps run" "dconf line=$dconf_line hardware line=$hw_line"
+fi
+
+# (4) --remove on a symlinked ~/.bashrc keeps the symlink and the real file's mode
+newhome 18
+"$T" --yes >/dev/null 2>&1
+mkdir -p "$HOME/dots"
+# shellcheck disable=SC2016  # the guarded line is written literally, as tinkero-provision writes it
+printf 'echo mine\n%s\n' '[[ ${XDG_SESSION_DESKTOP:-} == Hyprland && -r /usr/share/omarchy/default/bash/rc ]] && source /usr/share/omarchy/default/bash/rc  # tinkero-provision' > "$HOME/dots/bashrc"
+chmod 600 "$HOME/dots/bashrc"
+rm -f "$HOME/.bashrc"; ln -s dots/bashrc "$HOME/.bashrc"
+"$T" --remove >/dev/null 2>&1
+assert_symlink "$HOME/.bashrc" dots/bashrc "robustness: a symlinked bashrc stays a symlink"
+assert_eq "$(cat "$HOME/dots/bashrc")" "echo mine" "robustness: and the guarded line is filtered from the real file"
+assert_eq "$(stat -c %a "$HOME/dots/bashrc")" 600 "robustness: the real file's mode is preserved"
+
+# (5) --remove lists and keeps an orphaned row whose target still exists
+newhome 19
+"$T" --yes >/dev/null 2>&1
+rm "$OMARCHY_PATH/applications/foot.desktop"
+echo edited >> "$HOME/.local/share/applications/foot.desktop"
+"$T" --yes >/dev/null 2>&1
+out=$("$T" --remove 2>&1)
+assert_contains "$out" "kept (you changed it): .local/share/applications/foot.desktop" "robustness: an orphaned row is listed"
+assert_file "$HOME/.local/share/applications/foot.desktop" "robustness: and kept"
+"$ROOT/tests/fixtures/make-payload.sh" "$d/payload" >/dev/null
+
 rm -rf "$d"; finish
