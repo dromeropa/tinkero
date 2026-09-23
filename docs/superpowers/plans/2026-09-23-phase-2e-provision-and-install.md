@@ -24,7 +24,7 @@
 
 ## Issue map
 
-Filed 2026-09-23 as one orchestrated issue (the number is recorded under Deviations when known), superseding placeholder #9. The tasks land serially on one branch because they share `build/assemble`, `tests/test-assemble.sh`, `bin/tinkero-provision` and the allowlist. The `approved` label is Diego's.
+Filed 2026-09-23 as one orchestrated issue, #16, superseding placeholder #9 (the plan itself landed through PR #15). The tasks land serially on one branch because they share `build/assemble`, `tests/test-assemble.sh`, `bin/tinkero-provision` and the allowlist. The `approved` label is Diego's.
 
 | Task | Size | Area | WHAT | WHERE | HOW TO VERIFY |
 |---|---|---|---|---|---|
