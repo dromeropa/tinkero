@@ -18,7 +18,7 @@ srpm:
 	esac
 
 srpm-tinkero:
-	dnf -y install git-core curl rpm-build
+	dnf -y install git-core curl rpm-build python3
 	cd $(TOP) && \
 	  build/fetch-upstream >/dev/null && \
 	  build/render-spec tinkero.spec && \

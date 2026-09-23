@@ -1,0 +1,11 @@
+{
+  // Fixture overrides: one of each rule.
+  "delete": ["install.gaming", "learn.arch"],
+  "replace": {
+    "update.omarchy": {"icon":"","iconFont":"omarchy","label":"Packages","action":"omarchy-launch-floating-terminal-with-presentation tinkero-update"},
+  },
+  "add": {
+    "learn.fedora": {"icon":"","label":"Fedora","action":"omarchy-launch-webapp 'https://docs.fedoraproject.org/'"},
+  },
+  "expect_rows": 9,
+}

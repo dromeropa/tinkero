@@ -5,41 +5,5 @@ usr/bin/omarchy-provision-user:omarchy-provision-owner   # plan 2E
 usr/share/omarchy/default/bash/env-bootstrap:omarchy-dev-link   # comment only, permanent
 usr/share/omarchy/default/bash/env-bootstrap:omarchy-dev-unlink   # comment only, permanent
 usr/share/omarchy/default/hypr/bindings/applications.lua:omarchy-launch-docker-tui   # gated binding; returns with Docker
-usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-install-docker-dbs
-usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-install-gaming-battlenet
-usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-install-gaming-geforce-now
-usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-install-gaming-heroic
-usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-install-gaming-lutris
-usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-install-gaming-retroarch
-usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-install-gaming-steam
-usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-install-gaming-xbox-cloud
-usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-install-gaming-xbox-controllers
-usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-install-preinstalls
-usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-pkg-install
-usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-pkg-remove
-usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-plymouth-reset
-usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-plymouth-set-by-theme
-usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-plymouth-switcher
-usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-refresh-plymouth
-usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-remove-gaming-battlenet
-usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-remove-gaming-geforce-now
-usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-remove-gaming-heroic
-usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-remove-gaming-lutris
-usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-remove-gaming-minecraft
-usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-remove-gaming-retroarch
-usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-remove-gaming-steam
-usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-remove-gaming-xbox-cloud
-usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-remove-gaming-xbox-controllers
-usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-remove-preinstalls
-usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-remove-security-fido2
-usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-remove-security-sudoless-docker
-usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-setup-direct-boot
-usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-setup-security-fido2
-usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-setup-security-sudoless-docker
-usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-sudo-docker
-usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-sudo-passwordless
-usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-system-factory-reset
-usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-toggle-hybrid-gpu
-usr/share/omarchy/default/omarchy/omarchy-menu.jsonc:omarchy-windows-vm
 usr/share/omarchy/default/systemd/zram-generator.conf.d/90-omarchy.conf:omarchy-hibernation-setup   # comment only, permanent
 usr/share/omarchy/install/user/mise-work.sh:omarchy-provision-owner   # comment only, permanent

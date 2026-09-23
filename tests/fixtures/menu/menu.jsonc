@@ -1,0 +1,15 @@
+{
+  // Fixture menu: the shapes upstream's file uses.
+  "apps": {"icon":"󰀻","label":"Apps","provider":"apps"},
+  "learn": {"icon":"󰧑","label":"Learn"},
+  "learn.arch": {"icon":"󰣇","label":"Arch","action":"omarchy-launch-webapp 'https://wiki.archlinux.org/'"},
+  "learn.hyprland": {"icon":"","label":"Hyprland","action":"omarchy-launch-webapp 'https://wiki.hypr.land/'"},
+  "install": {"icon":"󰉉","label":"Install"},
+  "install.gaming": {"icon":"","label":"Gaming"},
+  "install.gaming.steam": {"icon":"","label":"Steam","action":"omarchy-install-gaming-steam"},
+  "install.dev": {"icon":"","label":"Development"},
+  "install.dev.docker-dbs": {"icon":"","label":"Docker DBs","when":"command -v docker","action":"omarchy-install-docker-dbs"},
+  "update": {"icon":"","label":"Update","aliases":["refresh"]},
+  "update.omarchy": {"icon":"","iconFont":"omarchy","label":"Omarchy","action":"omarchy-launch-floating-terminal-with-presentation omarchy-update"},
+  "update.snap": {"icon":"","label":"Snapshot","checked":"omarchy-snapshot-enabled","action":"omarchy-snapshot create"},
+}

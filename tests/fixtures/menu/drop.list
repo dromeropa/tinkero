@@ -1,0 +1,4 @@
+# fixture drop list: two exact names and one glob
+bin/omarchy-install-docker-dbs
+bin/omarchy-snapshot
+bin/omarchy-plymouth-*

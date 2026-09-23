@@ -8,7 +8,7 @@ Phase 2 of the design spec (section 7) is six independent subsystems. One plan e
 |---|---|---|---|---|
 | **2A** build skeleton, payload assembly, CI gates | `./dev gates` green on the real `v4.0.4` tree; SRPM builds in CI | nothing | no | **done** 2026-09-17: `2026-09-17-phase-2a-build-skeleton-and-gates.md`; CI green on the branch |
 | **2B** patches, replacements, name map | patches 0002 to 0010, 13 replacements, `distro/fedora/pkgmap.tsv` (71 rows), `ci/gate-name-map`; `arch-leak.allow` at 8 entries (6 permanent, 1 for 2C, 1 for 2F) | 2A | no | **done** 2026-09-22: `2026-09-21-phase-2b-patches-replacements-name-map.md`; CI green |
-| **2C** menu rewrite | `menu/apply-overrides`, `menu/overrides.jsonc`, `tinkero-update`; `dropped-refs.allow` down to comment-only entries | 2A, and 2B's drop decisions | no | to write |
+| **2C** menu rewrite | `menu/apply-overrides`, `menu/overrides.jsonc`, `tinkero-update`; `dropped-refs.allow` down to comment-only entries | 2A, and 2B's drop decisions | no | **done** 2026-09-23: `2026-09-23-phase-2c-menu-rewrite.md`; first plan through the issue loop |
 | **2D** branding | font rebuild, wallpaper rendering, manifest rewrite, `branding/strings.tsv` and `images.tsv`, the branding gate | 2A, 2C (menu labels) | no, but needs the placeholder mark and one human pass over 92 wallpapers | to write |
 | **2E** provisioning and install | `tinkero-provision` with `seeded.tsv`, the two provisioning wrappers, `install.sh`, `host.md`, config overrides | 2A, 2B | no | to write |
 | **2F** session integration | lock-screen PAM variants and `tinkero-pam-sync`, the dconf profile and `DCONF_PROFILE` export, `[Install]` stripping and session-started units with the fcitx5 drop-in, `tinkero-inhibit-power-key`, `omarchy-apply-lock` patch, fingerprint replacements | 2A, 2E | no longer: Phase 0 is done (GO, 2026-09-21) | to write; its VM check re-runs the Phase 0 GNOME cycle with the dconf profile |
@@ -69,6 +69,13 @@ Running the 2A prototype against the real tree while writing the plan produced 2
 - **Bump checklist (Phase 3):** `herdr` is packaged at `0.8.0^13.git0766aa5` (Omedora's pin) while upstream is at 0.9.1; the first real bump should take it. `voxtype 1.0.1` builds from Omedora's fork source; review whether upstream's own release builds before bumping.
 - **Name map:** the `voxtype dnf voxtype` row is now backed by a real package.
 - **COPR operations:** the import queue can hold a build in `importing` for 40 minutes; nothing to fix, just do not read it as a hang. A full run of the set takes about four hours (two dispatches, `voxtype` and `hyprland` are the long builds).
+
+## What executing 2C added to the queue (2026-09-23)
+
+- **2D:** `learn.omarchy` becomes `learn.tinkero` through `replace` in `menu/overrides.jsonc` (label "Tinkero", the README as a web app or `omarchy-launch-webapp` on the repo); the `update.omarchy` row keeps upstream's glyph, which 2D's font work rebrands.
+- **Bump checklist (Phase 3):** after a tag bump, run `apply-overrides` on the new tree, read the deleted-for-dropped-command lines and the row count, update `expect_rows`. A new upstream row that calls a dropped script is deleted automatically; a renamed id in `delete` or `replace` fails the build.
+- **Permanent allowlist entries, final:** dropped-refs 7 (five comment-only, the Docker binding, `omarchy-provision-user` until 2E); arch-leak 7 (six comment-only, `omarchy-setup-security-fingerprint` until 2F).
+- **Housekeeping done:** `tinkero-copr` moved to `build/`; `bin/` holds only packaged commands (`%{_bindir}/tinkero-*`).
 
 ## What executing 2A added to the queue
 

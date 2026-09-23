@@ -1,0 +1,39 @@
+{
+  // Tinkero's build-time edits to upstream's default menu (design spec 4.4, audit section 7),
+  // applied by menu/apply-overrides during build/assemble. Rules:
+  //   delete   id prefixes: the id itself and every "prefix." child
+  //   replace  id -> whole row; the id must exist upstream (a rename fails the build)
+  //   add      id -> whole row; the id must not exist upstream
+  //   expect_rows  the row count after the rewrite at the pinned upstream tag; the bump
+  //                checklist updates it after reading the upstream diff
+  // Rows whose action, when or checked call a dropped command (build/drop.list) are deleted
+  // without being listed here; the build log names them.
+  "delete": [
+    // Arch package machinery and the AUR
+    "install.package", "install.aur", "remove.package",
+    // upstream's app catalogue: web apps, gaming, the Windows VM, preinstalls, AI desktop apps, services
+    "install.webapp", "install.gaming", "install.windows", "install.preinstalls", "install.ai", "install.service",
+    "remove.webapp", "remove.gaming", "remove.windows", "remove.preinstalls", "remove.ai", "remove.service",
+    // Emacs is an Omarchy-repo package
+    "install.editor.emacs",
+    // Omarchy's update channels and Plymouth (Fedora's boot stays as it is)
+    "update.channel", "update.config.plymouth",
+    // system policy Tinkero does not touch: direct boot, factory reset, passwordless sudo, FIDO2, sudoless docker, hybrid GPU
+    "setup.direct-boot", "setup.reset", "setup.security.passwordless-sudo",
+    "setup.security.fido2", "remove.security.fido2",
+    "setup.security.sudoless-docker", "remove.security.sudoless-docker",
+    "trigger.hardware.hybrid-gpu",
+    // the lock-screen style switcher (upstream's PAM shape; plan 2F owns the lock screen)
+    "style.unlock",
+    // the Arch wiki link (learn.fedora is added below)
+    "learn.arch",
+  ],
+  "replace": {
+    // update.omarchy ran omarchy-update; Tinkero updates through dnf, mise and flatpak (spec 4.7)
+    "update.omarchy": {"icon":"","iconFont":"omarchy","label":"Packages","action":"omarchy-launch-floating-terminal-with-presentation tinkero-update"},
+  },
+  "add": {
+    "learn.fedora": {"icon":"","label":"Fedora","action":"omarchy-launch-webapp 'https://docs.fedoraproject.org/'"},
+  },
+  "expect_rows": 258,
+}

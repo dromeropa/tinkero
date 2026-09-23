@@ -1,0 +1,11 @@
+#!/bin/bash
+# tinkero-update: update everything Tinkero installs (design spec 4.7). The menu's
+# Update > Packages row runs this in a floating terminal, so it is interactive on purpose.
+#   sudo dnf upgrade --refresh   the RPMs, the COPR set included
+#   mise up                      the tools mise manages (agent CLIs, optional extras)
+#   flatpak update               the applications the menu installs as Flatpaks
+# A missing mise or flatpak is skipped; a failing step stops the script.
+set -euo pipefail
+sudo dnf upgrade --refresh
+if command -v mise >/dev/null 2>&1; then mise up; else echo "tinkero-update: mise not installed, skipped"; fi
+if command -v flatpak >/dev/null 2>&1; then flatpak update; else echo "tinkero-update: flatpak not installed, skipped"; fi

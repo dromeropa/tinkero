@@ -20,7 +20,15 @@ printf '[Service]\nExecStart=/usr/bin/omarchy-keep-me\n' > "$top/default/systemd
 printf '[Service]\nExecStart=/usr/bin/omarchy-migrate-notify\n' > "$top/default/systemd/user/omarchy-migrate-notify.service"
 echo font > "$top/default/fonts/omarchy/omarchy.ttf"
 echo '<fontconfig/>' > "$top/default/fontconfig/conf.avail/50-omarchy.conf"
-echo '{}' > "$top/default/omarchy/omarchy-menu.jsonc"
+cat > "$top/default/omarchy/omarchy-menu.jsonc" <<'J'
+{
+  // fixture menu
+  "learn": {"icon":"","label":"Learn"},
+  "learn.arch": {"icon":"","label":"Arch","action":"omarchy-launch-webapp 'https://wiki.archlinux.org/'"},
+  "update": {"icon":"","label":"Update"},
+  "update.snap": {"icon":"","label":"Snapshot","action":"omarchy-snapshot create"},
+}
+J
 echo '{"text":"Omarchy"}' > "$top/etc/fastfetch/config.jsonc"
 echo '[tool_alias]' > "$top/etc/mise/conf.d/omarchy.toml"
 echo '%wheel ALL=(root) NOPASSWD: ALL' > "$top/etc/sudoers.d/omarchy-dns"

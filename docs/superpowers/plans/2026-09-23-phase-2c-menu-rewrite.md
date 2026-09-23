@@ -840,7 +840,12 @@ git commit -m "docs: 2C done, the menu is rewritten at build time and tinkero-up
 
 ## Deviations
 
-(empty at the time of writing; each task's PR appends here)
+- **Tasks 2 to 6, 2026-09-23 (issue #13):** landed as one PR. Issue #13 superseded issues #2 to #6; the tasks were built serially on one branch, each as its own commit until the squash, each with its own implementer and reviewer.
+- **Task 2:** the plan's JSON blocks lost every private-use glyph of the Basic Multilingual Plane when the plan was committed (the fixture rows read `"icon":""`). The fixture keeps the empty icons; no test reads them. The test file gains a `tearDown` that removes its temporary directories.
+- **Task 3:** the same loss hit the `update.omarchy` replacement and the `learn.fedora` row. `menu/overrides.jsonc` carries the glyphs the prose names: U+E900 (upstream's own glyph, `omarchy` icon font) for `update.omarchy` and U+F30A (the Nerd Font Fedora logo) for `learn.fedora`. Copying the plan's block verbatim reproduces the defect; copy the file instead.
+- **Task 4:** `tests/test-update.sh` builds the stub names with `tr '[:lower:]' '[:upper:]'`, not the plan's `tr a-z A-Z`, which ShellCheck flags (SC2018, SC2019) and CI would reject.
+- **Task 5:** the plan's test snippet named `$dest`; the test's variable is `$d/dest`. `.gitignore` gains `__pycache__/`, which the Python tests leave under `tests/`. `rpmspec` and `rpmlint` were not installed on the build host; the spec renders locally and CI proves that it parses and lints. The `expect_rows` mismatch case asserts on the build's message (the file's idiom, count 37), not `assert_fails`; the assemble header names the menu inputs.
+- **Task 6:** spec 4.4 said 77 of 333 entries go by prefix; the measured rewrite deletes 75 by prefix and one more by action, and the section says so now. Section 4.7 no longer counts the Flatpak rows (the plan said eleven; the name map has nine).
 
 ## What this plan deliberately leaves out
 

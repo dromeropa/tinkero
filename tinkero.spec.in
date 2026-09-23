@@ -8,7 +8,7 @@ URL:            https://github.com/dromeropa/tinkero
 Source0:        omarchy-@COMMIT@.tar.gz
 Source1:        tinkero-src.tar.gz
 BuildArch:      noarch
-BuildRequires:  git-core
+BuildRequires:  git-core python3
 
 # The pin (design spec 4.2): tree and compositor move in one transaction.
 Requires:       (hyprland >= @HYPRLAND@ with hyprland < @HYPRLAND_NEXT@)
@@ -42,6 +42,7 @@ TINKERO_ROOT=$PWD TINKERO_LOCK=$PWD/upstream.lock build/assemble %{SOURCE0} %{bu
 %files
 %license %{_datadir}/licenses/tinkero/LICENSE.omarchy
 %{_bindir}/omarchy*
+%{_bindir}/tinkero-*
 %{_datadir}/omarchy
 %{_datadir}/tinkero
 %{_datadir}/uwsm/env.d/10-omarchy

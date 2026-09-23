@@ -8,6 +8,7 @@
 #   patches/series + patches/*.patch     applied with git apply -p1 (strict, no fuzz)
 #   distro/fedora/replacements/*         copied over bin/<same name>
 #   distro/fedora/replacements.new       names allowed to have no upstream file
+#   menu/overrides.jsonc + menu/apply-overrides   the default menu, rewritten (step 3b)
 #   session/tinkero.desktop              the GDM session entry
 set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -59,6 +60,15 @@ if [[ -d $repl ]]; then
     fi
     install -m 0755 "$f" "$tree/bin/$name"
   done
+fi
+
+# 3b. Menu. Upstream's default menu, rewritten by menu/overrides.jsonc (design spec 4.4).
+# Rows that call a dropped command go too, so the drop list and the menu cannot disagree.
+menu=$tree/default/omarchy/omarchy-menu.jsonc
+if [[ -f $root/menu/overrides.jsonc ]]; then
+  python3 "$root/menu/apply-overrides" "$menu" "$root/menu/overrides.jsonc" "$root/build/drop.list" "$menu.tinkero" \
+    || die "menu rewrite failed (see apply-overrides output above)"
+  mv "$menu.tinkero" "$menu"
 fi
 
 # 4. Relocate the two etc/ files Tinkero keeps, then drop the rest of etc/.
