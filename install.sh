@@ -22,12 +22,12 @@ yes=0
 usage() { sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; }
 die() { echo "install.sh: $*" >&2; exit 1; }
 say() { echo "install.sh: $*"; }
-confirm() {   # QUESTION
+confirm() {   # QUESTION [STOP_MESSAGE]
   local a
   if (( yes )); then return 0; fi
   [[ -t 0 ]] || die "$1 needs a yes; run with --yes or from a terminal"
-  read -r -p "$1 [y/N] " a
-  [[ $a == [yY]* ]] || die "stopped; nothing was changed"
+  read -r -p "$1 [y/N] " a || a=""
+  [[ $a == [yY]* ]] || die "${2:-stopped; nothing was changed}"
 }
 
 while (($#)); do
@@ -52,7 +52,7 @@ installed=$(dnf repoquery --installed --queryformat '%{name} %{from_repo}\n' hyp
 while read -r name repo; do
   [[ -z $name ]] && continue
   [[ $name != omedora* ]] || die "$name is installed; remove Omedora first (sudo dnf remove 'omedora*')"
-  [[ $repo == "$own_repo" ]] || die "$name is installed from $repo, not from $own_repo; remove it first so the pinned build can be installed"
+  [[ $repo == "$own_repo" ]] || die "$name is installed from ${repo:-an unknown source}, not from $own_repo; remove it first so the pinned build can be installed"
 done <<<"$installed"
 say "preflight passed: Fedora $ver, $arch, GDM"
 
@@ -63,7 +63,7 @@ Plan:
   system stage (sudo):  dnf copr enable $copr
                         dnf install tinkero      (the desktop with its pinned Hyprland and Quickshell)
   user stage (you):     tinkero-provision        (its own plan is shown and confirmed first)
-Nothing else changes: no other repository, no versionlock, no Flathub, nothing under /etc beyond the package's files.
+Nothing else changes: no other repository, no versionlock, no Flathub, nothing under /etc beyond the package's files and the COPR repository file.
 
 EOF
 confirm "Continue with the system stage?"
@@ -81,6 +81,6 @@ say "system stage done"
 echo; echo "Provisioning plan (per file; nothing you already have is overwritten):"
 tinkero-provision --plan
 echo
-confirm "Create the files above and append the guarded line to ~/.bashrc?"
+confirm "Create the files above and append the guarded line to ~/.bashrc?" "stopped; the tinkero package is installed, run tinkero-provision when you are ready"
 tinkero-provision --yes
 say "done. Log out and choose Tinkero at the GDM login screen."

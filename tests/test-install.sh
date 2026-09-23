@@ -56,18 +56,25 @@ TINKERO_OS_RELEASE=$d/os-release-43 run --yes
 assert_eq "$rc" 1 "preflight: wrong Fedora release stops"; assert_contains "$out" "Fedora 44" "preflight: names the expected release"
 ARCH=aarch64 run --yes
 assert_eq "$rc" 1 "preflight: not x86_64 stops"
+assert_contains "$out" "x86_64" "preflight: names the architecture"
 TINKERO_DM_UNIT=$d/dm-sddm run --yes
 assert_eq "$rc" 1 "preflight: another display manager stops"; assert_contains "$out" "GDM" "preflight: names GDM"
 printf 'hyprland copr:copr.fedorainfracloud.org:agaspar:omedora-4\n' > "$d/foreign"
 REPOQUERY=$d/foreign run --yes
 assert_eq "$rc" 1 "preflight: hyprland from another repository stops"; assert_contains "$out" "agaspar:omedora-4" "preflight: names the repository"
+assert_eq "$(grep -c '^sudo' "$LOG")" 0 "preflight: a repository failure changes nothing"
+printf 'hyprland\n' > "$d/local"
+REPOQUERY=$d/local run --yes
+assert_eq "$rc" 1 "preflight: a locally built package with no repo stops"; assert_contains "$out" "an unknown source" "preflight: names it an unknown source"
 printf 'omedora copr:copr.fedorainfracloud.org:agaspar:omedora-4\n' > "$d/omedora"
 REPOQUERY=$d/omedora run --yes
 assert_eq "$rc" 1 "preflight: omedora installed stops"
+assert_contains "$out" "remove Omedora first" "preflight: says to remove Omedora"
 printf 'hyprland copr:copr.fedorainfracloud.org:dromero:tinkero\n' > "$d/own"
 REPOQUERY=$d/own run --yes
 assert_eq "$rc" 0 "preflight: our own COPR's hyprland is fine"
 TINKERO_EUID=0 run --yes
 assert_eq "$rc" 1 "preflight: root stops"
+assert_contains "$out" "not as root" "preflight: says not as root"
 assert_eq "$(grep -c '^sudo' "$LOG")" 0 "preflight: a failed preflight changes nothing"
 rm -rf "$d"; finish
