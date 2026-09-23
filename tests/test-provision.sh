@@ -165,5 +165,60 @@ out=$("$T" --plan 2>&1) && rc=0 || rc=$?
 assert_eq "$rc" 1 "a malformed seeded.tsv stops the run"
 assert_contains "$out" "seeded.tsv line 14" "and names the line"
 
+# 8b. Robustness (review of plan 2E, Task 3)
+# (1) a write failure mid apply_plan does not abort the run or lose already-written rows
+newhome 11
+mkdir -p "$HOME/.local/share"; : > "$HOME/.local/share/applications"
+out=$("$T" --yes 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 1 "robustness: a write failure mid-apply exits 1"
+assert_eq "$(tsv | wc -l)" 10 "robustness: only the files that could not be written are unrecorded"
+assert_eq "$(row .config/hypr/hyprland.lua | cut -f3)" seeded "robustness: an unaffected file is still recorded"
+assert_contains "$out" "not complete:" "robustness: reported as not complete"
+assert_no_path "$HOME/.local/state/tinkero/release" "robustness: no release file when a file failed to write"
+plan=$("$T" --plan)
+assert_contains "$plan" $'current\t.config/hypr/hyprland.lua' "robustness: an unaffected file is current"
+if grep -q $'conflict\t.config/hypr/hyprland.lua' <<<"$plan"; then not_ok "robustness: the unaffected file is not a conflict"; else ok "robustness: the unaffected file is not a conflict"; fi
+rm "$HOME/.local/share/applications"
+out=$("$T" --yes 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 0 "robustness: a further run succeeds once the obstruction is gone"
+assert_eq "$(tsv | wc -l)" 12 "robustness: all twelve rows recorded once the obstruction is gone"
+
+# (2) a directory at a target path is never written through or deleted
+newhome 12
+mkdir -p "$HOME/.config/hypr/looknfeel.lua"
+"$T" --yes >/dev/null 2>&1 || true
+if [[ -d "$HOME/.config/hypr/looknfeel.lua" ]]; then ok "robustness: the directory at a target path is untouched"; else not_ok "robustness: the directory at a target path is untouched"; fi
+assert_eq "$(find "$HOME/.config/hypr/looknfeel.lua" -mindepth 1 | wc -l)" 0 "robustness: nothing was written into the directory"
+assert_eq "$(tsv | wc -l)" 11 "robustness: the directory's row is not recorded"
+plan=$("$T" --plan) && rc2=0 || rc2=$?
+assert_eq "$rc2" 0 "robustness: --plan still succeeds with a directory at a target path"
+assert_contains "$plan" $'conflict\t.config/hypr/looknfeel.lua' "robustness: the directory is reported as a conflict"
+out2=$("$T" --reset .config/hypr/looknfeel.lua 2>&1)
+assert_eq "$(find "$HOME/.config/hypr/looknfeel.lua" -mindepth 1 | wc -l)" 0 "robustness: --reset leaves the directory in place"
+assert_contains "$out2" "not a regular file" "robustness: --reset explains why"
+
+# (3) --reset-all does not die at the first symlinked target
+newhome 13
+"$T" --yes >/dev/null 2>&1
+rm "$HOME/.config/hypr/hyprland.lua"; ln -s /dev/null "$HOME/.config/hypr/hyprland.lua"
+echo x > "$HOME/.config/hypr/looknfeel.lua"
+out=$("$T" --reset-all 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 0 "robustness: --reset-all succeeds even with a symlinked target"
+assert_symlink "$HOME/.config/hypr/hyprland.lua" /dev/null "robustness: the symlink is left alone by --reset-all"
+assert_eq "$(cat "$HOME/.config/hypr/looknfeel.lua")" "-- looknfeel v1" "robustness: other defaults are still restored"
+assert_contains "$out" "is a symlink; not touching it" "robustness: the skip is reported"
+
+# (4) a missing .bashrc is created with only the guarded line, no leading blank line
+newhome 14
+"$T" --yes >/dev/null 2>&1
+assert_eq "$(wc -l < "$HOME/.bashrc")" 1 "robustness: a missing .bashrc gets exactly one line"
+assert_eq "$(head -c1 "$HOME/.bashrc")" "[" "robustness: no leading blank line in a fresh .bashrc"
+
+# (5) %q quoting is transparent for plain paths (regression for the existing diff-command test)
+newhome 15
+mkdir -p "$HOME/.config/hypr"; echo mine > "$HOME/.config/hypr/hyprland.lua"
+out=$("$T" --yes 2>&1)
+assert_contains "$out" "diff $OMARCHY_PATH/config/hypr/hyprland.lua $HOME/.config/hypr/hyprland.lua" "robustness: %q leaves plain paths unquoted in the diff command"
+
 # Task 4 appends its cases here.
 rm -rf "$d"; finish
