@@ -17,7 +17,7 @@
 - Gate allowlists only shrink: `ci/allow/dropped-refs.allow` loses `usr/bin/omarchy-provision-user:omarchy-provision-owner` in the task that replaces the script (Task 5) and not before.
 - Nothing in the payload may contain a token the arch-leak gate matches (`ci/gate-arch-leak`: `pacman`, `archlinux`, `limine`, `snapper`, `ufw`, ...). This binds `host.md` and `tinkero-provision`.
 - Scripts start with `#!/bin/bash` and `set -euo pipefail`; ShellCheck clean with `-x -e SC1090,SC1091`; no `A && B || C` one-liners (SC2015); `# shellcheck disable=SC2016` above `printf`/heredoc lines that write literal `$*` into stub scripts.
-- Tests never use the network and never run a real package manager, `dconf`, `systemctl` or `mise`: every such command is a stub on `PATH`, and every test runs under a temporary `HOME` with the seams `OMARCHY_PATH`, `TINKERO_SHARE`, `TINKERO_LOCK`, `TINKERO_DCONF_PROFILE`, `TINKERO_UNIT_DIR`, `TINKERO_EUID`, `TINKERO_OS_RELEASE`, `TINKERO_DM_UNIT`.
+- Tests never use the network and never run a real package manager, `dconf`, `systemctl` or `mise`: every such command is a stub on `PATH`, and every test runs under a temporary `HOME` with the seams `OMARCHY_PATH`, `TINKERO_SHARE`, `TINKERO_LOCK`, `TINKERO_DCONF_PROFILE`, `TINKERO_UNIT_DIR`, `TINKERO_EUID`, `TINKERO_OS_RELEASE`, `TINKERO_DM_UNIT`, `TINKERO_FEDORA`.
 - Real home directories are never touched by any test or verification step in this plan; the real-tree check runs `tinkero-provision --plan` (which writes nothing) under a temporary `HOME`.
 - No em dashes in Tinkero's own prose. Attribution trailers on every commit per the session's rules. Land through a PR against the approved issue; never push master.
 - Each task's PR includes its Deviations line in this plan's "## Deviations" section when anything deviated.
@@ -28,12 +28,12 @@ Filed 2026-09-23 as one orchestrated issue, #16, superseding placeholder #9 (the
 
 | Task | Size | Area | WHAT | WHERE | HOW TO VERIFY |
 |---|---|---|---|---|---|
-| 1 Payload data and assemble steps | medium | build | the config override, skip list, unit list, dconf profile, `Conflicts: nwg-panel`, and the assemble steps that ship them and the host guide | `build/assemble`, `tinkero.spec.in`, `config/hypr/bindings.lua`, `provision/{skip,session-units}.list`, `distro/fedora/dconf/profile/tinkero`, `tests/fixtures/make-tree.sh`, `tests/test-assemble.sh` | `bash tests/test-assemble.sh` green at `1..43`; `./dev gates` four PASS; `ls .cache/payload/usr/share/tinkero/provision` lists both lists; `grep -c '^Conflicts:.*nwg-panel' tinkero.spec.in` is 1 |
+| 1 Payload data and assemble steps | medium | build | the config override, skip list, unit list, dconf profile, the two launcher icons, `Conflicts: nwg-panel`, and the assemble steps that ship them and the host guide | `build/assemble`, `tinkero.spec.in`, `config/hypr/bindings.lua`, `provision/{skip,session-units}.list`, `distro/fedora/dconf/profile/tinkero`, `tests/fixtures/make-tree.sh`, `tests/test-assemble.sh` | `bash tests/test-assemble.sh` green at `1..45`; `./dev gates` four PASS; `ls .cache/payload/usr/share/tinkero/provision` lists both lists; `ls .cache/payload/usr/share/icons/hicolor/512x512/apps` lists `disk-usage.png imv.png`; `grep -c '^Conflicts:.*nwg-panel' tinkero.spec.in` is 1 |
 | 2 `host.md` | small | provision | the host guide the patched skill points at | `distro/fedora/skills/host.md` | `./dev gates` green with the file in the payload (arch-leak gate proves no forbidden token); `test -f .cache/payload/usr/share/omarchy/default/agents/skills/omarchy/host.md`; the reviewer reads it against design section 5 |
 | 3 `tinkero-provision`: the seeding engine | medium | provision | the decision function, sources, `seeded.tsv`, `--plan`, seeding, `--reset`, `--reset-all`, config notes | `bin/tinkero-provision`, `tests/fixtures/make-payload.sh`, `tests/test-provision.sh` | `bash tests/test-provision.sh` green (`1..79` after this task); real tree: `--plan` under an empty `HOME` prints 45 `seed` lines, 0 `conflict`, none naming `chromium` |
 | 4 `tinkero-provision`: steps, session, dconf, removal | medium | provision | the upstream leaves, `--session` with units and notices, dconf seeding and `--reset dconf`, `--remove` | `bin/tinkero-provision`, `tests/test-provision.sh` | `bash tests/test-provision.sh` green at `1..130`; `./dev check` green |
 | 5 The two provisioning wrappers | small | provision | `omarchy-provision-first-run` and `omarchy-provision-user` exec `tinkero-provision`; the allowlist shrinks | `distro/fedora/replacements/omarchy-provision-{first-run,user}`, `ci/allow/dropped-refs.allow`, `tests/test-replacements.sh` | `bash tests/test-replacements.sh` green at `1..36`; `grep -vc '^#' ci/allow/dropped-refs.allow` is 6; `./dev gates` four PASS |
-| 6 `install.sh` | medium | provision | preflight, plan, two gates, system and user stages, against stubs | `install.sh`, `tests/test-install.sh`, `.github/workflows/ci.yml` | `bash tests/test-install.sh` green at `1..23`; ShellCheck clean; CI green |
+| 6 `install.sh` | medium | provision | preflight, plan, two gates, system and user stages, against stubs; the Fedora release pinned to the lock by a test | `install.sh`, `tests/test-install.sh`, `.github/workflows/ci.yml` | `bash tests/test-install.sh` green at `1..21`; ShellCheck clean; CI green |
 | 7 Docs | small | docs | spec 4.6 status, roadmap, README install and remove sections, workflow guide | `docs/superpowers/specs/2026-09-17-tinkero-design.md`, `docs/superpowers/plans/2026-09-17-phase-2-roadmap.md`, `README.md`, `docs/guides/workflow.md` | `./dev check` green; no em dash in the edited text; the reviewer reads each edit against the design |
 
 ## File Structure
@@ -45,15 +45,15 @@ Filed 2026-09-23 as one orchestrated issue, #16, superseding placeholder #9 (the
 | `tests/test-provision.sh` | the decision table and every mode against the fixture under a temporary `HOME` |
 | `config/hypr/bindings.lua` | Tinkero's seeded override: upstream's template plus the tmux and herdr bindings |
 | `provision/skip.list` | `config/` paths never seeded |
-| `provision/session-units.list` | units `--session` starts |
+| `provision/session-units.list` | units `--session` starts (skipped when not installed) |
 | `distro/fedora/dconf/profile/tinkero` | the session's dconf profile (D2) |
 | `distro/fedora/skills/host.md` | the host guide |
 | `distro/fedora/replacements/omarchy-provision-first-run`, `omarchy-provision-user` | wrappers |
 | `install.sh`, `tests/test-install.sh` | the entry point and its stub-based test |
 | `build/assemble` | step 3c (skills into the tree) and the provisioning data in step 5 |
-| `tinkero.spec.in` | `Conflicts: nwg-panel`, `%config` for the dconf profile |
+| `tinkero.spec.in` | `Conflicts: nwg-panel`, `%config` for the dconf profile, the two icons |
 
-Interfaces later plans rely on: `provision/session-units.list` (2F appends `tinkero-inhibit-power-key.service`); `/etc/dconf/profile/tinkero` and `~/.config/dconf/tinkero` (2F exports `DCONF_PROFILE=tinkero`); `~/.local/state/tinkero/{seeded.tsv,release,done/}` and the `--plan` line format `<decision>\t<path>` (Phase 3's `tinkero-status`); `TINKERO_REF` in `install.sh` (the release workflow).
+Interfaces later plans rely on: `provision/session-units.list` (2F appends `tinkero-inhibit-power-key.service`); `/etc/dconf/profile/tinkero` and `~/.config/dconf/tinkero` (2F exports `DCONF_PROFILE=tinkero`); `~/.local/state/tinkero/{seeded.tsv,release,done/}` and the `--plan` line format `<decision>\t<path>` (Phase 3's `tinkero-status`); `TINKERO_REF` and `TINKERO_FEDORA` in `install.sh` (the release workflow rewrites both).
 
 ## Review Focus
 
@@ -71,10 +71,10 @@ Input classes the design implies that no requirement names; each has its test in
 
 **Files:**
 - Create: `config/hypr/bindings.lua`, `provision/skip.list`, `provision/session-units.list`, `distro/fedora/dconf/profile/tinkero`
-- Modify: `build/assemble` (header comment, new step 3c, additions to step 5), `tinkero.spec.in` (`Conflicts:`, `%files`), `tests/fixtures/make-tree.sh` (a skill directory), `tests/test-assemble.sh` (root files and six assertions)
+- Modify: `build/assemble` (header comment, new step 3c, additions to step 5), `tinkero.spec.in` (`Conflicts:`, `%files`), `tests/fixtures/make-tree.sh` (a skill directory, two icons), `tests/test-assemble.sh` (root files and eight assertions)
 
 **Interfaces:**
-- Produces: `/usr/share/tinkero/config/**` (seeding overrides), `/usr/share/tinkero/provision/skip.list`, `/usr/share/tinkero/provision/session-units.list`, `/usr/share/tinkero/config-notes/*.md` (none at `v4.0.4`), `/etc/dconf/profile/tinkero`, and `default/agents/skills/omarchy/host.md` inside the tree once Task 2 adds the source. Task 3 reads the first two, Task 4 the unit list and the profile.
+- Produces: `/usr/share/tinkero/config/**` (seeding overrides), `/usr/share/tinkero/provision/skip.list`, `/usr/share/tinkero/provision/session-units.list`, `/usr/share/tinkero/config-notes/*.md` (none at `v4.0.4`), `/etc/dconf/profile/tinkero`, `/usr/share/icons/hicolor/512x512/apps/{disk-usage,imv}.png` (the icons the seeded launchers name, design D12), and `default/agents/skills/omarchy/host.md` inside the tree once Task 2 adds the source. Task 3 reads the first two, Task 4 the unit list and the profile.
 
 - [ ] **Step 1: The data files**
 
@@ -104,12 +104,14 @@ chromium-flags.conf
 ```
 # provision/session-units.list: user units tinkero-provision --session starts at every Tinkero
 # session start (spec 4.6, 4.9). Nothing is enabled; PartOf=graphical-session.target stops them.
-# 2F appends tinkero-inhibit-power-key.service.
+# A unit whose file is not installed is skipped. 2F appends tinkero-inhibit-power-key.service.
 omarchy-crash-watch.service
 omarchy-sleep-lock.service
 omarchy-recover-internal-monitor.service
 omarchy-fcitx5.service
 bt-agent.service
+# installed under ~/.config/systemd/user by `omarchy-audio-tuning on` on the laptops it matches (design D4)
+omarchy-speaker-tuning.service
 ```
 
 `distro/fedora/dconf/profile/tinkero` (spec 4.9: the session's own user database, then Fedora's system databases):
@@ -123,10 +125,12 @@ system-db:distro
 
 - [ ] **Step 2: Fixture and failing tests**
 
-In `tests/fixtures/make-tree.sh`, extend the first `mkdir -p` so the fixture tree has a skill directory: add `"$top"/default/agents/skills/omarchy` to the list, and after the `echo '<fontconfig/>' ...` line add:
+In `tests/fixtures/make-tree.sh`, extend the first `mkdir -p` so the fixture tree has a skill directory and an icons directory: add `"$top"/default/agents/skills/omarchy "$top"/applications/icons` to the list, and after the `echo '<fontconfig/>' ...` line add:
 
 ```bash
 echo '# fixture skill' > "$top/default/agents/skills/omarchy/SKILL.md"
+echo 'png' > "$top/applications/icons/Disk Usage.png"
+echo 'png' > "$top/applications/icons/imv.png"
 ```
 
 In `tests/test-assemble.sh`, extend the root: change the `mkdir -p "$r"/{...}` line to include `distro/fedora/skills,distro/fedora/dconf/profile,config/hypr,provision,config-notes`, and after the `cp "$ROOT/session/tinkero.desktop" "$r/session/"` line add:
@@ -150,9 +154,11 @@ assert_file "$d/dest/usr/share/tinkero/provision/skip.list" "skip list shipped"
 assert_file "$d/dest/usr/share/tinkero/provision/session-units.list" "session unit list shipped"
 assert_file "$d/dest/usr/share/tinkero/config-notes/v0.md" "config notes shipped"
 assert_file "$d/dest/etc/dconf/profile/tinkero" "dconf profile shipped"
+assert_file "$d/dest/usr/share/icons/hicolor/512x512/apps/disk-usage.png" "launcher icon shipped under its Icon= name"
+assert_file "$d/dest/usr/share/icons/hicolor/512x512/apps/imv.png" "imv icon shipped"
 ```
 
-Run: `bash tests/test-assemble.sh` Expected: the six new cases fail (`not ok`), the rest green.
+Run: `bash tests/test-assemble.sh` Expected: the eight new cases fail (`not ok`), the rest green.
 
 - [ ] **Step 3: The assemble steps**
 
@@ -162,6 +168,7 @@ In `build/assemble`, add to the header comment block, after the `session/tinkero
 #   distro/fedora/skills/*.md           the host guide, into the omarchy skill inside the tree
 #   config/**, provision/*.list, config-notes/*.md, distro/fedora/dconf/profile/tinkero
 #                                        provisioning data under /usr/share/tinkero and /etc/dconf
+#   applications/icons/{Disk Usage,imv}.png   the icons the seeded launchers name, under hicolor
 ```
 
 After step 3b (the menu block) and before step 4, add:
@@ -193,6 +200,10 @@ for f in "$root"/config-notes/*.md; do
   [[ -f $f ]] && install -Dm 0644 "$f" "$dest/usr/share/tinkero/config-notes/$(basename "$f")"
 done
 install -Dm 0644 "$root/distro/fedora/dconf/profile/tinkero" "$dest/etc/dconf/profile/tinkero"
+# The icons the seeded launchers name (design D12): upstream installs them system-wide, and the
+# names must match the launchers' Icon= lines (disk-usage, imv). The web-app icons stay out.
+install -Dm 0644 "$tree/applications/icons/Disk Usage.png" "$dest/usr/share/icons/hicolor/512x512/apps/disk-usage.png"
+install -Dm 0644 "$tree/applications/icons/imv.png" "$dest/usr/share/icons/hicolor/512x512/apps/imv.png"
 ```
 
 - [ ] **Step 4: The spec template**
@@ -209,14 +220,16 @@ In `%files`, after the `%config(noreplace) %{_sysconfdir}/mise/conf.d/omarchy.to
 
 ```
 %config %{_sysconfdir}/dconf/profile/tinkero
+%{_datadir}/icons/hicolor/512x512/apps/disk-usage.png
+%{_datadir}/icons/hicolor/512x512/apps/imv.png
 ```
 
 - [ ] **Step 5: Verify**
 
-Run: `bash tests/test-assemble.sh` Expected: `1..43`, no `not ok`.
+Run: `bash tests/test-assemble.sh` Expected: `1..45`, no `not ok`.
 Run: `./dev check` Expected: green.
 Run: `./dev gates` Expected: four `PASS` (the host guide is not in the payload yet; Task 2 adds it).
-Run: `ls .cache/payload/usr/share/tinkero/provision .cache/payload/etc/dconf/profile` Expected: `skip.list session-units.list` and `tinkero`.
+Run: `ls .cache/payload/usr/share/tinkero/provision .cache/payload/etc/dconf/profile .cache/payload/usr/share/icons/hicolor/512x512/apps` Expected: `session-units.list skip.list`, `tinkero`, and `disk-usage.png imv.png`.
 Run: `test -f .cache/payload/usr/share/tinkero/config/hypr/bindings.lua && echo ok` Expected: `ok`.
 Run: `grep -c '^Conflicts:.*nwg-panel' tinkero.spec.in` Expected: `1`.
 Run: `shellcheck -x -e SC1090,SC1091 build/assemble tests/test-assemble.sh tests/fixtures/make-tree.sh` Expected: clean.
@@ -226,7 +239,7 @@ Run: `shellcheck -x -e SC1090,SC1091 build/assemble tests/test-assemble.sh tests
 
 ```bash
 git add build/assemble tinkero.spec.in config provision distro/fedora/dconf tests/fixtures/make-tree.sh tests/test-assemble.sh
-git commit -m "build: ship the provisioning data (config overrides, lists, dconf profile); Conflicts: nwg-panel"
+git commit -m "build: ship the provisioning data (config overrides, lists, dconf profile, launcher icons); Conflicts: nwg-panel"
 ```
 
 **Verification for the issue:** Step 5's commands, plus CI green. The depsolve proof for `Conflicts: nwg-panel` (`dnf install --assumeno tinkero` against the COPR pulling no `nwg-panel`) needs the `tinkero` RPM in COPR and is owed by 2F's first-build issue; this task proves only that the spec parses and lints.
@@ -1359,8 +1372,8 @@ git commit -m "provision: omarchy-provision-first-run and -user exec tinkero-pro
 - Modify: `.github/workflows/ci.yml` (ShellCheck list gains `install.sh tests/fixtures/make-payload.sh`)
 
 **Interfaces:**
-- Consumes: `upstream.lock` keys `fedora`; `tinkero-provision --plan` and `tinkero-provision [--yes]` (Tasks 3 and 4).
-- Produces: `bash install.sh [--yes] [--lock FILE]`; `TINKERO_REF` (the release workflow rewrites it), `TINKERO_COPR`; the seams `TINKERO_OS_RELEASE`, `TINKERO_DM_UNIT`, `TINKERO_EUID`, `TINKERO_LOCK`.
+- Consumes: `tinkero-provision --plan` and `tinkero-provision --yes` (Tasks 3 and 4); `upstream.lock`'s `fedora` key, only through the test that pins `TINKERO_FEDORA` to it.
+- Produces: `bash install.sh [--yes]`; the variables `TINKERO_REF` and `TINKERO_FEDORA` at the top of the script (the release workflow rewrites both; design D7) and `TINKERO_COPR`; the seams `TINKERO_OS_RELEASE`, `TINKERO_DM_UNIT`, `TINKERO_EUID`.
 
 - [ ] **Step 1: The failing tests**
 
@@ -1368,10 +1381,10 @@ git commit -m "provision: omarchy-provision-first-run and -user exec tinkero-pro
 
 ```bash
 #!/bin/bash
-# install.sh against stub dnf, sudo, getenforce, uname, tinkero-provision and curl, with a
-# fixture os-release and display-manager link. No package manager runs.
+# install.sh against stub dnf, sudo, getenforce, uname and tinkero-provision, with a fixture
+# os-release and display-manager link. No package manager runs; nothing is fetched.
 source "$(dirname "$0")/lib.sh"
-d=$(mktmp); mkdir -p "$d/bin" "$d/alone"; export LOG=$d/log
+d=$(mktmp); mkdir -p "$d/bin"; export LOG=$d/log
 I=$ROOT/install.sh
 cat > "$d/bin/dnf" <<'S'
 #!/bin/bash
@@ -1388,11 +1401,6 @@ echo "tinkero-provision $*" >> "$LOG"
 [[ $1 == --plan ]] && printf 'seed\t.config/hypr/hyprland.lua\n'
 exit 0
 S
-cat > "$d/bin/curl" <<'S'
-#!/bin/bash
-echo "curl $*" >> "$LOG"
-while (($#)); do [[ $1 == -o ]] && { printf 'fedora=44\n' > "$2"; }; shift; done
-S
 printf '#!/bin/bash\necho Enforcing\n' > "$d/bin/getenforce"
 # shellcheck disable=SC2016  # the stub reads ARCH at run time
 printf '#!/bin/bash\necho "${ARCH:-x86_64}"\n' > "$d/bin/uname"
@@ -1401,54 +1409,49 @@ printf 'ID=fedora\nVERSION_ID=44\n' > "$d/os-release"
 printf 'ID=fedora\nVERSION_ID=43\n' > "$d/os-release-43"
 ln -s /usr/lib/systemd/system/gdm.service "$d/dm-gdm"
 ln -s /usr/lib/systemd/system/sddm.service "$d/dm-sddm"
-printf 'omarchy_tag=v4.0.4\nfedora=44\n' > "$d/lock"
 : > "$d/none"
 export PATH=$d/bin:$PATH TINKERO_OS_RELEASE=$d/os-release TINKERO_DM_UNIT=$d/dm-gdm TINKERO_EUID=1000 REPOQUERY=$d/none
+unset TINKERO_FEDORA TINKERO_REF
 run() { : > "$LOG"; out=$(bash "$I" "$@" 2>&1 </dev/null) && rc=0 || rc=$?; }
 
+# the script's Fedora release is the lock's (the release workflow rewrites both variables together)
+# shellcheck disable=SC2016  # the sed pattern matches install.sh's source text, unexpanded on purpose
+assert_eq "$(sed -n 's/^TINKERO_FEDORA=\${TINKERO_FEDORA:-\([0-9]*\)}.*/\1/p' "$I")" "$(sed -n 's/^fedora=//p' "$ROOT/upstream.lock")" "install.sh carries the lock's fedora release"
+
 # the happy path
-run --yes --lock "$d/lock"
+run --yes
 assert_eq "$rc" 0 "install: exit 0"
 assert_eq "$(paste -sd'|' "$LOG")" "dnf repoquery --installed --queryformat %{name} %{from_repo}\n hyprland quickshell omedora omedora-settings|sudo dnf copr enable -y dromero/tinkero|dnf copr enable -y dromero/tinkero|sudo dnf install -y tinkero|dnf install -y tinkero|tinkero-provision --plan|tinkero-provision --yes" "install: preflight query, copr enable, install, plan, provision, in that order"
 assert_contains "$out" "SELinux is Enforcing" "install: reports SELinux"
 assert_contains "$out" "Log out and choose Tinkero" "install: says what comes next"
 assert_contains "$out" $'seed\t.config/hypr/hyprland.lua' "install: shows the provisioning plan"
-run --yes --lock "$d/lock"; assert_eq "$rc" 0 "install: re-running is fine (both stages are no-ops on a current machine)"
+run --yes; assert_eq "$rc" 0 "install: re-running is fine (both stages are no-ops on a current machine)"
 
 # the gates
-run --lock "$d/lock"
+run
 assert_eq "$rc" 1 "gate: no terminal and no --yes stops"
 assert_contains "$out" "run with --yes or from a terminal" "gate: and says how to proceed"
 assert_eq "$(grep -c '^sudo' "$LOG")" 0 "gate: nothing was changed"
 
 # preflight
-TINKERO_OS_RELEASE=$d/os-release-43 run --yes --lock "$d/lock"
+TINKERO_OS_RELEASE=$d/os-release-43 run --yes
 assert_eq "$rc" 1 "preflight: wrong Fedora release stops"; assert_contains "$out" "Fedora 44" "preflight: names the expected release"
-ARCH=aarch64 run --yes --lock "$d/lock"
+ARCH=aarch64 run --yes
 assert_eq "$rc" 1 "preflight: not x86_64 stops"
-TINKERO_DM_UNIT=$d/dm-sddm run --yes --lock "$d/lock"
+TINKERO_DM_UNIT=$d/dm-sddm run --yes
 assert_eq "$rc" 1 "preflight: another display manager stops"; assert_contains "$out" "GDM" "preflight: names GDM"
 printf 'hyprland copr:copr.fedorainfracloud.org:agaspar:omedora-4\n' > "$d/foreign"
-REPOQUERY=$d/foreign run --yes --lock "$d/lock"
+REPOQUERY=$d/foreign run --yes
 assert_eq "$rc" 1 "preflight: hyprland from another repository stops"; assert_contains "$out" "agaspar:omedora-4" "preflight: names the repository"
 printf 'omedora copr:copr.fedorainfracloud.org:agaspar:omedora-4\n' > "$d/omedora"
-REPOQUERY=$d/omedora run --yes --lock "$d/lock"
+REPOQUERY=$d/omedora run --yes
 assert_eq "$rc" 1 "preflight: omedora installed stops"
 printf 'hyprland copr:copr.fedorainfracloud.org:dromero:tinkero\n' > "$d/own"
-REPOQUERY=$d/own run --yes --lock "$d/lock"
+REPOQUERY=$d/own run --yes
 assert_eq "$rc" 0 "preflight: our own COPR's hyprland is fine"
-TINKERO_EUID=0 run --yes --lock "$d/lock"
+TINKERO_EUID=0 run --yes
 assert_eq "$rc" 1 "preflight: root stops"
 assert_eq "$(grep -c '^sudo' "$LOG")" 0 "preflight: a failed preflight changes nothing"
-
-# the lock: beside the script, or fetched from the ref
-cp "$I" "$d/alone/install.sh"; cp "$d/lock" "$d/alone/upstream.lock"
-: > "$LOG"; bash "$d/alone/install.sh" --yes >/dev/null 2>&1 </dev/null; rc=$?
-assert_eq "$rc:$(grep -c '^curl' "$LOG")" "0:0" "lock: a lock beside the script is used, nothing fetched"
-rm "$d/alone/upstream.lock"
-: > "$LOG"; bash "$d/alone/install.sh" --yes >/dev/null 2>&1 </dev/null; rc=$?
-assert_eq "$rc" 0 "lock: fetched when there is none beside the script"
-assert_contains "$(cat "$LOG")" "https://raw.githubusercontent.com/dromeropa/tinkero/master/upstream.lock" "lock: from the ref the script names"
 rm -rf "$d"; finish
 ```
 
@@ -1462,21 +1465,23 @@ Run: `bash tests/test-install.sh` Expected: fails (`install.sh` missing).
 #!/bin/bash
 # install.sh: install Tinkero on Fedora Workstation (design spec 4.6). Run it as your own user:
 #
-#   bash install.sh [--yes] [--lock FILE]
+#   bash install.sh [--yes]
 #
 # 1. preflight (no changes)  2. the plan, confirmed  3. system stage (sudo): enable the COPR and
-# install the tinkero package  4. user stage: tinkero-provision, its own plan confirmed first.
+# install the tinkero package  4. user stage: the provisioning plan, confirmed, then tinkero-provision.
 # Re-running is safe: both stages are no-ops when the machine is current.
 set -euo pipefail
 copr=${TINKERO_COPR:-dromero/tinkero}
-# The release workflow rewrites this to the tag it attaches the script to (design 2E, D7), so
-# a script fetched from a release installs that release's lock.
+# The release workflow rewrites these two when it attaches the script to a release (design 2E,
+# D7): the git ref the script belongs to, and the Fedora release its lock names. tests/test-install.sh
+# fails when TINKERO_FEDORA differs from upstream.lock.
 TINKERO_REF=${TINKERO_REF:-master}
+TINKERO_FEDORA=${TINKERO_FEDORA:-44}
 own_repo="copr:copr.fedorainfracloud.org:${copr//\//:}"
 os_release=${TINKERO_OS_RELEASE:-/etc/os-release}
 dm_unit=${TINKERO_DM_UNIT:-/etc/systemd/system/display-manager.service}
 euid=${TINKERO_EUID:-$EUID}
-yes=0; lock=${TINKERO_LOCK:-}
+yes=0
 
 usage() { sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; }
 die() { echo "install.sh: $*" >&2; exit 1; }
@@ -1488,38 +1493,20 @@ confirm() {   # QUESTION
   read -r -p "$1 [y/N] " a
   [[ $a == [yY]* ]] || die "stopped; nothing was changed"
 }
-lock_get() {   # KEY: parsed, never sourced
-  local line
-  line=$(grep -E "^$1=" "$lock" | tail -n1) || die "no key '$1' in $lock"
-  printf '%s\n' "${line#*=}"
-}
 
 while (($#)); do
   case $1 in
     --yes|-y) yes=1 ;;
-    --lock) [[ -n ${2:-} ]] || die "--lock needs a file"; lock=$2; shift ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown option: $1" ;;
   esac
   shift
 done
 
-here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-if [[ -z $lock ]]; then
-  if [[ -f $here/upstream.lock ]]; then
-    lock=$here/upstream.lock
-  else
-    lock=$(mktemp); trap 'rm -f "$lock"' EXIT
-    url="https://raw.githubusercontent.com/dromeropa/tinkero/$TINKERO_REF/upstream.lock"
-    curl -fsSL -o "$lock" "$url" || die "could not fetch $url"
-  fi
-fi
-
 # 1. Preflight: nothing changes.
 [[ $euid != 0 ]] || die "run as your own user, not as root; the system stage uses sudo"
-want=$(lock_get fedora)
 id=$(sed -n 's/^ID=//p' "$os_release" | tr -d '"'); ver=$(sed -n 's/^VERSION_ID=//p' "$os_release" | tr -d '"')
-[[ $id == fedora && $ver == "$want" ]] || die "this release of Tinkero is for Fedora $want; this host is ${id:-unknown} ${ver:-?}"
+[[ $id == fedora && $ver == "$TINKERO_FEDORA" ]] || die "this release of Tinkero ($TINKERO_REF) is for Fedora $TINKERO_FEDORA; this host is ${id:-unknown} ${ver:-?}"
 arch=$(uname -m)
 [[ $arch == x86_64 ]] || die "Tinkero is x86_64 only; this host is $arch"
 dm=$(basename "$(readlink "$dm_unit" 2>/dev/null || echo none)")
@@ -1552,12 +1539,14 @@ sudo dnf copr enable "${y[@]}" "$copr"
 sudo dnf install "${y[@]}" tinkero
 say "system stage done"
 
-# 4. The provisioning plan, the second gate, the user stage.
+# 4. The provisioning plan, the second gate, the user stage. The plan lists every file that
+# would be created (nothing you have is overwritten) and the one existing file it touches,
+# ~/.bashrc, so answering here answers tinkero-provision's own consent question too.
 echo; echo "Provisioning plan (per file; nothing you already have is overwritten):"
 tinkero-provision --plan
 echo
-confirm "Continue with the user stage?"
-if (( yes )); then tinkero-provision --yes; else tinkero-provision; fi
+confirm "Create the files above and append the guarded line to ~/.bashrc?"
+tinkero-provision --yes
 say "done. Log out and choose Tinkero at the GDM login screen."
 ```
 
@@ -1565,10 +1554,11 @@ In `.github/workflows/ci.yml`, add `install.sh tests/fixtures/make-payload.sh` t
 
 - [ ] **Step 3: Verify**
 
-Run: `bash tests/test-install.sh` Expected: `1..23`, no `not ok`.
+Run: `bash tests/test-install.sh` Expected: `1..21`, no `not ok`.
 Run: `shellcheck -x -e SC1090,SC1091 install.sh tests/test-install.sh` Expected: clean.
 Run: `./dev check` Expected: green.
 Run: `bash install.sh --help` Expected: the seven header lines, exit 0.
+Run: `sed -i 's/^fedora=44/fedora=45/' upstream.lock && bash tests/test-install.sh | head -n1; git checkout upstream.lock` Expected: `not ok 1 - install.sh carries the lock's fedora release` (the pin works), then the lock restored.
 
 - [ ] **Step 4: Commit**
 
@@ -1593,7 +1583,7 @@ Status line (line 4): append `; 2E (provisioning and install) done 2026-09-XX (d
 In 4.6, after the paragraph beginning "Re-running is safe", add:
 
 ```
-Two details settled by plan 2E (`docs/superpowers/specs/2026-09-23-phase-2e-provision-design.md`, decisions D3 and D7): the provisioning plan can only be printed once the package is installed, so `install.sh` confirms twice on a first install, before the system stage and before the user stage; and the script finds its lock beside itself in a checkout or fetches it from the ref the release workflow bakes into `TINKERO_REF`.
+Two details settled by plan 2E (`docs/superpowers/specs/2026-09-23-phase-2e-provision-design.md`, decisions D3 and D7): the provisioning plan can only be printed once the package is installed, so `install.sh` confirms twice on a first install, before the system stage and before the user stage, the second answer covering the `~/.bashrc` line; and the script does not parse the lock but carries the one value it needs, `TINKERO_FEDORA`, pinned to the lock's `fedora` key by a test and rewritten by the release workflow together with `TINKERO_REF`.
 ```
 
 In 4.6, after the seeding rules list, add:
@@ -1611,10 +1601,10 @@ The 2E row's Status becomes `**done** 2026-09-XX: `2026-09-23-phase-2e-provision
 ```
 ## What executing 2E added to the queue (2026-09-XX)
 
-- **2F:** append `tinkero-inhibit-power-key.service` to `provision/session-units.list`; export `DCONF_PROFILE=tinkero` from uwsm's `env.d` (the profile file and the seeded database exist); the VM check proves `dconf load` under the profile wrote `~/.config/dconf/tinkero`, that the units start from `tinkero-provision --session`, and whether `omarchy-speaker-tuning.service` (installed and enabled under `~/.config/systemd/user` by `omarchy-audio-tuning on` on matching laptops, design D4) starts under GNOME; if it does and must not, 2F conditions it like `omarchy-fcitx5.service`. `omarchy-tailscale-receive.service` ships with its `[Install]` section too and is inert without `/usr/bin/tailscale`; 2F's stripping covers it. 2F's first COPR build issue also re-runs the depsolve for `Conflicts: nwg-panel`.
-- **Phase 3:** `tinkero-status` reads `~/.local/state/tinkero/{seeded.tsv,release,done/}` and `tinkero-provision --plan`; the release workflow rewrites `TINKERO_REF` in `install.sh` and attaches it to the release; the VM smoke test runs `install.sh --yes` and confirms dnf5's `%{from_repo}` tag and `dnf copr enable -y`.
+- **2F:** append `tinkero-inhibit-power-key.service` to `provision/session-units.list`; export `DCONF_PROFILE=tinkero` from uwsm's `env.d` (the profile file and the seeded database exist); the VM check proves `dconf load` under the profile wrote `~/.config/dconf/tinkero` and that the listed units start from `tinkero-provision --session`. Stripping `[Install]` at build time also covers `omarchy-speaker-tuning.service` (copied from the tree into `~/.config/systemd/user` by `omarchy-audio-tuning on`, started by the list from then on, design D4) and `omarchy-tailscale-receive.service` (inert without `/usr/bin/tailscale`); on a matching laptop the VM check confirms the tuning no longer starts under GNOME. 2F's first COPR build issue also re-runs the depsolve for `Conflicts: nwg-panel`.
+- **Phase 3:** `tinkero-status` reads `~/.local/state/tinkero/{seeded.tsv,release,done/}` and `tinkero-provision --plan`; the release workflow rewrites `TINKERO_REF` and `TINKERO_FEDORA` in `install.sh` and attaches it to the release; the VM smoke test runs `install.sh --yes` and confirms dnf5's `%{from_repo}` tag and `dnf copr enable -y`.
 - **Bump checklist:** after a tag bump, diff `config/`, `applications/` and `install/user/**` against the previous tag (audit section 10, item 2); update `provision/skip.list` if a new shared-with-GNOME file appears; write `config-notes/<tag>.md` from the config-only migrations; re-run `tinkero-provision --plan` on the real payload and record the new `seed` count in the design's section 8.
-- **Later polish:** the four seeded launchers show a generic icon (D12); the nautilus-python extensions are not seeded.
+- **Not seeded, by decision:** the nautilus-python extensions (D12); Chromium's profile and flags (D1).
 - **Permanent allowlist entries, final:** dropped-refs 6 (five comment-only, the Docker binding); arch-leak 7 (six comment-only, `omarchy-setup-security-fingerprint` until 2F).
 ```
 
@@ -1669,5 +1659,5 @@ Recorded per task by the implementing PR, as `docs/guides/workflow.md` requires.
 - The `DCONF_PROFILE` export, the `[Install]` stripping with the fcitx5 drop-in, `tinkero-inhibit-power-key.service`, the PAM variants and `tinkero-pam-sync` in `%posttrans`: plan 2F.
 - The first COPR build of the `tinkero` RPM and the `nwg-panel` depsolve proof: 2F's last issue.
 - `tinkero-status`, the release workflow that bakes `TINKERO_REF` and archives the RPM set, the VM smoke test: Phase 3.
-- Seeding the nautilus-python extensions and installing the launcher icons (design D12); modifying `omarchy-refresh-applications` (D11).
+- Seeding the nautilus-python extensions (design D12); modifying `omarchy-refresh-applications` (D11, a candidate replacement for later).
 - A `--check` mode for unread config notes: `tinkero-status` reads the `done/notes-<tag>` markers instead.
