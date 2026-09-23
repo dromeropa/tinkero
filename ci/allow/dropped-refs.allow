@@ -1,7 +1,6 @@
 # Baseline written by './dev baseline'. Entries may only be removed, never added by hand.
 # Most are work owed by a later plan; a few are permanent (comment-only mentions). See the audit.
 usr/bin/omarchy-bar:omarchy-migrate   # comment only, permanent
-usr/bin/omarchy-provision-user:omarchy-provision-owner   # plan 2E
 usr/share/omarchy/default/bash/env-bootstrap:omarchy-dev-link   # comment only, permanent
 usr/share/omarchy/default/bash/env-bootstrap:omarchy-dev-unlink   # comment only, permanent
 usr/share/omarchy/default/hypr/bindings/applications.lua:omarchy-launch-docker-tui   # gated binding; returns with Docker

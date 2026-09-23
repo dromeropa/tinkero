@@ -1,0 +1,8 @@
+#!/bin/bash
+
+# omarchy:summary=Provision this user's configuration (Tinkero: tinkero-provision)
+# omarchy:hidden=true
+
+# Upstream's finalizer repointed XDG directories, changed the default browser and mail handler
+# and created an unencrypted keyring; Tinkero's provisioning does none of that (design spec 4.6).
+exec tinkero-provision "$@"

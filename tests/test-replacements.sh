@@ -87,4 +87,16 @@ assert_eq "$("$R/omarchy-version-channel")" tinkero "version-channel"
 "$R/omarchy-channel-set" edge 2>/dev/null; assert_eq "$?" 1 "channel-set: refuses"
 "$R/omarchy-hibernation-available";   assert_eq "$?" 1 "hibernation-available: false"
 assert_eq "$(TZ=UTC "$R/omarchy-version-pkgs")" "2027-01-15 08:00" "version-pkgs: newest rpm install time"
+
+# provisioning wrappers (plan 2E): exec tinkero-provision, flags passed through
+# shellcheck disable=SC2016  # the $* below belongs to the stub script being written, not to this shell
+cat > "$d/bin/tinkero-provision" <<'S'
+#!/bin/bash
+echo "tinkero-provision${*:+ $*}" >> "$LOG"
+S
+chmod +x "$d/bin/tinkero-provision"
+: > "$LOG"; "$R/omarchy-provision-first-run"; assert_eq "$(cat "$LOG")" "tinkero-provision --session" "first-run: session mode"
+: > "$LOG"; "$R/omarchy-provision-first-run" --force; assert_eq "$(cat "$LOG")" "tinkero-provision --session --force" "first-run: --force passes through"
+: > "$LOG"; "$R/omarchy-provision-user"; assert_eq "$(cat "$LOG")" "tinkero-provision" "provision-user: a plain provision"
+
 rm -rf "$d"; finish
