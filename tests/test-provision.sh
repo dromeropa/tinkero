@@ -307,7 +307,10 @@ assert_contains "$out" "sudo dnf remove tinkero" "remove: says what comes next"
 newhome 16
 mkdir -p "$HOME/.local/state/omarchy/current"; echo "Tokyo Night" > "$HOME/.local/state/omarchy/current/theme.name"
 FAIL_MISE_WORK=1 "$T" --yes >/dev/null 2>&1 || true
-: > "$LOG"; "$T" --session >/dev/null 2>&1 || true
+: > "$LOG"; out=$("$T" --session 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 0 "session: a home whose theme already exists provisions cleanly"
+if grep -q 'step theme: failed' <<<"$out"; then not_ok "session: the theme step is not a failure when the theme exists"; else ok "session: the theme step is not a failure when the theme exists"; fi
+assert_file "$HOME/.local/state/tinkero/release" "session: and the release is recorded"
 assert_contains "$(cat "$LOG")" "omarchy-theme-set Tokyo Night" "in-session theme: staged headless, applied for real even though the session run was a full provision"
 assert_file "$HOME/.local/state/tinkero/done/theme-in-session" "in-session theme: the marker is set"
 : > "$LOG"; "$T" --session >/dev/null 2>&1

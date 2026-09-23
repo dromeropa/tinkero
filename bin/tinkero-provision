@@ -306,7 +306,7 @@ step_theme() {
     [[ -s $name ]] && had=1
     export OMARCHY_THEME_HEADLESS=0
     leaf "$OMARCHY_PATH/install/user/theme.sh" || return 1
-    [[ $had == 0 ]] && mark theme-in-session
+    if [[ $had == 0 ]]; then mark theme-in-session; fi
   else
     export OMARCHY_THEME_HEADLESS=1
     leaf "$OMARCHY_PATH/install/user/theme.sh"
