@@ -26,7 +26,8 @@ you talk about the desktop; use the real command names when you give instruction
 - `/usr/share/omarchy` and `/usr/bin/omarchy-*` are package-owned. Never edit, copy into, or
   redirect them. User configuration lives in `~/.config`, seeded by `tinkero-provision`.
 - `/etc/pam.d`: PAM is managed by `authselect`. Fingerprint and other login features go
-  through `authselect enable-feature`, and the menu's setup entries already do that.
+  through `authselect enable-feature`; the fingerprint setup entry is ported to that in a
+  later plan (2F), and until then it is upstream's and must not be run on this host.
 - SELinux stays enforcing. Read denials with `sudo ausearch -m AVC -ts recent`. Never change
   the mode, a boolean or a label; if something needs that, report it to the user instead.
 - The firewall is `firewalld` (`firewall-cmd`). Containers: `podman` is the default.
