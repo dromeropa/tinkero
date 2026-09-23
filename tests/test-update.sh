@@ -4,7 +4,7 @@ source "$(dirname "$0")/lib.sh"
 d=$(mktmp); mkdir -p "$d/bin" "$d/bin-nomise"; export LOG=$d/log
 # shellcheck disable=SC2016  # the stubs log their own $* at run time
 for s in sudo mise flatpak; do
-  printf '#!/bin/bash\necho "%s $*" >> "$LOG"\n[[ ${FAIL_%s:-} == 1 ]] && exit 1\nexit 0\n' "$s" "$(tr a-z A-Z <<<"$s")" > "$d/bin/$s"
+  printf '#!/bin/bash\necho "%s $*" >> "$LOG"\n[[ ${FAIL_%s:-} == 1 ]] && exit 1\nexit 0\n' "$s" "$(tr '[:lower:]' '[:upper:]' <<<"$s")" > "$d/bin/$s"
   chmod +x "$d/bin/$s"
 done
 cp "$d/bin/sudo" "$d/bin-nomise/sudo"   # a PATH with sudo only: no mise, no flatpak
