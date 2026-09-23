@@ -1,0 +1,155 @@
+#!/usr/bin/env python3
+"""apply-overrides IN OVERRIDES DROPLIST OUT: rewrite upstream's default menu at build time.
+
+Design spec 4.4. Line-oriented on purpose: every upstream row is one line keyed by its
+id, so deleting, replacing and adding whole lines keeps upstream's comments and layout,
+and a diff of OUT against IN shows exactly the rows Tinkero changed.
+
+Rules, in this order:
+  1. delete every row whose id equals a prefix in OVERRIDES "delete" or starts with "prefix."
+  2. delete every row whose action, when or checked mentions a dropped command: the bin/
+     lines of DROPLIST, "*" globs allowed, matched as whole words (the same rule as
+     ci/gate-dropped-refs)
+  3. replace the rows in "replace" (the id must exist upstream); append the rows in "add"
+     (the id must not exist upstream) as a Tinkero block before the closing brace
+  4. fail, leaving OUT untouched, on: a delete prefix that matched nothing, a replace id
+     that does not exist or that rule 1 or 2 removed, an add id that exists, a row whose
+     parent is gone (an orphan), an OUT that upstream's parser would reject, or a row
+     count different from "expect_rows" when that key is present
+"""
+import json
+import re
+import sys
+
+ROW = re.compile(r'^(\s*)"([a-z0-9.-]+)"\s*:\s*(\{.*\})\s*,?\s*$')
+
+
+def strip_jsonc(raw):
+    """Exact port of stripJsonc in shell/plugins/menu/MenuModel.js: full-line // comments
+    and trailing commas. Nothing else is JSONC to upstream, so nothing else is to us."""
+    raw = re.sub(r'^\s*//[^\n]*(\n|$)', '', raw, flags=re.M)
+    return re.sub(r',(\s*[}\]])', r'\1', raw)
+
+
+def parse(text, what):
+    try:
+        data = json.loads(strip_jsonc(text))
+    except json.JSONDecodeError as e:
+        fail(f"{what} does not parse the way MenuModel.js parses it: {e}")
+    if not isinstance(data, dict):
+        fail(f"{what}: top level is not an object")
+    return data
+
+
+def fail(msg):
+    sys.exit(f"apply-overrides: {msg}")
+
+
+def dropped_pattern(droplist):
+    names = []
+    with open(droplist, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line.startswith("bin/"):
+                continue
+            name = line[len("bin/"):]
+            if re.search(r'[?\[]', name):
+                fail(f"unsupported glob in drop list line: {line} (only * is supported)")
+            names.append(re.escape(name).replace(r'\*', '[a-z0-9-]*'))
+    if not names:
+        return None
+    return re.compile(r'(?:^|[^a-z0-9-])(?:%s)(?:[^a-z0-9-]|$)' % "|".join(names))
+
+
+def row_line(indent, id_, row):
+    return f'{indent}"{id_}": {json.dumps(row, ensure_ascii=False, separators=(",", ":"))},\n'
+
+
+def main(argv):
+    if len(argv) != 5:
+        sys.exit("usage: apply-overrides IN OVERRIDES DROPLIST OUT")
+    src, ov_path, droplist, out = argv[1:]
+    with open(src, encoding="utf-8") as f:
+        text = f.read()
+    rows_in = parse(text, src)
+    with open(ov_path, encoding="utf-8") as f:
+        ov = parse(f.read(), ov_path)
+    prefixes = ov.get("delete", [])
+    replace = ov.get("replace", {})
+    add = ov.get("add", {})
+    expect = ov.get("expect_rows")
+    dropped = dropped_pattern(droplist)
+
+    lines = text.splitlines(keepends=True)
+    ids_on_lines = {m.group(2) for m in map(ROW.match, lines) if m}
+    if ids_on_lines != set(rows_in):
+        odd = sorted(ids_on_lines ^ set(rows_in))
+        fail(f"rows are not one per line, cannot rewrite safely: {odd[:5]}")
+
+    kept, by_prefix, by_dropped, replaced = [], [], [], []
+    hit = set()
+    for line in lines:
+        m = ROW.match(line)
+        if not m:
+            kept.append(line)
+            continue
+        indent, id_, _ = m.groups()
+        pfx = next((p for p in prefixes if id_ == p or id_.startswith(p + ".")), None)
+        if pfx is not None:
+            hit.add(pfx)
+            by_prefix.append(id_)
+            continue
+        row = rows_in[id_]
+        fields = " ".join(str(row.get(k, "")) for k in ("action", "when", "checked"))
+        if dropped and dropped.search(fields):
+            by_dropped.append(id_)
+            continue
+        if id_ in replace:
+            kept.append(row_line(indent, id_, replace[id_]))
+            replaced.append(id_)
+            continue
+        kept.append(line)
+
+    problems = []
+    unused = sorted(set(prefixes) - hit)
+    if unused:
+        problems.append(f"delete prefixes matching no row: {unused}")
+    not_found = sorted(set(replace) - set(rows_in))
+    if not_found:
+        problems.append(f"replace ids not in upstream menu: {not_found}")
+    lost = sorted(set(replace) & (set(by_prefix) | set(by_dropped)))
+    if lost:
+        problems.append(f"replace ids that the delete rules removed: {lost}")
+    dup = sorted(set(add) & set(rows_in))
+    if dup:
+        problems.append(f"add ids already in upstream menu: {dup}")
+
+    if add:
+        close = max(i for i, l in enumerate(kept) if l.strip() == "}")
+        block = ["\n", "  // Tinkero additions (menu/overrides.jsonc)\n"]
+        block += [row_line("  ", id_, row) for id_, row in add.items()]
+        kept[close:close] = block
+
+    result = "".join(kept)
+    rows_out = parse(result, "the rewritten menu")
+    for id_ in rows_out:
+        parent = id_.rpartition(".")[0]
+        if parent and parent not in rows_out:
+            problems.append(f"orphan row {id_}: parent {parent} was deleted")
+    if expect is not None and len(rows_out) != expect:
+        problems.append(f"expect_rows is {expect} but the rewritten menu has {len(rows_out)} rows "
+                        "(an upstream change; check the diff, then update expect_rows)")
+    if problems:
+        fail("; ".join(problems))
+
+    with open(out, "w", encoding="utf-8") as f:
+        f.write(result)
+    for id_ in by_dropped:
+        print(f"apply-overrides: deleted {id_} (calls a dropped command)")
+    print(f"apply-overrides: {len(rows_in)} rows in, {len(by_prefix)} deleted by prefix, "
+          f"{len(by_dropped)} deleted for a dropped command, {len(replaced)} replaced, "
+          f"{len(add)} added, {len(rows_out)} rows out")
+
+
+if __name__ == "__main__":
+    main(sys.argv)
