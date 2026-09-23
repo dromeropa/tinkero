@@ -15,6 +15,9 @@ Requires:       (hyprland >= @HYPRLAND@ with hyprland < @HYPRLAND_NEXT@)
 Requires:       quickshell = @QUICKSHELL@
 Conflicts:      omedora
 Conflicts:      omedora-settings
+# Fedora's nwg-panel declares Supplements: hyprland; a conflict makes dnf drop that weak
+# dependency instead of installing a second bar (design spec 6, Phase 1 findings).
+Conflicts:      nwg-panel
 
 # Hard requirements (design spec 6). Weak ones are added with the features that use them.
 Requires:       uwsm xdg-desktop-portal-hyprland xdg-desktop-portal-gtk hyprland-guiutils hyprsunset hyprpicker lua
@@ -51,6 +54,9 @@ TINKERO_ROOT=$PWD TINKERO_LOCK=$PWD/upstream.lock build/assemble %{SOURCE0} %{bu
 %{_datadir}/fontconfig/conf.avail/50-omarchy.conf
 %{_prefix}/lib/systemd/user/*
 %config(noreplace) %{_sysconfdir}/mise/conf.d/omarchy.toml
+%config %{_sysconfdir}/dconf/profile/tinkero
+%{_datadir}/icons/hicolor/512x512/apps/disk-usage.png
+%{_datadir}/icons/hicolor/512x512/apps/imv.png
 
 %changelog
 * @DATE@ Tinkero <noreply@tinkero.invalid> - @VERSION@-@RELEASE@

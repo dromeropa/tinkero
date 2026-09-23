@@ -1,0 +1,10 @@
+#!/bin/bash
+
+# omarchy:summary=Finish first-login setup (Tinkero: tinkero-provision --session)
+# omarchy:args=[--force]
+# omarchy:hidden=true
+
+# Upstream's autostart runs this at every session start. Tinkero's provisioning is
+# tinkero-provision (design spec 4.6): --session is a fast no-op once done and starts the
+# session-scoped user units; --force reprovisions.
+exec tinkero-provision --session "$@"

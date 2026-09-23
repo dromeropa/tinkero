@@ -2,9 +2,15 @@
 source "$(dirname "$0")/lib.sh"
 d=$(mktmp); tb=$("$ROOT/tests/fixtures/make-tree.sh" "$d/src")
 # a private repo root so the test controls drop.list, patches and replacements
-r=$d/root; mkdir -p "$r"/{build,patches,distro/fedora/replacements,distro/fedora/lib,session,bin}
+r=$d/root; mkdir -p "$r"/{build,patches,distro/fedora/{replacements,lib,skills,dconf/profile},session,bin,config/hypr,provision,config-notes}
 printf '# lib\n' > "$r/distro/fedora/lib/pkg.sh"; printf 'foot\tdnf\tfoot\n' > "$r/distro/fedora/pkgmap.tsv"
 cp "$ROOT/session/tinkero.desktop" "$r/session/"
+echo '# fixture host guide' > "$r/distro/fedora/skills/host.md"
+echo '-- fixture bindings' > "$r/config/hypr/bindings.lua"
+printf 'chromium/\n' > "$r/provision/skip.list"
+printf 'omarchy-keep.service\n' > "$r/provision/session-units.list"
+echo 'user-db:tinkero' > "$r/distro/fedora/dconf/profile/tinkero"
+echo 'note' > "$r/config-notes/v0.md"
 printf 'omarchy_tag=v0\n' > "$r/upstream.lock"
 printf '# comment\nmigrations\ndefault/pacman\nbin/omarchy-snapshot\nbin/omarchy-plymouth-*\ndefault/systemd/user/omarchy-migrate-notify.service\n' > "$r/build/drop.list"
 cat > "$r/patches/0001-version.patch" <<'P'
@@ -43,6 +49,16 @@ assert_file "$d/dest/usr/share/licenses/tinkero/LICENSE.omarchy" "upstream licen
 assert_file "$d/dest/usr/share/tinkero/upstream.lock" "lock shipped"
 assert_file "$d/dest/usr/share/tinkero/pkg.sh" "package library shipped"
 assert_file "$d/dest/usr/share/tinkero/pkgmap.tsv" "name map shipped"
+
+# Provisioning data (plan 2E)
+assert_file "$o/default/agents/skills/omarchy/host.md" "host guide joins the omarchy skill inside the tree"
+assert_eq "$(cat "$d/dest/usr/share/tinkero/config/hypr/bindings.lua")" "-- fixture bindings" "config overrides shipped under /usr/share/tinkero/config"
+assert_file "$d/dest/usr/share/tinkero/provision/skip.list" "skip list shipped"
+assert_file "$d/dest/usr/share/tinkero/provision/session-units.list" "session unit list shipped"
+assert_file "$d/dest/usr/share/tinkero/config-notes/v0.md" "config notes shipped"
+assert_file "$d/dest/etc/dconf/profile/tinkero" "dconf profile shipped"
+assert_file "$d/dest/usr/share/icons/hicolor/512x512/apps/disk-usage.png" "launcher icon shipped under its Icon= name"
+assert_file "$d/dest/usr/share/icons/hicolor/512x512/apps/imv.png" "imv icon shipped"
 
 # 3b. Menu: the default menu is rewritten in place, in the tree, before relocation
 menu=$d/dest/usr/share/omarchy/default/omarchy/omarchy-menu.jsonc

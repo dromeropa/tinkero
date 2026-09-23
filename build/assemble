@@ -10,6 +10,10 @@
 #   distro/fedora/replacements.new       names allowed to have no upstream file
 #   menu/overrides.jsonc + menu/apply-overrides   the default menu, rewritten (step 3b)
 #   session/tinkero.desktop              the GDM session entry
+#   distro/fedora/skills/*.md           the host guide, into the omarchy skill inside the tree
+#   config/**, provision/*.list, config-notes/*.md, distro/fedora/dconf/profile/tinkero
+#                                        provisioning data under /usr/share/tinkero and /etc/dconf
+#   applications/icons/{Disk Usage,imv}.png   the icons the seeded launchers name, under hicolor
 set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 root=${TINKERO_ROOT:-$(dirname "$here")}
@@ -71,6 +75,15 @@ if [[ -f $root/menu/overrides.jsonc ]]; then
   mv "$menu.tinkero" "$menu"
 fi
 
+# 3c. Skill guides. Tinkero's host guide joins the omarchy skill inside the tree, so the
+# skill link provisioning makes covers it (design spec 4.5; patch 0006 points SKILL.md at it).
+if [[ -d $root/distro/fedora/skills ]]; then
+  [[ -d $tree/default/agents/skills/omarchy ]] || die "upstream has no default/agents/skills/omarchy; decide where the host guide goes"
+  for f in "$root"/distro/fedora/skills/*.md; do
+    [[ -f $f ]] && install -m 0644 "$f" "$tree/default/agents/skills/omarchy/$(basename "$f")"
+  done
+fi
+
 # 4. Relocate the two etc/ files Tinkero keeps, then drop the rest of etc/.
 install -Dm 0644 "$tree/etc/fastfetch/config.jsonc" "$dest/usr/share/tinkero/fastfetch/config.jsonc"
 install -Dm 0644 "$tree/etc/mise/conf.d/omarchy.toml" "$dest/etc/mise/conf.d/omarchy.toml"
@@ -88,6 +101,24 @@ install -Dm 0644 "${TINKERO_LOCK:-$root/upstream.lock}" "$dest/usr/share/tinkero
 # The package wrappers' library and name map (distro/fedora, plan 2B).
 install -Dm 0644 "$root/distro/fedora/lib/pkg.sh" "$dest/usr/share/tinkero/pkg.sh"
 install -Dm 0644 "$root/distro/fedora/pkgmap.tsv" "$dest/usr/share/tinkero/pkgmap.tsv"
+
+# Provisioning data (plan 2E): Tinkero's seeded config overrides, the skip list and the session
+# unit list, the per-bump config notes (none until the first bump) and the session's dconf profile.
+if [[ -d $root/config ]]; then
+  mkdir -p "$dest/usr/share/tinkero/config"
+  cp -a "$root/config/." "$dest/usr/share/tinkero/config/"
+fi
+for f in "$root"/provision/*.list; do
+  [[ -f $f ]] && install -Dm 0644 "$f" "$dest/usr/share/tinkero/provision/$(basename "$f")"
+done
+for f in "$root"/config-notes/*.md; do
+  [[ -f $f ]] && install -Dm 0644 "$f" "$dest/usr/share/tinkero/config-notes/$(basename "$f")"
+done
+install -Dm 0644 "$root/distro/fedora/dconf/profile/tinkero" "$dest/etc/dconf/profile/tinkero"
+# The icons the seeded launchers name (design D12): upstream installs them system-wide, and the
+# names must match the launchers' Icon= lines (disk-usage, imv). The web-app icons stay out.
+install -Dm 0644 "$tree/applications/icons/Disk Usage.png" "$dest/usr/share/icons/hicolor/512x512/apps/disk-usage.png"
+install -Dm 0644 "$tree/applications/icons/imv.png" "$dest/usr/share/icons/hicolor/512x512/apps/imv.png"
 
 # 6. The tree, with upstream's own layout: commands in /usr/bin, symlinks in the tree.
 mkdir -p "$dest/usr/bin" "$dest/usr/share/omarchy"
