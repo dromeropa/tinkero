@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -28,6 +29,9 @@ class ApplyOverrides(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp(prefix="tinkero-menu.")
         self.out = os.path.join(self.tmp, "out.jsonc")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
 
     def overrides(self, **changes):
         """The fixture overrides with expect_rows corrected (8) and any key replaced."""

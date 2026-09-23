@@ -53,7 +53,9 @@ if grep -q "learn.arch\|omarchy-snapshot" "$menu"; then not_ok "menu: deleted ro
 assert_contains "$out" "apply-overrides: 4 rows in, 1 deleted by prefix, 1 deleted for a dropped command, 0 replaced, 0 added, 2 rows out" "menu: assemble logs the summary"
 # a wrong expect_rows fails the build
 sed -i 's/"expect_rows": 2/"expect_rows": 3/' "$r/menu/overrides.jsonc"
-assert_fails "menu: expect_rows mismatch fails assemble" run "$d/dest-badmenu"
+out=$(run "$d/dest-badmenu" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 1 "menu: expect_rows mismatch fails assemble"
+assert_contains "$out" "expect_rows is 3 but the rewritten menu has 2 rows" "and names the menu step"
 sed -i 's/"expect_rows": 3/"expect_rows": 2/' "$r/menu/overrides.jsonc"
 
 # assert_fails cannot tell the guard from the pre-existing "matches nothing" failure,

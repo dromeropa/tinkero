@@ -198,7 +198,7 @@ After a tree bump, `tinkero-provision` (run by the user, or on the next session 
 
 ### 4.7 Maintenance model
 
-On every machine: `sudo dnf upgrade --refresh`, `mise up`, and `flatpak update` when Flatpak is installed (the menu installs eleven applications as Flatpaks through the name map, so they update through the same entry). Nothing else, ever. `tinkero-update` is exactly that, and the menu's Update > Packages row runs it in a floating terminal.
+On every machine: `sudo dnf upgrade --refresh`, `mise up`, and `flatpak update` when Flatpak is installed (the applications the menu installs as Flatpaks through the name map update through the same entry). Nothing else, ever. `tinkero-update` is exactly that, and the menu's Update > Packages row runs it in a floating terminal.
 
 For the packager:
 

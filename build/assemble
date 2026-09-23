@@ -8,6 +8,7 @@
 #   patches/series + patches/*.patch     applied with git apply -p1 (strict, no fuzz)
 #   distro/fedora/replacements/*         copied over bin/<same name>
 #   distro/fedora/replacements.new       names allowed to have no upstream file
+#   menu/overrides.jsonc + menu/apply-overrides   the default menu, rewritten (step 3b)
 #   session/tinkero.desktop              the GDM session entry
 set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
