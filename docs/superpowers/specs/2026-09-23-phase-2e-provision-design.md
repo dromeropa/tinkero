@@ -140,7 +140,7 @@ At the repo root, fetched from a tagged release URL in use, run as the desktop u
 3. **System stage**: `sudo dnf copr enable dromero/tinkero` and `sudo dnf install tinkero` (`-y` with `--yes`). Nothing else.
 4. **Second gate and user stage**: `tinkero-provision --plan`, then a confirmation that names what the plan showed and the one existing file it touches ("create the files above and append the guarded line to ~/.bashrc?"), unless `--yes`; then `tinkero-provision --yes`, because the user has just answered the consent question the plan carries. Then: log out and pick "Tinkero" at GDM.
 
-Two gates instead of the master spec's one (decision D3): the provisioning plan can only be printed by `tinkero-provision`, which does not exist on the machine before the system stage on a first install. Two prompts in total on an interactive first install, since the second gate answers the `~/.bashrc` question too. Both gates are the same question on a re-run, where both stages are no-ops.
+Two gates instead of the master spec's one (decision D3): the provisioning plan can only be printed by `tinkero-provision`, which does not exist on the machine before the system stage on a first install. Two Tinkero prompts on an interactive first install, since the second gate answers the `~/.bashrc` question too; dnf's own confirmations (the COPR notice, the transaction) stay in an interactive run and are silenced by `-y` only with `--yes`. Both gates are the same question on a re-run, where both stages are no-ops.
 
 ## 5. `host.md`
 

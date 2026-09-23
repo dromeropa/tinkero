@@ -10,7 +10,7 @@ Phase 2 of the design spec (section 7) is six independent subsystems. One plan e
 | **2B** patches, replacements, name map | patches 0002 to 0010, 13 replacements, `distro/fedora/pkgmap.tsv` (71 rows), `ci/gate-name-map`; `arch-leak.allow` at 8 entries (6 permanent, 1 for 2C, 1 for 2F) | 2A | no | **done** 2026-09-22: `2026-09-21-phase-2b-patches-replacements-name-map.md`; CI green |
 | **2C** menu rewrite | `menu/apply-overrides`, `menu/overrides.jsonc`, `tinkero-update`; `dropped-refs.allow` down to comment-only entries | 2A, and 2B's drop decisions | no | **done** 2026-09-23: `2026-09-23-phase-2c-menu-rewrite.md`; first plan through the issue loop |
 | **2D** branding | font rebuild, wallpaper rendering, manifest rewrite, `branding/strings.tsv` and `images.tsv`, the branding gate | 2A, 2C (menu labels) | no, but needs the placeholder mark and one human pass over 92 wallpapers | to write |
-| **2E** provisioning and install | `tinkero-provision` with `seeded.tsv`, the two provisioning wrappers, `install.sh`, `host.md`, config overrides | 2A, 2B | no | to write |
+| **2E** provisioning and install | `tinkero-provision` with `seeded.tsv`, the two provisioning wrappers, `install.sh`, `host.md`, config overrides | 2A, 2B | no | **done** 2026-09-23: `2026-09-23-phase-2e-provision-and-install.md`; design `specs/2026-09-23-phase-2e-provision-design.md` |
 | **2F** session integration | lock-screen PAM variants and `tinkero-pam-sync`, the dconf profile and `DCONF_PROFILE` export, `[Install]` stripping and session-started units with the fcitx5 drop-in, `tinkero-inhibit-power-key`, `omarchy-apply-lock` patch, fingerprint replacements | 2A, 2E | no longer: Phase 0 is done (GO, 2026-09-21) | to write; its VM check re-runs the Phase 0 GNOME cycle with the dconf profile |
 
 Milestones A, B and C of the spec (section 8) need 2A to 2F and the Phase 1 COPR. Nothing before 2F needs a running desktop: every plan up to 2E is verified by unit tests against a fixture tree and by the gates against the real tree.
@@ -69,6 +69,14 @@ Running the 2A prototype against the real tree while writing the plan produced 2
 - **Bump checklist (Phase 3):** `herdr` is packaged at `0.8.0^13.git0766aa5` (Omedora's pin) while upstream is at 0.9.1; the first real bump should take it. `voxtype 1.0.1` builds from Omedora's fork source; review whether upstream's own release builds before bumping.
 - **Name map:** the `voxtype dnf voxtype` row is now backed by a real package.
 - **COPR operations:** the import queue can hold a build in `importing` for 40 minutes; nothing to fix, just do not read it as a hang. A full run of the set takes about four hours (two dispatches, `voxtype` and `hyprland` are the long builds).
+
+## What executing 2E added to the queue (2026-09-23)
+
+- **2F:** append `tinkero-inhibit-power-key.service` to `provision/session-units.list`; export `DCONF_PROFILE=tinkero` from uwsm's `env.d` (the profile file and the seeded database exist); the VM check proves `dconf load` under the profile wrote `~/.config/dconf/tinkero` and that the listed units start from `tinkero-provision --session`. Stripping `[Install]` at build time also covers `omarchy-speaker-tuning.service` (copied from the tree into `~/.config/systemd/user` by `omarchy-audio-tuning on`, started by the list from then on, design D4) and `omarchy-tailscale-receive.service` (inert without `/usr/bin/tailscale`); on a matching laptop the VM check confirms the tuning no longer starts under GNOME. 2F's first COPR build issue also re-runs the depsolve for `Conflicts: nwg-panel`.
+- **Phase 3:** `tinkero-status` reads `~/.local/state/tinkero/{seeded.tsv,release,done/}` and `tinkero-provision --plan`; the release workflow rewrites `TINKERO_REF` and `TINKERO_FEDORA` in `install.sh` (both in the `${VAR:-value}` form) and attaches it to the release; the VM smoke test runs `install.sh --yes` and confirms dnf5's `%{from_repo}` tag and `dnf copr enable -y`.
+- **Bump checklist:** after a tag bump, diff `config/`, `applications/` and `install/user/**` against the previous tag (audit section 10, item 2); update `provision/skip.list` if a new shared-with-GNOME file appears; write `config-notes/<tag>.md` from the config-only migrations; re-run `tinkero-provision --plan` on the real payload and record the new `seed` count in the design's section 8.
+- **Not seeded, by decision:** the nautilus-python extensions (D12); Chromium's profile and flags (D1).
+- **Permanent allowlist entries, final:** dropped-refs 6 (five comment-only, the Docker binding); arch-leak 7 (six comment-only, `omarchy-setup-security-fingerprint` until 2F).
 
 ## What executing 2C added to the queue (2026-09-23)
 
