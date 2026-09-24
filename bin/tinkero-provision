@@ -317,7 +317,7 @@ run_steps() {
   run_step theme step_theme
   run_step mise-work leaf "$OMARCHY_PATH/install/user/mise-work.sh"
   run_step mise leaf "$OMARCHY_PATH/install/user/mise.sh"
-  seed_dconf 0
+  seed_dconf 0 || true
   if in_session; then in_session_steps; fi
 }
 # in_session_steps: once per home, inside a Tinkero session (design 2E, D4): the hardware
@@ -348,20 +348,26 @@ in_session_steps() {
 # --- the session's dconf database (spec 4.9) ---------------------------------------------------
 # seed_dconf FORCE (0|1): GNOME's settings, read through Fedora's "user" profile, loaded into
 # the "tinkero" profile the package ships. Once, unless forced (--reset dconf backs the file up).
+# Returns 0 seeded (or already done), 1 failed (joins FAILED), 2 skipped (nothing was done). Called
+# with "|| true" or "|| rc=$?" at every call site, since calling it on the left of "||" turns off
+# errexit for its whole body, not just its final status: every command inside that matters (the
+# backup below, on failure) must therefore fail explicitly rather than rely on set -e to stop it.
 seed_dconf() {
   local db=$config_home/dconf/tinkero
   if [[ $1 == 0 && -f $state/done/dconf ]]; then return 0; fi
-  if [[ ! -f $TINKERO_DCONF_PROFILE ]]; then say "dconf: $TINKERO_DCONF_PROFILE is missing; skipped"; return 0; fi
-  if ! command -v dconf >/dev/null 2>&1; then say "dconf: dconf is not installed; skipped"; return 0; fi
+  if [[ ! -f $TINKERO_DCONF_PROFILE ]]; then say "dconf: $TINKERO_DCONF_PROFILE is missing; skipped"; return 2; fi
+  if ! command -v dconf >/dev/null 2>&1; then say "dconf: dconf is not installed; skipped"; return 2; fi
   if [[ -z ${DBUS_SESSION_BUS_ADDRESS:-} ]]; then
     say "dconf: no session bus; run tinkero-provision again from a graphical session to seed the session's settings"
-    return 0
+    return 2
   fi
-  if [[ $1 == 1 && -f $db ]]; then cp -p -- "$db" "$db.bak.$(date +%s)"; fi
+  if [[ $1 == 1 && -f $db ]]; then
+    cp -p -- "$db" "$db.bak.$(date +%s)" || { FAILED+=(dconf); say "dconf: could not back up $db; not reset"; return 1; }
+  fi
   if DCONF_PROFILE=user dconf dump / | DCONF_PROFILE=tinkero dconf load /; then
     mark dconf; say "dconf: seeded the session's settings from GNOME's"
   else
-    FAILED+=(dconf); say "dconf: seeding failed"
+    FAILED+=(dconf); say "dconf: seeding failed"; return 1
   fi
 }
 
@@ -412,7 +418,7 @@ session_mode() {   # FORCE (0|1)
     provision skip || rc=1
   else
     FAILED=(); mkdir -p "$state/done"
-    seed_dconf 0
+    seed_dconf 0 || true
     in_session_steps
     if ((${#FAILED[@]})); then rc=1; fi
   fi
@@ -494,7 +500,7 @@ do_reset() {   # REL...
 }
 
 main() {
-  local mode=provision consent=ask force=0 arg="" targets
+  local mode=provision consent=ask force=0 arg="" targets rc=0
   while (($#)); do
     case $1 in
       --yes|-y) consent=yes ;;
@@ -521,8 +527,8 @@ main() {
     session)   session_mode "$force" ;;
     reset)
       if [[ $arg == dconf ]]; then
-        mkdir -p "$state"; FAILED=(); seed_dconf 1
-        [[ ${#FAILED[@]} == 0 ]] || exit 1
+        mkdir -p "$state"; FAILED=(); seed_dconf 1 || rc=$?
+        ((rc == 0)) || exit "$rc"
       else
         load_rows; collect_sources all; do_reset "$arg"
       fi ;;
