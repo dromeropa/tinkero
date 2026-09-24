@@ -10,6 +10,9 @@
 #   distro/fedora/replacements.new       names allowed to have no upstream file
 #   menu/overrides.jsonc + menu/apply-overrides   the default menu, rewritten (step 3b)
 #   session/tinkero.desktop              the GDM session entry
+#   branding/{mark.svg,wordmark.svg,logo.txt,icon.txt,strings.tsv,images.tsv} + the branding/ tools
+#                                        the mark into the font, the logo files, the plugin manifests,
+#                                        the substitution list and the wallpapers (step 3d)
 #   distro/fedora/skills/*.md           the host guide, into the omarchy skill inside the tree
 #   config/**, provision/*.list, config-notes/*.md, distro/fedora/dconf/profile/tinkero
 #                                        provisioning data under /usr/share/tinkero and /etc/dconf
@@ -82,6 +85,27 @@ if [[ -d $root/distro/fedora/skills ]]; then
   for f in "$root"/distro/fedora/skills/*.md; do
     [[ -f $f ]] && install -m 0644 "$f" "$tree/default/agents/skills/omarchy/$(basename "$f")"
   done
+fi
+
+# 3d. Branding (design spec 4.13, plan 2D): the mark into the font, the logo files, the plugin
+# manifests, the substitution list, the wallpapers. Data under branding/; every step fails when
+# upstream moved something. Skipped when the root has no branding/strings.tsv (fixture roots).
+if [[ -f $root/branding/strings.tsv ]]; then
+  command -v magick >/dev/null || die "branding needs ImageMagick (magick)"
+  python3 -c 'import fontTools' 2>/dev/null || die "branding needs python3-fonttools"
+  for f in default/fonts/omarchy/omarchy.ttf logo.txt icon.txt logo.svg icon.png; do
+    [[ -f $tree/$f ]] || die "upstream has no $f; decide where the branding goes before building"
+  done
+  font=$tree/default/fonts/omarchy/omarchy.ttf
+  python3 "$root/branding/rebuild-font" "$font" "$root/branding/mark.svg" "$font.tinkero" || die "font rebuild failed"
+  mv "$font.tinkero" "$font"
+  install -m 0644 "$root/branding/logo.txt" "$tree/logo.txt"
+  install -m 0644 "$root/branding/icon.txt" "$tree/icon.txt"
+  install -m 0644 "$root/branding/wordmark.svg" "$tree/logo.svg"
+  magick -background none -density 300 "$root/branding/mark.svg" -resize 300x300 -strip "$tree/icon.png" || die "icon.png render failed"
+  python3 "$root/branding/rewrite-manifests" "$tree" || die "manifest rewrite failed"
+  python3 "$root/branding/apply-strings" "$tree" "$root/branding/strings.tsv" || die "substitution list failed (see apply-strings output above)"
+  "$root/branding/render-wallpapers" "$tree" "$root/branding/images.tsv" "$root/branding/wordmark.svg" || die "wallpaper rendering failed"
 fi
 
 # 4. Relocate the two etc/ files Tinkero keeps, then drop the rest of etc/.

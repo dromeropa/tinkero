@@ -100,4 +100,56 @@ out=$("$ROOT/ci/gate-name-map" "$p" "$d/map5" 2>&1) && rc=0 || rc=$?
 assert_eq "$rc" 1 "name-map fails on a map with no rows"; assert_contains "$out" "has no rows" "and says so"
 printf 'foot\tdnf\tfoot\r\n' > "$d/map6"
 "$ROOT/ci/gate-name-map" "$p" "$d/map6" >/dev/null 2>&1; assert_eq "$?" 2 "name-map exits 2 on a CRLF map"
+# branding (plan 2D)
+b=$d/brand; mkdir -p "$b/usr/bin" "$b/usr/share/omarchy/themes/t/backgrounds" "$b/usr/share/tinkero/fastfetch"
+printf 'title: "Omarchy shell"\n' > "$b/usr/share/omarchy/gallery.qml"
+printf -- '-- the "Omarchy" comment\nx = "fine" -- Omarchy trailing\n' > "$b/usr/share/omarchy/comment.lua"
+printf '{"author": "Tinkero (from Omarchy)", "id": "omarchy.x", "n": "OmarchyFoo"}\n' > "$b/usr/share/omarchy/attrib.json"
+printf '{"text": "Tinkero 1, built on Omarchy"}\n' > "$b/usr/share/tinkero/fastfetch/config.jsonc"
+printf "y = 'org.omarchy.app'\n" > "$b/usr/share/omarchy/ids.js"
+echo keep > "$b/usr/share/omarchy/themes/t/backgrounds/1-keep.png"
+echo rendered > "$b/usr/share/omarchy/themes/t/backgrounds/tinkero.png"
+keepsha=$(sha256sum "$b/usr/share/omarchy/themes/t/backgrounds/1-keep.png" | cut -d' ' -f1)
+printf 'themes/t/backgrounds/1-keep.png\t%s\tkeep\nthemes/t/backgrounds/omarchy.png\t0\tregenerate\nthemes/t/backgrounds/old.jpg\t0\tdelete\n' "$keepsha" > "$d/images.tsv"
+printf 'etc/fastfetch/config.jsonc\tOmarchy 1\tTinkero 1, built on Omarchy\t1\n' > "$d/strings.tsv"
+G=$ROOT/ci/gate-branding
+: > "$d/allow-b"
+out=$("$G" "$b" "$d/images.tsv" "$d/strings.tsv" "$d/allow-b" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 1 "branding: fails on a string literal"
+assert_contains "$out" "usr/share/omarchy/gallery.qml" "branding: names the file"
+for f in comment.lua attrib.json ids.js tinkero/fastfetch; do
+  if [[ $out == *"$f"* ]]; then not_ok "branding: no finding for $f" "$out"; else ok "branding: no finding for $f"; fi
+done
+echo 'usr/share/omarchy/gallery.qml   # dev tool' > "$d/allow-b"
+out=$("$G" "$b" "$d/images.tsv" "$d/strings.tsv" "$d/allow-b" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 0 "branding: passes with the allowlist, a keep row and a rendered file"
+assert_contains "$out" "PASS: branding" "branding: and says so"
+echo 'usr/share/omarchy/stale.qml' >> "$d/allow-b"
+out=$("$G" "$b" "$d/images.tsv" "$d/strings.tsv" "$d/allow-b" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 1 "branding: a stale allowlist entry fails"
+sed -i '/stale/d' "$d/allow-b"
+echo x > "$b/usr/share/omarchy/themes/t/backgrounds/omarchy.png"
+out=$("$G" "$b" "$d/images.tsv" "$d/strings.tsv" "$d/allow-b" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 1 "branding: a wallpaper named for upstream fails"
+assert_contains "$out" "still named for upstream" "branding: the name check"
+assert_contains "$out" "present but marked regenerate" "branding: and the list check"
+rm "$b/usr/share/omarchy/themes/t/backgrounds/omarchy.png"
+echo extra > "$b/usr/share/omarchy/themes/t/backgrounds/9-extra.png"
+out=$("$G" "$b" "$d/images.tsv" "$d/strings.tsv" "$d/allow-b" 2>&1) && rc=0 || rc=$?
+assert_contains "$out" "no row in $d/images.tsv: themes/t/backgrounds/9-extra.png" "branding: a wallpaper without a row fails"
+rm "$b/usr/share/omarchy/themes/t/backgrounds/9-extra.png"
+echo changed > "$b/usr/share/omarchy/themes/t/backgrounds/1-keep.png"
+out=$("$G" "$b" "$d/images.tsv" "$d/strings.tsv" "$d/allow-b" 2>&1) && rc=0 || rc=$?
+assert_contains "$out" "changed since it was reviewed: themes/t/backgrounds/1-keep.png" "branding: a changed keeper fails"
+echo keep > "$b/usr/share/omarchy/themes/t/backgrounds/1-keep.png"
+printf 'themes/t/backgrounds/2-new.png\t0\treview\n' >> "$d/images.tsv"
+out=$("$G" "$b" "$d/images.tsv" "$d/strings.tsv" "$d/allow-b" 2>&1) && rc=0 || rc=$?
+assert_contains "$out" "not reviewed yet: themes/t/backgrounds/2-new.png" "branding: a review row fails"
+sed -i '/2-new/d' "$d/images.tsv"
+printf '{"text": "Omarchy 1"}\n' > "$b/usr/share/tinkero/fastfetch/config.jsonc"
+out=$("$G" "$b" "$d/images.tsv" "$d/strings.tsv" "$d/allow-b" 2>&1) && rc=0 || rc=$?
+assert_contains "$out" "still contains the upstream string" "branding: an unapplied etc/ row is looked up under usr/share/tinkero"
+out=$("$G" "$d/no-payload" "$d/images.tsv" "$d/strings.tsv" "$d/allow-b" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 2 "branding: fails loudly without a payload"
+
 rm -rf "$d"; finish

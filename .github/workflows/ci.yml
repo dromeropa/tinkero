@@ -18,7 +18,7 @@ jobs:
     container: fedora:44
     steps:
       - name: Tools
-        run: dnf -y install git-core curl diffutils findutils ShellCheck rpmlint rpm-build rpmdevtools make nodejs python3
+        run: dnf -y install git-core curl diffutils findutils ShellCheck rpmlint rpm-build rpmdevtools make nodejs python3 python3-fonttools ImageMagick
       - uses: actions/checkout@v4
       - name: Trust the workspace
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
@@ -26,7 +26,8 @@ jobs:
         run: >
           shellcheck -x -e SC1090,SC1091
           dev build/assemble build/fetch-upstream build/render-spec build/lib.sh
-          ci/gate-arch-leak ci/gate-dropped-refs ci/gate-single-copy ci/gate-name-map ci/lib-gate.sh
+          ci/gate-arch-leak ci/gate-dropped-refs ci/gate-single-copy ci/gate-name-map ci/gate-branding ci/lib-gate.sh
+          branding/render-wallpapers branding/inventory-images branding/contact-sheet
           tests/run tests/lib.sh tests/test-*.sh tests/fixtures/make-tree.sh install.sh tests/fixtures/make-payload.sh
           distro/fedora/replacements/* distro/fedora/lib/pkg.sh
           distro/fedora/specs/srpm.sh build/tinkero-copr bin/tinkero-*
