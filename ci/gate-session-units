@@ -1,0 +1,59 @@
+#!/bin/bash
+# gate-session-units PAYLOAD LIST: properties of the session units a bump can silently
+# undo (design spec 4.9, section 2.4). No allowlist. Fails when:
+#   1. any regular unit file under usr/lib/systemd/user/ or
+#      usr/share/omarchy/default/systemd/user/ still contains an [Install] line;
+#   2. a unit named in LIST has no file under usr/lib/systemd/user/;
+#   3. a unit named in LIST is neither bound to the session (PartOf=graphical-session.target
+#      in the unit itself or in any usr/lib/systemd/user/<unit>.d/*.conf) nor a Type=oneshot
+#      unit without RemainAfterExit=yes (or true, on, 1). A PartOf= line may name several units.
+set -euo pipefail
+export LC_ALL=C
+[[ $# -eq 2 ]] || { echo "usage: gate-session-units PAYLOAD LIST" >&2; exit 2; }
+dest=$1; list=$2
+[[ -d $dest/usr/bin ]] || { echo "FAIL: no payload at DEST (run ./dev payload first)"; exit 2; }
+[[ -r $list ]] || { echo "FAIL: cannot read session unit list: $list"; exit 2; }
+unitdir=$dest/usr/lib/systemd/user
+[[ -d $unitdir ]] || { echo "FAIL: no unit directory in the payload: $unitdir"; exit 2; }
+rc=0
+
+# 1. No [Install] anywhere under either copy. Unanchored on the section name (same choice as
+#    build/assemble step 3e's own safety check, and for the same reason) so a header the build's
+#    strip step failed to recognise still fails here rather than shipping unnoticed.
+leaked=$(grep -rl '\[Install\]' "$unitdir" "$dest/usr/share/omarchy/default/systemd/user" 2>/dev/null | sed "s|^$dest/||" | sort || true)
+if [[ -n $leaked ]]; then
+  echo "FAIL: [Install] survives in:"; printf '  %s\n' "${leaked//$'\n'/$'\n'  }"; rc=1
+fi
+
+# 2 and 3: every listed unit.
+n=0
+while IFS= read -r name; do
+  [[ -z $name || $name == \#* ]] && continue
+  n=$((n + 1))
+  unit=$unitdir/$name
+  if [[ ! -f $unit ]]; then
+    echo "FAIL: listed unit has no file: $name"; rc=1; continue
+  fi
+  bound=0
+  grep -qE '^[[:space:]]*PartOf=(.*[[:space:]])?graphical-session\.target([[:space:]].*)?$' "$unit" && bound=1
+  if [[ $bound -eq 0 ]]; then
+    shopt -s nullglob
+    dropins=("$unitdir/$name.d"/*.conf)
+    shopt -u nullglob
+    for d in "${dropins[@]}"; do
+      grep -qE '^[[:space:]]*PartOf=(.*[[:space:]])?graphical-session\.target([[:space:]].*)?$' "$d" && { bound=1; break; }
+    done
+  fi
+  oneshot_ok=0
+  if grep -qE '^[[:space:]]*Type=oneshot[[:space:]]*$' "$unit" \
+      && ! grep -qE '^[[:space:]]*RemainAfterExit=(yes|true|on|1)[[:space:]]*$' "$unit"; then
+    oneshot_ok=1
+  fi
+  if [[ $bound -eq 0 && $oneshot_ok -eq 0 ]]; then
+    echo "FAIL: listed unit is neither bound to the session nor a plain oneshot: $name"; rc=1
+  fi
+done < "$list"
+
+m=$(find "$unitdir" -maxdepth 1 -type f \( -name '*.service' -o -name '*.socket' -o -name '*.timer' -o -name '*.path' -o -name '*.target' \) | wc -l)
+[[ $rc -eq 0 ]] && echo "PASS: session units ($n listed, $m unit files, no [Install])"
+exit $rc

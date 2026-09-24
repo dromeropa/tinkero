@@ -26,7 +26,7 @@ jobs:
         run: >
           shellcheck -x -e SC1090,SC1091
           dev build/assemble build/fetch-upstream build/render-spec build/lib.sh
-          ci/gate-arch-leak ci/gate-dropped-refs ci/gate-single-copy ci/gate-name-map ci/gate-branding ci/lib-gate.sh
+          ci/gate-arch-leak ci/gate-dropped-refs ci/gate-single-copy ci/gate-name-map ci/gate-branding ci/gate-session-units ci/lib-gate.sh
           branding/render-wallpapers branding/inventory-images branding/contact-sheet
           tests/run tests/lib.sh tests/test-*.sh tests/fixtures/make-tree.sh install.sh tests/fixtures/make-payload.sh
           distro/fedora/replacements/* distro/fedora/lib/pkg.sh
