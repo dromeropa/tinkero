@@ -31,11 +31,13 @@ out=$(render) && rc=0 || rc=$?
 assert_eq "$rc" 1 "render: a wallpaper without a row is refused"
 assert_contains "$out" "no row" "render: and named"
 rm "$th/backgrounds/4-extra.png"
-magick -size 16x9 xc:yellow "$th/backgrounds/1-keep.png"
+# back the keeper up and restore it by copy: a PNG written anew by magick carries creation-date
+# chunks, so re-rendering it in a later second changes its bytes and its sha256
+cp "$th/backgrounds/1-keep.png" "$d/keep.bak"; magick -size 16x9 xc:yellow "$th/backgrounds/1-keep.png"
 out=$(render) && rc=0 || rc=$?
 assert_eq "$rc" 1 "render: a changed keeper is refused"
 assert_contains "$out" "changed since it was reviewed" "render: and named"
-magick -size 16x9 xc:red "$th/backgrounds/1-keep.png"
+cp "$d/keep.bak" "$th/backgrounds/1-keep.png"
 printf 'themes/tokyo/backgrounds/ghost.png\t0000\tkeep\n' >> "$tsv"
 out=$(render) && rc=0 || rc=$?
 assert_eq "$rc" 1 "render: a row without a file is refused"
