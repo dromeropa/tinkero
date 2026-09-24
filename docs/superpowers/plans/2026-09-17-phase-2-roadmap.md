@@ -93,7 +93,7 @@ Running the 2A prototype against the real tree while writing the plan produced 2
 - **Bump checklist (Phase 3):** `branding/inventory-images` on the new tree, then review every `review` row on `branding/contact-sheet`'s output; read `apply-strings`' report and fix `strings.tsv`; read `rewrite-manifests`' counts against the plugin diff; run the gate and read new string-literal findings before touching `ci/allow/branding.allow`; check that `U+E900` is still the logo glyph.
 - **Developer machines:** `./dev gates` needs `python3-fonttools` and `ImageMagick`; `./dev check` prints a skip line for the two test files that need them.
 - **Measured, not as the audit said:** 20 flat wordmark wallpapers, not 18; 36 branded manifests in 37 files, not 28; 11 branded display fields, not 4; five Chromium files and five comment-only mentions the audit did not list.
-- **Diego's wallpaper pass:** the 67 `review` rows in `branding/images.tsv`, from `.cache/wallpapers.png` (`branding/contact-sheet`); the branch lands only when none is left.
+- **Diego's wallpaper pass:** done 2026-09-24: lumon's two Severance-branded wallpapers deleted as third-party marks, the other 65 kept; `92 wallpapers: 66 kept, 20 regenerated, 6 deleted`, 86 in the payload.
 - **Memory for the contact sheet:** about 3.3 GiB and seven minutes for the 92-image montage even with the script's limits; a smaller sheet (thumbnails first) is worth doing if the bump loop makes it routine.
 
 ## What executing 2A added to the queue
