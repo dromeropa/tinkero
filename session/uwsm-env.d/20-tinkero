@@ -1,0 +1,3 @@
+# Tinkero: the session reads and writes its own dconf database, ~/.config/dconf/tinkero,
+# never GNOME's ~/.config/dconf/user (spec 4.9). /etc/dconf/profile/tinkero names it.
+export DCONF_PROFILE=tinkero

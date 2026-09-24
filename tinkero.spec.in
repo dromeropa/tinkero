@@ -24,7 +24,7 @@ Requires:       uwsm xdg-desktop-portal-hyprland xdg-desktop-portal-gtk hyprland
 Requires:       qt6-qtwayland qt6-qtmultimedia qt6-qtimageformats qt6-qtsvg gtk4-layer-shell
 Requires:       fontawesome-fonts-all yaru-icon-theme tinkero-nerd-fonts
 Requires:       polkit gnome-keyring pipewire wireplumber pipewire-pulseaudio pamixer brightnessctl
-Requires:       ppd-service bluez NetworkManager udiskie socat inotify-tools jq gum git-core fcitx5
+Requires:       ppd-service bluez bluez-tools NetworkManager udiskie socat inotify-tools jq gum git-core fcitx5
 Requires:       foot xdg-terminal-exec tmux herdr mise
 Requires:       grim slurp wl-clipboard wtype tensaku hyprland-preview-share-picker ttfx
 
@@ -49,6 +49,7 @@ TINKERO_ROOT=$PWD TINKERO_LOCK=$PWD/upstream.lock build/assemble %{SOURCE0} %{bu
 %{_datadir}/omarchy
 %{_datadir}/tinkero
 %{_datadir}/uwsm/env.d/10-omarchy
+%{_datadir}/uwsm/env.d/20-tinkero
 %{_datadir}/wayland-sessions/tinkero.desktop
 %{_datadir}/fonts/omarchy
 %{_datadir}/fontconfig/conf.avail/50-omarchy.conf

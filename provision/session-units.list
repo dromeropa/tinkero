@@ -1,10 +1,11 @@
 # provision/session-units.list: user units tinkero-provision --session starts at every Tinkero
 # session start (spec 4.6, 4.9). Nothing is enabled; PartOf=graphical-session.target stops them.
-# A unit whose file is not installed is skipped. 2F appends tinkero-inhibit-power-key.service.
+# A unit whose file is not installed is skipped.
 omarchy-crash-watch.service
 omarchy-sleep-lock.service
 omarchy-recover-internal-monitor.service
 omarchy-fcitx5.service
 bt-agent.service
+tinkero-inhibit-power-key.service
 # installed under ~/.config/systemd/user by `omarchy-audio-tuning on` on the laptops it matches (design D4)
 omarchy-speaker-tuning.service
