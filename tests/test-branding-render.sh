@@ -90,8 +90,9 @@ magick -size 64x36 xc:'#1a1b26' "$src/themes/tokyo/backgrounds/omarchy.png"; mag
 printf 'o.bind("SUPER + SPACE", "Omarchy menu", "omarchy-menu toggle")\n' > "$src/default/hypr/bindings/utilities.lua"
 for f in logo.txt icon.txt logo.svg icon.png; do echo upstream > "$src/$f"; done
 tar -C "$d/src" -czf "$tb" omarchy-fixture
-r=$d/root; mkdir -p "$r"/{build,session,distro/fedora/lib,branding}
+r=$d/root; mkdir -p "$r"/{build,session/uwsm-env.d,distro/fedora/lib,branding}
 printf 'migrations\n' > "$r/build/drop.list"; cp "$ROOT/session/tinkero.desktop" "$r/session/"
+printf 'export DCONF_PROFILE=tinkero\n' > "$r/session/uwsm-env.d/20-tinkero"
 printf '# lib\n' > "$r/distro/fedora/lib/pkg.sh"; printf 'foot\tdnf\tfoot\n' > "$r/distro/fedora/pkgmap.tsv"; printf 'omarchy_tag=v0\n' > "$r/upstream.lock"
 mkdir -p "$r/distro/fedora/dconf/profile"; echo 'user-db:tinkero' > "$r/distro/fedora/dconf/profile/tinkero"
 cp "$B"/rebuild-font "$B"/rewrite-manifests "$B"/apply-strings "$B"/render-wallpapers "$B"/inventory-images "$B"/mark.svg "$r/branding/"

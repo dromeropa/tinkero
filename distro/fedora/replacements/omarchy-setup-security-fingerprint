@@ -25,7 +25,7 @@ omarchy-pkg-add fprintd fprintd-pam
 echo -e "\033[32m\nLet's set up your right index finger as the first fingerprint.\033[0m"
 echo -e "Keep moving the finger around on the sensor until the process completes.\n"
 
-if fprintd-enroll "$USER"; then
+if fprintd-enroll; then
   echo -e "\033[32m\nFingerprint enrolled successfully!\033[0m"
 
   echo -e "\nNow let's verify that it's working correctly.\n"
