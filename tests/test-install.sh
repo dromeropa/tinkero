@@ -7,6 +7,7 @@ I=$ROOT/install.sh
 cat > "$d/bin/dnf" <<'S'
 #!/bin/bash
 echo "dnf $*" >> "$LOG"
+[[ $1 == repoquery && ${DNF_FAIL:-0} == 1 ]] && exit 3
 case $1 in repoquery) cat "${REPOQUERY:-/dev/null}" ;; esac
 S
 cat > "$d/bin/sudo" <<'S'
@@ -32,9 +33,9 @@ export PATH=$d/bin:$PATH TINKERO_OS_RELEASE=$d/os-release TINKERO_DM_UNIT=$d/dm-
 unset TINKERO_FEDORA TINKERO_REF
 run() { : > "$LOG"; out=$(bash "$I" "$@" 2>&1 </dev/null) && rc=0 || rc=$?; }
 
-# the script's Fedora release is the lock's (the release workflow rewrites both variables together)
-# shellcheck disable=SC2016  # the sed pattern matches install.sh's source text, unexpanded on purpose
-assert_eq "$(sed -n 's/^TINKERO_FEDORA=\${TINKERO_FEDORA:-\([0-9]*\)}.*/\1/p' "$I")" "$(sed -n 's/^fedora=//p' "$ROOT/upstream.lock")" "install.sh carries the lock's fedora release"
+# the script's Fedora release is the lock's (the release workflow rewrites both variables together);
+# TINKERO_FEDORA is a plain pin, not an env-overridable seam like TINKERO_REF (issue #20)
+assert_eq "$(sed -n 's/^TINKERO_FEDORA=\([0-9]*\)$/\1/p' "$I")" "$(sed -n 's/^fedora=//p' "$ROOT/upstream.lock")" "install.sh carries the lock's fedora release"
 
 # the happy path
 run --yes
@@ -54,6 +55,13 @@ assert_eq "$(grep -c '^sudo' "$LOG")" 0 "gate: nothing was changed"
 # preflight
 TINKERO_OS_RELEASE=$d/os-release-43 run --yes
 assert_eq "$rc" 1 "preflight: wrong Fedora release stops"; assert_contains "$out" "Fedora 44" "preflight: names the expected release"
+TINKERO_FEDORA=99 run --yes
+assert_eq "$rc" 0 "preflight: a stray TINKERO_FEDORA in the environment does not override the pin"
+assert_contains "$out" "ignoring TINKERO_FEDORA=99" "preflight: says it ignored the stray env var"
+DNF_FAIL=1 run --yes
+assert_eq "$rc" 1 "preflight: dnf itself failing stops, not treated as a pass"
+assert_contains "$out" "dnf repoquery failed" "preflight: names the dnf failure"
+assert_eq "$(grep -c '^sudo' "$LOG")" 0 "preflight: a dnf failure changes nothing"
 ARCH=aarch64 run --yes
 assert_eq "$rc" 1 "preflight: not x86_64 stops"
 assert_contains "$out" "x86_64" "preflight: names the architecture"

@@ -236,6 +236,28 @@ assert_eq "$(grep -c '^dconf' "$LOG")" 0 "dconf: seeded once"
 assert_contains "$("$T" --plan)" $'step\tdconf: seed ~/.config/dconf/tinkero from the GNOME settings done' "plan: the dconf step shows done"
 : > "$LOG"; "$T" --reset dconf >/dev/null 2>&1
 assert_eq "$(grep -c '^dconf' "$LOG")" 2 "reset dconf: dumped and loaded again"
+: > "$LOG"; out=$(TINKERO_DCONF_PROFILE=$d/no-such-profile "$T" --reset dconf 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 2 "reset dconf: a skipped reset (profile missing) does not exit 0"
+assert_contains "$out" "is missing; skipped" "reset dconf: says why it skipped"
+assert_eq "$(grep -c '^dconf' "$LOG")" 0 "reset dconf: nothing ran"
+: > "$LOG"; out=$(DBUS_SESSION_BUS_ADDRESS='' "$T" --reset dconf 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 2 "reset dconf: a skipped reset (no session bus) does not exit 0 either"
+assert_eq "$(grep -c '^dconf' "$LOG")" 0 "reset dconf: nothing ran, again"
+
+# calling seed_dconf on the left of "||" (as --reset dconf does) turns off errexit for its whole
+# body, not just its final status, so a failed backup must stop it explicitly, not rely on set -e
+newhome 20
+mkdir -p "$HOME/.config/dconf"; : > "$HOME/.config/dconf/tinkero"
+mkdir -p "$d/failcp"; printf '#!/bin/bash\nexit 9\n' > "$d/failcp/cp"; chmod +x "$d/failcp/cp"
+: > "$LOG"
+out=$(TINKERO_PROVISION_SOURCED=1 PATH="$d/failcp:$PATH" bash -c '
+  source "$1"; FAILED=(); rc=0
+  seed_dconf 1 || rc=$?
+  echo "rc=$rc failed=${FAILED[*]:-}"
+' bash "$T" 2>&1)
+assert_contains "$out" "rc=1 failed=dconf" "reset dconf: a failed backup is reported as a failure, the way --reset dconf calls seed_dconf"
+assert_contains "$out" "could not back up" "reset dconf: says why"
+assert_eq "$(grep -c '^dconf' "$LOG")" 0 "reset dconf: a failed backup means dump/load never ran, so nothing was overwritten"
 newhome 7
 out=$(FAIL_MISE_WORK=1 "$T" --yes 2>&1) && rc=0 || rc=$?
 assert_eq "$rc" 1 "a failing leaf makes the run fail"

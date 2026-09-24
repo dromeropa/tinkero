@@ -10,9 +10,12 @@ set -euo pipefail
 copr=${TINKERO_COPR:-dromero/tinkero}
 # The release workflow rewrites these two when it attaches the script to a release (design 2E,
 # D7): the git ref the script belongs to, and the Fedora release its lock names. tests/test-install.sh
-# fails when TINKERO_FEDORA differs from upstream.lock.
+# fails when TINKERO_FEDORA differs from upstream.lock. TINKERO_FEDORA is the pin, not an
+# environment seam: a stray TINKERO_FEDORA already set in the caller's environment must not
+# silently override it (preflight warns and uses the pin instead).
 TINKERO_REF=${TINKERO_REF:-master}
-TINKERO_FEDORA=${TINKERO_FEDORA:-44}
+tinkero_fedora_env=${TINKERO_FEDORA:-}
+TINKERO_FEDORA=44
 own_repo="copr:copr.fedorainfracloud.org:${copr//\//:}"
 os_release=${TINKERO_OS_RELEASE:-/etc/os-release}
 dm_unit=${TINKERO_DM_UNIT:-/etc/systemd/system/display-manager.service}
@@ -40,6 +43,9 @@ while (($#)); do
 done
 
 # 1. Preflight: nothing changes.
+if [[ -n $tinkero_fedora_env && $tinkero_fedora_env != "$TINKERO_FEDORA" ]]; then
+  say "ignoring TINKERO_FEDORA=$tinkero_fedora_env from the environment; this release is pinned to Fedora $TINKERO_FEDORA"
+fi
 [[ $euid != 0 ]] || die "run as your own user, not as root; the system stage uses sudo"
 id=$(sed -n 's/^ID=//p' "$os_release" | tr -d '"'); ver=$(sed -n 's/^VERSION_ID=//p' "$os_release" | tr -d '"')
 [[ $id == fedora && $ver == "$TINKERO_FEDORA" ]] || die "this release of Tinkero ($TINKERO_REF) is for Fedora $TINKERO_FEDORA; this host is ${id:-unknown} ${ver:-?}"
@@ -48,7 +54,9 @@ arch=$(uname -m)
 dm=$(basename "$(readlink "$dm_unit" 2>/dev/null || echo none)")
 [[ $dm == gdm.service ]] || die "Tinkero needs GDM as the display manager; this host has ${dm%.service}"
 if command -v getenforce >/dev/null 2>&1; then say "SELinux is $(getenforce)"; else say "SELinux: getenforce not found"; fi
-installed=$(dnf repoquery --installed --queryformat '%{name} %{from_repo}\n' hyprland quickshell omedora omedora-settings 2>/dev/null || true)
+if ! installed=$(dnf repoquery --installed --queryformat '%{name} %{from_repo}\n' hyprland quickshell omedora omedora-settings 2>/dev/null); then
+  die "dnf repoquery failed; cannot verify what is already installed"
+fi
 while read -r name repo; do
   [[ -z $name ]] && continue
   [[ $name != omedora* ]] || die "$name is installed; remove Omedora first (sudo dnf remove 'omedora*')"
