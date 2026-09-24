@@ -1698,13 +1698,30 @@ git commit -m "docs: 2D done, the seen surface is Tinkero's and the gate proves 
 
 ---
 
-## What executing 2D added to the queue (2026-09-XX)
+## What executing 2D added to the queue (2026-09-24)
 
-Filled in by the implementing session as Task 8's roadmap section is written; the plan keeps a copy here.
+- **The mark:** `branding/mark.svg` and `wordmark.svg` are a generated placeholder; the real artwork replaces them per `branding/README.md` (two files, two commands). The two ASCII renderings are regenerated with upstream's `omarchy-transcode-ascii`.
+- **Milestone B (2F):** the on-screen lines this plan could not check: the mark in the bar's menu button and beside the Packages row, the About screen with the 54 by 26 logo and its "built on Omarchy" line, the screensaver, each theme's rotation showing `tinkero.png` where `omarchy.png` was.
+- **2F or bare metal:** upstream's `learn.hyprland`, `learn.neovim` and `learn.bash` rows use `omarchy-launch-webapp`, which runs `chromium.desktop` unless the default browser is Chrome-like; on a stock Fedora with Firefox those rows do nothing. Decide between a patch to the launcher's fallback and a name-map row for Chromium. 2D switched Tinkero's two Learn rows to `omarchy-launch-browser`.
+- **Bump checklist (Phase 3):** `branding/inventory-images` on the new tree, then review every `review` row on `branding/contact-sheet`'s output; read `apply-strings`' report and fix `strings.tsv`; read `rewrite-manifests`' counts against the plugin diff; run the gate and read new string-literal findings before touching `ci/allow/branding.allow`; check that `U+E900` is still the logo glyph.
+- **Developer machines:** `./dev gates` needs `python3-fonttools` and `ImageMagick`; `./dev check` prints a skip line for the two test files that need them.
+- **Measured, not as the audit said:** 20 flat wordmark wallpapers, not 18; 36 branded manifests in 37 files, not 28; 11 branded display fields, not 4; five Chromium files and five comment-only mentions the audit did not list.
+- **Diego's wallpaper pass:** the 67 `review` rows in `branding/images.tsv`, from `.cache/wallpapers.png` (`branding/contact-sheet`); the branch lands only when none is left.
+- **Memory for the contact sheet:** about 3.3 GiB and seven minutes for the 92-image montage even with the script's limits; a smaller sheet (thumbnails first) is worth doing if the bump loop makes it routine.
 
 ## Deviations
 
-Recorded per task by the implementing PR, as `docs/guides/workflow.md` requires. Empty until the plan runs.
+The deviations below were recorded by the implementing branch on 2026-09-24.
+
+- **Environment:** the implementing machine had neither ImageMagick nor python3-fonttools and the host was left untouched; every tool-dependent step ran in a `fedora:44` container carrying CI's package line plus the two tools. On the host `./dev check` prints the two skip lines (D12).
+- **Task 6, fixture:** plan 2E landed first and `build/assemble` now installs `distro/fedora/dconf/profile/tinkero` unconditionally, so the assemble fixture root in `tests/test-branding-render.sh` section 4 gained that file (as `tests/test-assemble.sh` has it).
+- **Task 6, `render-wallpapers`:** `-alpha remove` was added before `-strip` on the render line as a guard that keeps the PNG24 output independent of how the SVG delegate fills the canvas; the implementer's report of black pixels without it did not reproduce under review (output byte-identical with and without), so it is a guard, not a fix.
+- **Task 6, the render test:** the plan's histogram pipeline kept the `#` of each hex colour, so its expected value `1a1b26 7aa2f7 ` could never match; the pipeline now strips the `#` (`tr -d '#'`) and the expected value is unchanged.
+- **Task 6, `contact-sheet`:** the montage over the real tree (originals up to 10456 by 3455) was killed for memory on an 11 GiB machine at ImageMagick's default limits; the script now passes `-limit memory 1GiB -limit map 2GiB -limit thread 1`. `render-wallpapers` needs no limits (one image at a time, about 30 seconds for the tree).
+- **Task 6, the review:** the 67 `review` rows are Diego's to replace; the branch carries them as `review`, and every real-tree figure above that depends on the verdicts was measured on a scratch copy of the list with review turned to keep. Task 6 is not done and the CI gates step is red until the review lands (D4).
+- **Task 7:** the plan's RED expectation for the gate tests (17 `not ok`) was imprecise: four of the new cases pass trivially before the gate exists (13 `not ok`); the GREEN tally 1..58 is as planned.
+- **Task 5:** the plan's verify command carried the U+E900 character literally, which renders blank; it was run with the actual glyph pasted in place of an escape sequence. No file differs from the plan.
+- **Deferred:** `rebuild-font` reports malformed XML or an unsupported SVG feature as a raw traceback rather than `rebuild-font: <reason>`; `render-wallpapers` and `contact-sheet` have no fixture case with a space in a wallpaper path (`inventory-images` has one).
 
 ## What this plan deliberately leaves out
 

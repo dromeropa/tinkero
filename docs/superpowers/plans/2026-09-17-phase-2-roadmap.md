@@ -9,7 +9,7 @@ Phase 2 of the design spec (section 7) is six independent subsystems. One plan e
 | **2A** build skeleton, payload assembly, CI gates | `./dev gates` green on the real `v4.0.4` tree; SRPM builds in CI | nothing | no | **done** 2026-09-17: `2026-09-17-phase-2a-build-skeleton-and-gates.md`; CI green on the branch |
 | **2B** patches, replacements, name map | patches 0002 to 0010, 13 replacements, `distro/fedora/pkgmap.tsv` (71 rows), `ci/gate-name-map`; `arch-leak.allow` at 8 entries (6 permanent, 1 for 2C, 1 for 2F) | 2A | no | **done** 2026-09-22: `2026-09-21-phase-2b-patches-replacements-name-map.md`; CI green |
 | **2C** menu rewrite | `menu/apply-overrides`, `menu/overrides.jsonc`, `tinkero-update`; `dropped-refs.allow` down to comment-only entries | 2A, and 2B's drop decisions | no | **done** 2026-09-23: `2026-09-23-phase-2c-menu-rewrite.md`; first plan through the issue loop |
-| **2D** branding | font rebuild, wallpaper rendering, manifest rewrite, `branding/strings.tsv` and `images.tsv`, the branding gate | 2A, 2C (menu labels) | no, but needs the placeholder mark and one human pass over 92 wallpapers | to write |
+| **2D** branding | font rebuild, wallpaper rendering, manifest rewrite, `branding/strings.tsv` and `images.tsv`, the branding gate | 2A, 2C (menu labels) | no | **done** 2026-09-24: `2026-09-23-phase-2d-branding.md`; design `2026-09-23-phase-2d-branding-design.md`; the placeholder mark ships until the real one exists |
 | **2E** provisioning and install | `tinkero-provision` with `seeded.tsv`, the two provisioning wrappers, `install.sh`, `host.md`, config overrides | 2A, 2B | no | **done** 2026-09-23: `2026-09-23-phase-2e-provision-and-install.md`; design `specs/2026-09-23-phase-2e-provision-design.md` |
 | **2F** session integration | lock-screen PAM variants and `tinkero-pam-sync`, the dconf profile and `DCONF_PROFILE` export, `[Install]` stripping and session-started units with the fcitx5 drop-in, `tinkero-inhibit-power-key`, `omarchy-apply-lock` patch, fingerprint replacements | 2A, 2E | no longer: Phase 0 is done (GO, 2026-09-21) | to write; its VM check re-runs the Phase 0 GNOME cycle with the dconf profile |
 
@@ -84,6 +84,17 @@ Running the 2A prototype against the real tree while writing the plan produced 2
 - **Bump checklist (Phase 3):** after a tag bump, run `apply-overrides` on the new tree, read the deleted-for-dropped-command lines and the row count, update `expect_rows`. A new upstream row that calls a dropped script is deleted automatically; a renamed id in `delete` or `replace` fails the build.
 - **Permanent allowlist entries, final:** dropped-refs 7 (five comment-only, the Docker binding, `omarchy-provision-user` until 2E); arch-leak 7 (six comment-only, `omarchy-setup-security-fingerprint` until 2F).
 - **Housekeeping done:** `tinkero-copr` moved to `build/`; `bin/` holds only packaged commands (`%{_bindir}/tinkero-*`).
+
+## What executing 2D added to the queue (2026-09-24)
+
+- **The mark:** `branding/mark.svg` and `wordmark.svg` are a generated placeholder; the real artwork replaces them per `branding/README.md` (two files, two commands). The two ASCII renderings are regenerated with upstream's `omarchy-transcode-ascii`.
+- **Milestone B (2F):** the on-screen lines this plan could not check: the mark in the bar's menu button and beside the Packages row, the About screen with the 54 by 26 logo and its "built on Omarchy" line, the screensaver, each theme's rotation showing `tinkero.png` where `omarchy.png` was.
+- **2F or bare metal:** upstream's `learn.hyprland`, `learn.neovim` and `learn.bash` rows use `omarchy-launch-webapp`, which runs `chromium.desktop` unless the default browser is Chrome-like; on a stock Fedora with Firefox those rows do nothing. Decide between a patch to the launcher's fallback and a name-map row for Chromium. 2D switched Tinkero's two Learn rows to `omarchy-launch-browser`.
+- **Bump checklist (Phase 3):** `branding/inventory-images` on the new tree, then review every `review` row on `branding/contact-sheet`'s output; read `apply-strings`' report and fix `strings.tsv`; read `rewrite-manifests`' counts against the plugin diff; run the gate and read new string-literal findings before touching `ci/allow/branding.allow`; check that `U+E900` is still the logo glyph.
+- **Developer machines:** `./dev gates` needs `python3-fonttools` and `ImageMagick`; `./dev check` prints a skip line for the two test files that need them.
+- **Measured, not as the audit said:** 20 flat wordmark wallpapers, not 18; 36 branded manifests in 37 files, not 28; 11 branded display fields, not 4; five Chromium files and five comment-only mentions the audit did not list.
+- **Diego's wallpaper pass:** the 67 `review` rows in `branding/images.tsv`, from `.cache/wallpapers.png` (`branding/contact-sheet`); the branch lands only when none is left.
+- **Memory for the contact sheet:** about 3.3 GiB and seven minutes for the 92-image montage even with the script's limits; a smaller sheet (thumbnails first) is worth doing if the bump loop makes it routine.
 
 ## What executing 2A added to the queue
 

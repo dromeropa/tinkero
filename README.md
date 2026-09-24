@@ -31,6 +31,10 @@ Until the first release is tagged, the URL above installs from `master`. Release
 - Vendor upstream, do not rewrite it. Patches are shims, not surgery.
 - The default agent is part of the desktop: it customizes it, builds plugins for it, and tells you when maintenance is due.
 
+## Branding
+
+Nothing on screen says or shows Omarchy: the mark, the wallpapers, the About screen and the menu are Tinkero's, generated at build time from `branding/` (a placeholder mark until the real one exists). Every command, path and plugin id keeps upstream's name, because they are identifiers, not branding. Tinkero is built on [Omarchy](https://omarchy.org) and says so in the About screen, in every plugin's author line and in this README; Omarchy's license ships in `/usr/share/licenses/tinkero/`.
+
 ## License
 
 MIT. Omarchy, which Tinkero packages, is MIT licensed by its authors.
