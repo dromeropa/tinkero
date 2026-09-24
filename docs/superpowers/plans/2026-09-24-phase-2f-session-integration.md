@@ -2179,6 +2179,11 @@ A failure of the GNOME invariant (guide section 4) opens an issue for design D4'
 
 Filled by the PR that implements Tasks 1 to 7 (and by Task 8's and 9's issues for theirs), per task, when anything deviated from this plan.
 
+- Tasks 2, 4 and 5: `./dev gates` (and `./dev gates-at`) print seven `PASS` lines, not six: `ci/gate-branding` already printed two (Omarchy string literals, branding) before 2F, so session-units is the sixth gate call and the seventh line, printed last.
+- Task 1: `tests/test-branding-render.sh` builds its own fixture root for assemble's step 3d, so it also gains `session/uwsm-env.d/20-tinkero` (the plan listed only `tests/fixtures/make-tree.sh`); caught by CI, where that test does not skip.
+- Task 4: `omarchy-setup-security-fingerprint` calls bare `fprintd-enroll`, as design section 5.2 step 3 says, instead of the plan's `fprintd-enroll "$USER"`: `$USER` is unset under `set -u` in CI's root container, which aborted the script after `omarchy-pkg-add`.
+- Task 5: `ci/check-rpm` sits after `ci/gate-session-units` in the ShellCheck list (Task 2 had already put that gate after `ci/gate-branding`).
+
 ## What this plan deliberately leaves out
 
 - `tinkero-status` and its PAM drift report (Phase 3; `tinkero-pam-sync --check` is the interface), the release workflow, the VM smoke test in CI.

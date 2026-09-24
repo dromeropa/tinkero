@@ -101,7 +101,7 @@ Resulting patch set (the rebase cost): **11 small patches**, listed in §9. Ever
 | `omarchy-setup-direct-boot` | drop | UKI/EFI boot entries for Arch |
 | `omarchy-plymouth-*` (7), `omarchy-refresh-plymouth`, `omarchy-refresh-sddm` | drop | spec rev 1 already drops plymouth and sddm theming; outside their own family they are reachable only from the menu (`style.unlock`, `update.config.plymouth`), and `omarchy-theme-set` does not call them |
 | `omarchy-setup-security-fingerprint` | replace | upstream runs `sudo pacman -S libfprint-git fprintd usbutils` directly and inserts `pam_fprintd.so` into `/etc/pam.d/sudo` and `polkit-1` with `sed -i`, which authselect owns on Fedora. Tinkero version: `dnf install fprintd fprintd-pam`, `fprintd-enroll`, `authselect enable-feature with-fingerprint`, then `omarchy-apply-lock` |
-| `omarchy-remove-security-fingerprint` | replace | upstream `sed -i`s the same PAM files (lines 11-19), removes the lock fingerprint file and drops the packages. Tinkero version: `authselect disable-feature with-fingerprint`, `omarchy-apply-lock` (which removes the fingerprint PAM file when no enrolment remains), `omarchy-pkg-drop fprintd-pam`. Reachable from `remove.security.fingerprint` as soon as `fprintd` is installed, so it cannot ship as is. **Found by tier 3** |
+| `omarchy-remove-security-fingerprint` | replace | upstream `sed -i`s the same PAM files (lines 11-19), removes the lock fingerprint file and drops the packages. Tinkero version: `authselect disable-feature with-fingerprint`, `omarchy-apply-lock` (which removes the fingerprint PAM file once `system-auth` no longer uses `pam_fprintd.so`); no package removal (plan 2F, design D11). Reachable from `remove.security.fingerprint` as soon as `fprintd` is installed, so it cannot ship as is. **Found by tier 3** |
 | `omarchy-setup-security-fido2`, `omarchy-remove-security-fido2` | drop (v1) | insert and delete `pam_u2f.so` lines in `/etc/pam.d/sudo` and `polkit-1` with `sed -i`. The Fedora-native route is `authselect enable-feature with-pam-u2f`; until that replacement is written, the scripts and their menu entries are removed |
 | `omarchy-sudo-passwordless` | drop | writes a sudoers drop-in; Tinkero adds no sudoers entries (spec section 5) |
 | `omarchy-toggle-hybrid-gpu` | drop | writes `/etc/supergfxd.conf` and a systemd drop-in for `supergfxd`, which Fedora does not package; its menu row is hardware-guarded but the script cannot work |
@@ -216,7 +216,7 @@ Run against the *installed payload* of the built `tinkero` RPM (not the source t
 
 ## 9. The patch set
 
-Twelve files carry a diff against upstream and therefore a rebase cost on each bump. All but the first are under fifteen changed lines. Plan 2B generates 0002 to 0010 from exact string edits and verifies them with `git apply`; `omarchy-apply-lock` waits for plan 2F.
+Twelve files carry a diff against upstream and therefore a rebase cost on each bump. All but the first and patch 0011 are under fifteen changed lines. Plan 2B generates 0002 to 0010 from exact string edits and verifies them with `git apply`; `omarchy-apply-lock` is patch 0011 (plan 2F, 19 changed lines, most of them a deletion).
 
 1. `shell/plugins/menu/MenuModel.js` (package snapshot and its comment block; patch 0010)
 2. `bin/omarchy-apply-lock` (PAM shape; plan 2F)
