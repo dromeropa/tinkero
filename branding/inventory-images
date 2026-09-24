@@ -1,0 +1,37 @@
+#!/bin/bash
+# inventory-images TREE IMAGES.tsv: rewrite IMAGES.tsv from the wallpapers under TREE/themes.
+# A row whose path and sha256 are unchanged keeps its verdict; a new or changed image gets
+# 'review'; a row whose file is gone is dropped. Sorted, so the diff shows exactly what a bump
+# changed. The verdicts themselves are a person's (branding/contact-sheet shows the images).
+set -euo pipefail
+export LC_ALL=C
+[[ $# -eq 2 ]] || { echo "usage: inventory-images TREE IMAGES.tsv" >&2; exit 2; }
+tree=$1; images=$2
+[[ -d $tree/themes ]] || { echo "inventory-images: no themes/ under $tree" >&2; exit 1; }
+declare -A old=()   # "=()" matters: bash 5.3 treats a never-assigned array as unbound under set -u
+if [[ -f $images ]]; then
+  while IFS=$'\t' read -r p h v; do
+    [[ -z $p || $p == \#* ]] && continue
+    old[$p]="$h"$'\t'"$v"
+  done < "$images"
+fi
+new=0; changed=0; total=0
+tmp=$(mktemp)
+{
+  echo "# branding/images.tsv: every wallpaper in the upstream tree, reviewed by a person (design spec 4.13)."
+  echo "# path<TAB>sha256<TAB>verdict; verdict is keep, regenerate (a flat wordmark: rendered anew in the"
+  echo "# theme's colours), delete, or review (not looked at yet: the build refuses it). Rewrite the rows"
+  echo "# with branding/inventory-images after a bump; branding/contact-sheet renders the images."
+  while IFS= read -r f; do
+    rel=${f#"$tree"/}; h=$(sha256sum "$f" | cut -d' ' -f1); total=$((total + 1))
+    if [[ -z ${old[$rel]:-} ]]; then v=review; new=$((new + 1))
+    elif [[ ${old[$rel]%%$'\t'*} != "$h" ]]; then v=review; changed=$((changed + 1))
+    else v=${old[$rel]#*$'\t'}; fi
+    printf '%s\t%s\t%s\n' "$rel" "$h" "$v"
+    # shellcheck disable=SC2016  # bash expands the subscript itself; single quotes keep a space in the key intact
+    unset 'old[$rel]'
+  done < <(find "$tree/themes" -path '*/backgrounds/*' -type f | sort)
+} > "$tmp"
+gone=${#old[@]}
+mv "$tmp" "$images"
+echo "inventory-images: $total wallpapers, $new new, $changed changed, $gone gone; $(grep -c $'\treview$' "$images" || true) to review"
