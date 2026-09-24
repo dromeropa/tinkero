@@ -10,9 +10,10 @@ contract for people and for agent sessions alike. The design is in
 - Baseline: plans 2A and 2B and Phase 1 (the 25-package COPR set) landed on `master` at
   `fd68ce4` on 2026-09-23, as one fast-forward from the branch they grew on. That branch
   predates the loop; nothing is retro-fitted onto it.
-- Done since: 2C (menu rewrite, 2026-09-23) and 2E (provisioning and install, 2026-09-23).
-- Then 2D (branding), 2F (session integration, which makes the `tinkero` RPM installable),
-  Phase 3 (maintenance), each planned when the one before it has landed.
+- Done since: 2C (menu rewrite, 2026-09-23), 2E (provisioning and install, 2026-09-23) and 2D
+  (branding, 2026-09-24).
+- Then 2F (session integration, which makes the `tinkero` RPM installable), Phase 3
+  (maintenance), each planned when the one before it has landed.
 
 ## The loop
 

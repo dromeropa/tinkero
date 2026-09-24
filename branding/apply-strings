@@ -1,0 +1,66 @@
+#!/usr/bin/env python3
+"""apply-strings TREE STRINGS.tsv: the must-match substitution list (design spec 4.13).
+
+Each row of STRINGS.tsv is  file<TAB>upstream<TAB>replacement<TAB>count  with file relative
+to TREE. Every row is checked before anything is written: the file must exist and must
+contain the upstream string exactly count times, else nothing is written and every
+problem is listed. Matching is fixed-string, so an upstream rewording fails the build
+at the bump instead of shipping the old name.
+"""
+import sys
+
+
+def fail(msg):
+    sys.exit(f"apply-strings: {msg}")
+
+
+def read_rows(path):
+    rows = []
+    with open(path, encoding="utf-8") as f:
+        for n, line in enumerate(f, 1):
+            line = line.rstrip("\n")
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split("\t")
+            if len(parts) != 4:
+                fail(f"{path} line {n}: expected 4 tab-separated fields, got {len(parts)}")
+            file, old, new, count = parts
+            if not file or not old:
+                fail(f"{path} line {n}: file and upstream string must not be empty")
+            if not count.isdigit() or int(count) < 1:
+                fail(f"{path} line {n}: count must be a positive integer, got {count!r}")
+            rows.append((n, file, old, new, int(count)))
+    return rows
+
+
+def main(argv):
+    if len(argv) != 3:
+        fail("usage: apply-strings TREE STRINGS.tsv")
+    tree, tsv = argv[1], argv[2]
+    rows = read_rows(tsv)
+    if not rows:
+        fail(f"no rows in {tsv}")
+    texts, problems = {}, []
+    for n, file, old, new, count in rows:
+        if file not in texts:
+            try:
+                with open(f"{tree}/{file}", encoding="utf-8") as f:
+                    texts[file] = f.read()
+            except OSError as e:
+                problems.append(f"line {n}: cannot read {file}: {e.strerror}")
+                continue
+        found = texts[file].count(old)
+        if found != count:
+            problems.append(f"line {n}: {file} contains {old!r} {found} time(s), expected {count}")
+    if problems:
+        fail("nothing written:\n  " + "\n  ".join(problems))
+    for n, file, old, new, count in rows:
+        texts[file] = texts[file].replace(old, new)
+    for file, text in texts.items():
+        with open(f"{tree}/{file}", "w", encoding="utf-8") as f:
+            f.write(text)
+    print(f"apply-strings: {len(rows)} row(s), {sum(r[4] for r in rows)} replacement(s) in {len(texts)} file(s)")
+
+
+if __name__ == "__main__":
+    main(sys.argv)

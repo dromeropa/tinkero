@@ -1,0 +1,10 @@
+# Baseline written by hand from the gate's findings on 2026-09-24. Entries may only be removed, never added by hand.
+# Each is a string a user does not see: design 2D, D7 (Chromium) and D8 (window rules, the dev gallery).
+usr/share/omarchy/default/chromium/extensions/copy-url/manifest.json   # Chromium is a non-goal; not a Tinkero surface
+usr/share/omarchy/default/chromium/extensions/whatsapp-slim/manifest.json   # same
+usr/share/omarchy/default/chromium/extensions/yt-dlp/manifest.json   # same
+usr/share/omarchy/default/chromium/native-messaging-hosts/com.omarchy.copy_url.json   # same
+usr/share/omarchy/default/chromium/native-messaging-hosts/com.omarchy.ytdlp.json   # same
+usr/share/omarchy/default/hypr/apps/omarchy-shell.lua   # window rule matching the dev gallery's title
+usr/share/omarchy/default/hypr/apps/system.lua   # window rule matching a title, displays nothing
+usr/share/omarchy/shell/plugins/dev-gallery/GalleryPanel.qml   # developer tool, permanent

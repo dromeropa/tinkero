@@ -271,6 +271,8 @@ So the graphical surface is one glyph, four logo files, at least 24 wallpapers, 
 
 Bump checklist addition: after the greps in §10, run the branding gate on the new tag (literal scan, `backgrounds/*omarchy*` filename check, wallpapers without an `images.tsv` row) and review new hits before updating `branding/strings.tsv`. New themes are the likeliest source of a new branded image.
 
+Measured on the real tree by plan 2D (2026-09-24): 20 of the 92 wallpapers are flat wordmarks (the 18 `omarchy.png` plus `flexoki-light/2-omarchy.png` and `lupine/06-omarchy.png`, all 3840 by 2160, two colours, the theme's accent on its background), four are illustrated marks (`rose-pine/3-omarchy-plants.png`, `tokyo-night/1-quattro.jpg`, `5-oma-cityscape.jpg`, `6-oma.jpg`) and two carry a third-party mark (lumon's `01-united-in-severance.jpg` and `02-opinions-equally.jpg`, found by the review), so six are deleted and 66 kept; 37 manifests, 36 with the author and 11 branded display fields in 5 files; five Chromium extension files and five comment-only mentions that need no handling. The reviewed verdict of every wallpaper is `branding/images.tsv`.
+
 ## 12. The `etc/` payload
 
 Added 2026-09-17. The original method (§1) did not look at the tree's top-level `etc/` directory, which upstream's `omarchy-settings` package installs into `/etc`. It holds 40 files and is almost entirely host policy.

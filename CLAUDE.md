@@ -13,7 +13,10 @@ substrate with Fedora's. Read these before touching anything:
 
 Conventions: `./dev check` runs the tests, `./dev gates` the CI gates against the real tree;
 allowlists under `ci/allow/` only shrink; data over code (`build/drop.list`, `patches/series`,
-`distro/fedora/replacements/`, `menu/overrides.jsonc`); bash with `set -euo pipefail`,
-ShellCheck clean; Python standard library only; no em dashes in Tinkero's own prose; tests
-never touch the network or run a real package manager. `copr-build` publishes to the user's
-COPR and is triggered only when an issue says so.
+`distro/fedora/replacements/`, `menu/overrides.jsonc`, `branding/strings.tsv`,
+`branding/images.tsv`); bash with `set -euo pipefail`, ShellCheck clean; Python standard
+library only (fontTools in `branding/rebuild-font` is the one exception); no em dashes in
+Tinkero's own prose; tests never touch the network or run a real package manager. `copr-build`
+publishes to the user's COPR and is triggered only when an issue says so. `./dev gates` needs
+`python3-fonttools` and `ImageMagick`; without them `./dev check` skips the two test files that
+need them, and `branding/images.tsv` may carry no `review` row when the build runs.

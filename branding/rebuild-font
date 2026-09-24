@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+"""rebuild-font IN.ttf MARK.svg OUT.ttf: put the Tinkero mark at U+E900 (design spec 4.13).
+
+The glyph upstream draws its logo with is replaced in place, so every other glyph, the
+cmap, the family name ("omarchy": BarWidget.qml and the menu's "iconFont" ask for it) and
+the GSUB ligature that maps the letters o-m-a-r-c-h-y to that glyph are untouched. The mark
+is scaled into the 64..960 box upstream's own omarchy-dev-font uses for the agent marks.
+MARK.svg needs a viewBox; paths and basic shapes are read by fontTools' svgLib, which
+applies no transform attributes, so those are refused. Requires python3-fonttools.
+"""
+import sys
+import xml.etree.ElementTree as ET
+
+try:
+    from fontTools.pens.cu2quPen import Cu2QuPen
+    from fontTools.pens.ttGlyphPen import TTGlyphPen
+    from fontTools.svgLib.path import SVGPath
+    from fontTools.ttLib import TTFont
+except ImportError:
+    sys.exit("rebuild-font: python3-fonttools is required")
+
+CODEPOINT = 0xE900
+ART_BOX = (64, 64, 960, 960)   # the box every mark in the font is drawn in (omarchy-dev-font)
+
+
+def fail(msg):
+    sys.exit(f"rebuild-font: {msg}")
+
+
+def viewbox(svg):
+    root = ET.parse(svg).getroot()
+    for el in root.iter():
+        if el.get("transform"):
+            fail(f"{svg}: a transform attribute on <{el.tag.split('}')[-1]}> would be ignored; flatten the mark first")
+    vb = root.get("viewBox")
+    if not vb:
+        fail(f"{svg}: no viewBox")
+    x, y, w, h = (float(v) for v in vb.replace(",", " ").split())
+    if w <= 0 or h <= 0:
+        fail(f"{svg}: empty viewBox")
+    return x, y, w, h
+
+
+def main(argv):
+    if len(argv) != 4:
+        fail("usage: rebuild-font IN.ttf MARK.svg OUT.ttf")
+    src, svg, out = argv[1:]
+    font = TTFont(src)
+    cmap = font.getBestCmap()
+    if CODEPOINT not in cmap:
+        fail(f"{src}: no glyph at U+{CODEPOINT:04X}")
+    name = cmap[CODEPOINT]
+    x0, y0, w, h = viewbox(svg)
+    ax0, ay0, ax1, ay1 = ART_BOX
+    scale = min((ax1 - ax0) / w, (ay1 - ay0) / h)
+    # centre the mark in the art box; SVG y grows down and font y grows up, so flip y
+    ox = ax0 + ((ax1 - ax0) - w * scale) / 2 - x0 * scale
+    oy = ay0 + ((ay1 - ay0) - h * scale) / 2 + (y0 + h) * scale
+    pen = TTGlyphPen(None)
+    # no reverse_direction: with the y flip this yields clockwise outer contours, upstream's convention
+    SVGPath(svg, transform=(scale, 0, 0, -scale, ox, oy)).draw(Cu2QuPen(pen, max_err=1.0))
+    glyph = pen.glyph()
+    if not glyph.numberOfContours:
+        fail(f"{svg}: no contours found (paths and basic shapes only)")
+    glyf = font["glyf"]
+    glyf[name] = glyph
+    glyph.recalcBounds(glyf)
+    font["hmtx"][name] = (font["head"].unitsPerEm, glyph.xMin)
+    font.save(out)
+    print(f"rebuild-font: U+{CODEPOINT:04X} ({name}) is now {glyph.numberOfContours} contour(s) "
+          f"in ({glyph.xMin}, {glyph.yMin}, {glyph.xMax}, {glyph.yMax}); {len(cmap) - 1} other glyph(s) untouched")
+
+
+if __name__ == "__main__":
+    main(sys.argv)

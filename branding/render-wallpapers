@@ -1,0 +1,79 @@
+#!/bin/bash
+# render-wallpapers TREE IMAGES.tsv WORDMARK.svg: apply the reviewed wallpaper verdicts (design
+# spec 4.13). Verdicts in IMAGES.tsv (path<TAB>sha256<TAB>verdict, path relative to TREE):
+#   keep        the file stays; its sha256 must still match (a changed image is looked at again)
+#   regenerate  a flat wordmark wallpaper: WORDMARK is rendered in the theme's accent on its
+#               background (colors.toml), at the source's pixel size, under the source's name
+#               with omarchy replaced by tinkero; then the source is deleted
+#   delete      the file is removed
+#   review      nobody has looked at it yet: the build stops (branding/contact-sheet helps)
+# Every file under themes/*/backgrounds/ needs a row and every row needs a file. Every problem
+# is listed before anything is written. Needs ImageMagick (magick).
+set -euo pipefail
+export LC_ALL=C
+[[ $# -eq 3 ]] || { echo "usage: render-wallpapers TREE IMAGES.tsv WORDMARK.svg" >&2; exit 2; }
+tree=$1; images=$2; wordmark=$3
+die() { echo "render-wallpapers: $*" >&2; exit 1; }
+[[ -d $tree/themes ]] || die "no themes/ under $tree"
+[[ -r $images ]] || die "cannot read $images"
+[[ -r $wordmark ]] || die "cannot read $wordmark"
+command -v magick >/dev/null || die "ImageMagick (magick) is required"
+fraction=${TINKERO_MARK_FRACTION:-41}   # wordmark width as a percentage of the canvas width; upstream's flat wallpapers measure 41
+
+declare -A verdict=() sha=() accent=() bg=() present=()
+n=0
+while IFS=$'\t' read -r p h v; do
+  n=$((n + 1))
+  [[ -z $p || $p == \#* ]] && continue
+  [[ -n $h && -n $v ]] || die "$images line $n is not 'path<TAB>sha256<TAB>verdict'"
+  case $v in keep|regenerate|delete|review) ;; *) die "$images line $n: unknown verdict '$v'" ;; esac
+  [[ -z ${verdict[$p]:-} ]] || die "$images line $n: duplicate row for $p"
+  verdict[$p]=$v; sha[$p]=$h
+done < "$images"
+
+# color FILE KEY: the six-digit hex value of KEY in a colors.toml, lowercased; empty when absent
+color() { sed -nE "s/^$2[[:space:]]*=[[:space:]]*\"(#[0-9A-Fa-f]{6})\".*/\1/p" "$1" | head -n1 | tr '[:upper:]' '[:lower:]'; }
+
+problems=""
+while IFS= read -r f; do
+  rel=${f#"$tree"/}; present[$rel]=1
+  if [[ -z ${verdict[$rel]:-} ]]; then problems+="  no row (run branding/inventory-images, then look at it): $rel"$'\n'; continue; fi
+  [[ $(sha256sum "$f" | cut -d' ' -f1) == "${sha[$rel]}" ]] || problems+="  changed since it was reviewed (run branding/inventory-images, then look at it): $rel"$'\n'
+  [[ ${verdict[$rel]} == review ]] && problems+="  not reviewed yet: $rel"$'\n'
+  if [[ ${verdict[$rel]} == regenerate ]]; then
+    [[ ${rel##*/} == *omarchy* ]] || problems+="  regenerate needs 'omarchy' in the name to derive the output name: $rel"$'\n'
+    theme=${rel#themes/}; theme=${theme%%/*}; toml=$tree/themes/$theme/colors.toml
+    if [[ -f $toml ]]; then
+      accent[$rel]=$(color "$toml" accent); bg[$rel]=$(color "$toml" background)
+      [[ -n ${accent[$rel]} ]] || problems+="  themes/$theme/colors.toml: no 6-digit hex 'accent' (needed for $rel)"$'\n'
+      [[ -n ${bg[$rel]} ]] || problems+="  themes/$theme/colors.toml: no 6-digit hex 'background' (needed for $rel)"$'\n'
+    else
+      problems+="  no colors.toml for the theme of $rel"$'\n'
+    fi
+  fi
+done < <(find "$tree/themes" -path '*/backgrounds/*' -type f | sort)
+for p in "${!verdict[@]}"; do [[ -n ${present[$p]:-} ]] || problems+="  row without a file (remove the row): $p"$'\n'; done
+[[ -z $problems ]] || { echo "render-wallpapers: nothing written:" >&2; printf '%s' "$problems" >&2; exit 1; }
+
+kept=0; rendered=0; deleted=0
+while IFS= read -r p; do
+  f=$tree/$p
+  case ${verdict[$p]} in
+    keep) kept=$((kept + 1)) ;;
+    delete) rm -f -- "$f"; deleted=$((deleted + 1)) ;;
+    regenerate)
+      dir=${p%/*}; base=${p##*/}
+      out=$tree/$dir/${base//omarchy/tinkero}
+      read -r w h < <(magick identify -format '%w %h\n' "$f")
+      tmp=$(mktemp --suffix=.svg)
+      sed "s/currentColor/${accent[$p]}/g" "$wordmark" > "$tmp"
+      # -background fills the SVG canvas and the -extent padding; -alpha remove is a guard that
+      # flattens onto that background before PNG24 encoding so the result does not depend on how
+      # the SVG delegate fills the canvas
+      magick -background "${bg[$p]}" -density 300 "$tmp" -resize "$((w * fraction / 100))x" \
+        -gravity center -extent "${w}x${h}" -alpha remove -strip "PNG24:$out"
+      rm -f -- "$tmp" "$f"
+      rendered=$((rendered + 1)) ;;
+  esac
+done < <(printf '%s\n' "${!verdict[@]}" | sort)
+echo "render-wallpapers: $((kept + rendered + deleted)) wallpapers: $kept kept, $rendered regenerated, $deleted deleted"

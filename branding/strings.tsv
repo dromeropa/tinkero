@@ -1,0 +1,9 @@
+# branding/strings.tsv: exact upstream strings replaced during the build (design spec 4.13).
+# file<TAB>upstream<TAB>replacement<TAB>count, file relative to the upstream tree before
+# assemble step 4 relocates etc/. The build fails unless every row matches its count exactly,
+# so an upstream rewording is caught at the bump. Fixed strings, no escapes, no tabs inside.
+default/hypr/bindings/utilities.lua	"Omarchy menu"	"Tinkero menu"	2
+etc/fastfetch/config.jsonc	echo \"Omarchy $version\"	echo \"Tinkero $version, built on Omarchy\"	1
+shell/plugins/bar/widgets/SystemUpdate.qml	"Pending Omarchy Updates"	"Pending Tinkero Updates"	1
+shell/services/PluginRegistry.qml	reserved for first-party Omarchy plugins	reserved for first-party Tinkero plugins	1
+default/fonts/omarchy/README.md	`U+E900` — Omarchy	`U+E900` — Tinkero, from branding/mark.svg (the build replaces the upstream mark)	1

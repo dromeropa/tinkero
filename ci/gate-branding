@@ -1,0 +1,79 @@
+#!/bin/bash
+# gate-branding DEST IMAGES STRINGS ALLOW: nothing a user sees in the payload says or
+# shows Omarchy (design spec 4.13, section 8 item 4a). Four checks:
+#   1. no capitalised "Omarchy" inside a string literal of a QML, JS, Lua, JSON, JSONC or
+#      .desktop file, comment lines skipped, outside ALLOW (findings are file paths, and the
+#      allowlist may only shrink, like the other gates);
+#   2. no file named *omarchy* under a theme's backgrounds/;
+#   3. every wallpaper in the payload is a `keep` row of IMAGES with the recorded sha256, or
+#      a file rendered for a `regenerate` row; no `delete` or `regenerate` source is present;
+#      no row is `review`;
+#   4. no upstream string of STRINGS remains in its file, and its replacement is there.
+set -euo pipefail
+export LC_ALL=C
+here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd); # shellcheck source=ci/lib-gate.sh
+source "$here/lib-gate.sh"
+[[ $# -eq 4 ]] || { echo "usage: gate-branding DEST IMAGES STRINGS ALLOW" >&2; exit 2; }
+dest=$1; images=$2; strings=$3; allow=$4
+[[ -d $dest/usr/bin ]] || { echo "FAIL: no payload at DEST (run ./dev payload first)"; exit 2; }
+[[ -r $images ]] || { echo "FAIL: cannot read the image list: $images"; exit 2; }
+[[ -r $strings ]] || { echo "FAIL: cannot read the substitution list: $strings"; exit 2; }
+tree=$dest/usr/share/omarchy
+rc=0
+
+# 1. String literals. Comment lines (//, --, #) are dropped before matching, so a comment that
+#    mentions upstream needs no allowlist entry; a string literal does. The two attribution
+#    phrases the design keeps on purpose ("built on Omarchy", "from Omarchy") are not findings.
+found=$(mktemp); trap 'rm -f "$found"' EXIT
+lit='"[^"]*\bOmarchy\b[^"]*"|'"'"'[^'"'"']*\bOmarchy\b[^'"'"']*'"'"''
+( cd "$dest" && find . -type f \( -name '*.qml' -o -name '*.js' -o -name '*.lua' -o -name '*.json' -o -name '*.jsonc' -o -name '*.desktop' \) | sort \
+    | while IFS= read -r f; do
+        # not grep -q: under pipefail an early exit turns the upstream grep's SIGPIPE into a failure
+        hits=$(grep -vE '^\s*(//|--|#)' "$f" | sed -E 's/(built on|from) Omarchy//g' | grep -cE "$lit" || true)
+        (( hits > 0 )) && echo "${f#./}"
+      done ) > "$found" || true
+compare_with_allowlist "$found" "$allow" "files with Omarchy in a string literal" || rc=1
+
+# 2. Branded wallpaper names.
+named=$(find "$tree/themes" -path '*/backgrounds/*' -iname '*omarchy*' 2>/dev/null | sed "s|^$dest/||" || true)
+if [[ -n $named ]]; then echo "FAIL: wallpapers still named for upstream:"; printf '  %s\n' "${named//$'\n'/$'\n'  }"; rc=1; fi
+
+# 3. The image list against the payload.
+declare -A verdict=() sha=()
+while IFS=$'\t' read -r p h v; do
+  [[ -z $p || $p == \#* ]] && continue
+  verdict[$p]=$v; sha[$p]=$h
+done < "$images"
+bad=""
+while IFS= read -r f; do
+  rel=${f#"$tree"/}
+  if [[ -n ${verdict[$rel]:-} ]]; then
+    case ${verdict[$rel]} in
+      keep) [[ $(sha256sum "$f" | cut -d' ' -f1) == "${sha[$rel]}" ]] || bad+="  changed since it was reviewed: $rel"$'\n' ;;
+      *) bad+="  present but marked ${verdict[$rel]}: $rel"$'\n' ;;
+    esac
+  else
+    dir=${rel%/*}; base=${rel##*/}
+    src=$dir/${base//tinkero/omarchy}
+    [[ $src != "$rel" && ${verdict[$src]:-} == regenerate ]] || bad+="  no row in $images: $rel"$'\n'
+  fi
+done < <(find "$tree/themes" -path '*/backgrounds/*' -type f 2>/dev/null | sort)
+for p in "${!verdict[@]}"; do
+  [[ ${verdict[$p]} == review ]] && bad+="  not reviewed yet: $p"$'\n'
+done
+if [[ -n $bad ]]; then echo "FAIL: wallpapers:"; printf '%s' "$bad"; rc=1; fi
+
+# 4. The substitution list took effect (the build already failed if a count was off). Rows
+#    under etc/ are looked up where assemble step 4 relocated the file.
+while IFS=$'\t' read -r file old new _; do
+  [[ -z $file || $file == \#* ]] && continue
+  case $file in etc/*) target=$dest/usr/share/tinkero/${file#etc/} ;; *) target=$tree/$file ;; esac
+  if [[ ! -f $target ]]; then echo "FAIL: strings.tsv names a file the payload lacks: $file"; rc=1; continue; fi
+  n=$(grep -cF -- "$old" "$target" || true)
+  if (( n > 0 )); then echo "FAIL: $file still contains the upstream string ($n line(s)): $old"; rc=1; fi
+  n=$(grep -cF -- "$new" "$target" || true)
+  if (( n == 0 )); then echo "FAIL: $file lacks the replacement: $new"; rc=1; fi
+done < "$strings"
+
+[[ $rc -eq 0 ]] && echo "PASS: branding (string literals, wallpaper names, $(grep -vc '^#' "$images") reviewed wallpapers, $(grep -vc '^#' "$strings") substitutions)"
+exit $rc

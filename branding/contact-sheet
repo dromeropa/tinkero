@@ -1,0 +1,20 @@
+#!/bin/bash
+# contact-sheet TREE OUT.png: every wallpaper under TREE/themes on one labelled sheet, for the
+# review that fills in branding/images.tsv. Needs ImageMagick (magick).
+set -euo pipefail
+[[ $# -eq 2 ]] || { echo "usage: contact-sheet TREE OUT.png" >&2; exit 2; }
+tree=$1; out=$2
+command -v magick >/dev/null || { echo "contact-sheet: ImageMagick (magick) is required" >&2; exit 1; }
+mapfile -d '' -t files < <(find "$tree/themes" -path '*/backgrounds/*' -type f -print0 | sort -z)
+(( ${#files[@]} )) || { echo "contact-sheet: no wallpapers under $tree/themes" >&2; exit 1; }
+args=()
+for f in "${files[@]}"; do
+  rel=${f#"$tree"/themes/}
+  args+=( -label "${rel%%/*}: ${rel##*/}" "$f" )
+done
+# settings first, then the labelled images, then the layout: the montage idiom. The -limit
+# flags bound ImageMagick's own memory use: some upstream originals run to 10456x3455, and
+# decoding all 92 at once under the default limits can exhaust an 11 GiB machine.
+magick montage -limit memory 1GiB -limit map 2GiB -limit thread 1 -pointsize 16 -background '#808080' \
+  "${args[@]}" -tile 4x -geometry 480x270+6+6 "$out"
+echo "contact-sheet: ${#files[@]} wallpapers on $out"
