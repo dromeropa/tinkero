@@ -18,7 +18,7 @@ fail() { echo "FAIL: $*"; rc=1; }
 files=$(rpm -qp --qf '[%{FILEFLAGS:fflags} %{FILEMODES:perms} %{FILEUSERNAME}:%{FILEGROUPNAME} %{FILENAMES}\n]' "$rpm")
 want() {   # PATH FLAGS
   local line
-  line=$(awk -v p="$1" '$4 == p' <<<"$files")
+  line=$(awk -v p="$1" '$NF == p' <<<"$files")
   if [[ -z $line ]]; then fail "$1 is not in the package"; return; fi
   [[ $line == "$2 -rw-r--r-- root:root $1" ]] || fail "$1: want '$2 -rw-r--r-- root:root', got '${line% "$1"}'"
 }

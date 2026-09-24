@@ -11,7 +11,7 @@ Phase 2 of the design spec (section 7) is six independent subsystems. One plan e
 | **2C** menu rewrite | `menu/apply-overrides`, `menu/overrides.jsonc`, `tinkero-update`; `dropped-refs.allow` down to comment-only entries | 2A, and 2B's drop decisions | no | **done** 2026-09-23: `2026-09-23-phase-2c-menu-rewrite.md`; first plan through the issue loop |
 | **2D** branding | font rebuild, wallpaper rendering, manifest rewrite, `branding/strings.tsv` and `images.tsv`, the branding gate | 2A, 2C (menu labels) | no | **done** 2026-09-24: `2026-09-23-phase-2d-branding.md`; design `2026-09-23-phase-2d-branding-design.md`; the placeholder mark ships until the real one exists |
 | **2E** provisioning and install | `tinkero-provision` with `seeded.tsv`, the two provisioning wrappers, `install.sh`, `host.md`, config overrides | 2A, 2B | no | **done** 2026-09-23: `2026-09-23-phase-2e-provision-and-install.md`; design `specs/2026-09-23-phase-2e-provision-design.md` |
-| **2F** session integration | lock-screen PAM variants and `tinkero-pam-sync`, the dconf profile and `DCONF_PROFILE` export, `[Install]` stripping and session-started units with the fcitx5 drop-in, `tinkero-inhibit-power-key`, `omarchy-apply-lock` patch, fingerprint replacements | 2A, 2E | no longer: Phase 0 is done (GO, 2026-09-21) | **done** 2026-09-XX: `2026-09-24-phase-2f-session-integration.md`; design `specs/2026-09-24-phase-2f-session-design.md`; the first COPR build and the VM check are its post-merge issues |
+| **2F** session integration | lock-screen PAM variants and `tinkero-pam-sync`, the dconf profile and `DCONF_PROFILE` export, `[Install]` stripping and session-started units with the fcitx5 drop-in, `tinkero-inhibit-power-key`, `omarchy-apply-lock` patch, fingerprint replacements | 2A, 2E | no longer: Phase 0 is done (GO, 2026-09-21) | **done** 2026-09-24: `2026-09-24-phase-2f-session-integration.md`; design `specs/2026-09-24-phase-2f-session-design.md`; the first COPR build and the VM check are its post-merge issues |
 
 Milestones A, B and C of the spec (section 8) need 2A to 2F and the Phase 1 COPR. Nothing before 2F needs a running desktop: every plan up to 2E is verified by unit tests against a fixture tree and by the gates against the real tree.
 
@@ -70,7 +70,7 @@ Running the 2A prototype against the real tree while writing the plan produced 2
 - **Name map:** the `voxtype dnf voxtype` row is now backed by a real package.
 - **COPR operations:** the import queue can hold a build in `importing` for 40 minutes; nothing to fix, just do not read it as a hang. A full run of the set takes about four hours (two dispatches, `voxtype` and `hyprland` are the long builds).
 
-## What executing 2F added to the queue (2026-09-XX)
+## What executing 2F added to the queue (2026-09-24)
 
 - **Post-merge (this plan's own issues):** the first COPR build of `tinkero` (Task 8: build, log facts, `ci/check-rpm` on the COPR's RPM, the `nwg-panel` depsolve), then the VM check (`docs/guides/phase-2f-vm-check.md`, Task 9).
 - **Phase 3, `tinkero-status`:** `tinkero-pam-sync --check` is the PAM drift report (exit 0 or 1, one line; both PAM files are `%ghost` with no `%config`, so `rpm -V` does not see them, design D9); the release workflow archives `tinkero` with the set (it is the last line of `build-order.txt`).
