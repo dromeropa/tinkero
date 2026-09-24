@@ -1721,7 +1721,7 @@ The deviations below were recorded by the implementing branch on 2026-09-24.
 - **Task 6, the review:** the 67 `review` rows are Diego's to replace; the branch carries them as `review`, and every real-tree figure above that depends on the verdicts was measured on a scratch copy of the list with review turned to keep. Task 6 is not done and the CI gates step is red until the review lands (D4).
 - **Task 7:** the plan's RED expectation for the gate tests (17 `not ok`) was imprecise: four of the new cases pass trivially before the gate exists (13 `not ok`); the GREEN tally 1..58 is as planned.
 - **Task 5:** the plan's verify command carried the U+E900 character literally, which renders blank; it was run with the Python escape for that code point instead. No file differs from the plan.
-- **Final review:** the omarchy to tinkero name mapping in render-wallpapers and the gate acts on the file name only (a theme directory named for upstream would have broken both); one hermetic gate case added, tests/test-gates.sh at 1..59.
+- **Final review:** the omarchy to tinkero name mapping in render-wallpapers and the gate acts on the file name only: a theme directory named for upstream would have sent the render into a directory that does not exist, and one named for Tinkero would have made the gate look up the wrong row; one hermetic gate case added for the latter, tests/test-gates.sh at 1..59.
 - **Deferred:** `rebuild-font` reports malformed XML or an unsupported SVG feature as a raw traceback rather than `rebuild-font: <reason>`; `render-wallpapers` and `contact-sheet` have no fixture case with a space in a wallpaper path (`inventory-images` has one).
 
 ## What this plan deliberately leaves out

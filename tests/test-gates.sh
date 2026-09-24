@@ -150,13 +150,13 @@ printf '{"text": "Omarchy 1"}\n' > "$b/usr/share/tinkero/fastfetch/config.jsonc"
 out=$("$G" "$b" "$d/images.tsv" "$d/strings.tsv" "$d/allow-b" 2>&1) && rc=0 || rc=$?
 assert_contains "$out" "still contains the upstream string" "branding: an unapplied etc/ row is looked up under usr/share/tinkero"
 printf '{"text": "Tinkero 1, built on Omarchy"}\n' > "$b/usr/share/tinkero/fastfetch/config.jsonc"
-mkdir -p "$b/usr/share/omarchy/themes/omarchy-t/backgrounds"
-echo x > "$b/usr/share/omarchy/themes/omarchy-t/backgrounds/tinkero.png"
-printf 'themes/omarchy-t/backgrounds/omarchy.png\t0\tregenerate\n' >> "$d/images.tsv"
+mkdir -p "$b/usr/share/omarchy/themes/tinkero-t/backgrounds"
+echo x > "$b/usr/share/omarchy/themes/tinkero-t/backgrounds/tinkero.png"
+printf 'themes/tinkero-t/backgrounds/omarchy.png\t0\tregenerate\n' >> "$d/images.tsv"
 out=$("$G" "$b" "$d/images.tsv" "$d/strings.tsv" "$d/allow-b" 2>&1) && rc=0 || rc=$?
-assert_eq "$rc" 0 "branding: a theme directory named for upstream does not confuse the rendered-file lookup"
-rm "$b/usr/share/omarchy/themes/omarchy-t/backgrounds/tinkero.png"
-sed -i '/omarchy-t/d' "$d/images.tsv"
+assert_eq "$rc" 0 "branding: a theme directory named for Tinkero does not confuse the rendered-file lookup"
+rm "$b/usr/share/omarchy/themes/tinkero-t/backgrounds/tinkero.png"
+sed -i '/tinkero-t/d' "$d/images.tsv"
 
 out=$("$G" "$d/no-payload" "$d/images.tsv" "$d/strings.tsv" "$d/allow-b" 2>&1) && rc=0 || rc=$?
 assert_eq "$rc" 2 "branding: fails loudly without a payload"
