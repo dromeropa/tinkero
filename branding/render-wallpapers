@@ -41,7 +41,7 @@ while IFS= read -r f; do
   [[ $(sha256sum "$f" | cut -d' ' -f1) == "${sha[$rel]}" ]] || problems+="  changed since it was reviewed (run branding/inventory-images, then look at it): $rel"$'\n'
   [[ ${verdict[$rel]} == review ]] && problems+="  not reviewed yet: $rel"$'\n'
   if [[ ${verdict[$rel]} == regenerate ]]; then
-    [[ $rel == *omarchy* ]] || problems+="  regenerate needs 'omarchy' in the name to derive the output name: $rel"$'\n'
+    [[ ${rel##*/} == *omarchy* ]] || problems+="  regenerate needs 'omarchy' in the name to derive the output name: $rel"$'\n'
     theme=${rel#themes/}; theme=${theme%%/*}; toml=$tree/themes/$theme/colors.toml
     if [[ -f $toml ]]; then
       accent[$rel]=$(color "$toml" accent); bg[$rel]=$(color "$toml" background)
@@ -62,13 +62,14 @@ while IFS= read -r p; do
     keep) kept=$((kept + 1)) ;;
     delete) rm -f -- "$f"; deleted=$((deleted + 1)) ;;
     regenerate)
-      out=$tree/${p//omarchy/tinkero}
+      dir=${p%/*}; base=${p##*/}
+      out=$tree/$dir/${base//omarchy/tinkero}
       read -r w h < <(magick identify -format '%w %h\n' "$f")
       tmp=$(mktemp --suffix=.svg)
       sed "s/currentColor/${accent[$p]}/g" "$wordmark" > "$tmp"
-      # -background fills the SVG's transparent canvas and the -extent padding; -alpha remove
-      # flattens onto it before PNG24 encoding (PNG24 has no alpha channel and would otherwise
-      # turn any leftover transparency black, corrupting the corner sample and the histogram)
+      # -background fills the SVG canvas and the -extent padding; -alpha remove is a guard that
+      # flattens onto that background before PNG24 encoding so the result does not depend on how
+      # the SVG delegate fills the canvas
       magick -background "${bg[$p]}" -density 300 "$tmp" -resize "$((w * fraction / 100))x" \
         -gravity center -extent "${w}x${h}" -alpha remove -strip "PNG24:$out"
       rm -f -- "$tmp" "$f"

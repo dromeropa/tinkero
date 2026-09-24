@@ -53,7 +53,8 @@ while IFS= read -r f; do
       *) bad+="  present but marked ${verdict[$rel]}: $rel"$'\n' ;;
     esac
   else
-    src=${rel//tinkero/omarchy}
+    dir=${rel%/*}; base=${rel##*/}
+    src=$dir/${base//tinkero/omarchy}
     [[ $src != "$rel" && ${verdict[$src]:-} == regenerate ]] || bad+="  no row in $images: $rel"$'\n'
   fi
 done < <(find "$tree/themes" -path '*/backgrounds/*' -type f 2>/dev/null | sort)
