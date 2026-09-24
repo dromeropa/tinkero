@@ -29,11 +29,14 @@
     "learn.arch",
   ],
   "replace": {
+    // learn.omarchy opened the Omarchy manual; the id stays (identifiers keep upstream's names, spec 4.13),
+    // the label and the target are Tinkero's, the glyph is the rebranded U+E900 (plan 2D)
+    "learn.omarchy": {"icon":"","iconFont":"omarchy","label":"Tinkero","action":"omarchy-launch-browser https://github.com/dromeropa/tinkero#readme"},
     // update.omarchy ran omarchy-update; Tinkero updates through dnf, mise and flatpak (spec 4.7)
     "update.omarchy": {"icon":"","iconFont":"omarchy","label":"Packages","action":"omarchy-launch-floating-terminal-with-presentation tinkero-update"},
   },
   "add": {
-    "learn.fedora": {"icon":"","label":"Fedora","action":"omarchy-launch-webapp 'https://docs.fedoraproject.org/'"},
+    "learn.fedora": {"icon":"","label":"Fedora","action":"omarchy-launch-browser https://docs.fedoraproject.org/"},
   },
   "expect_rows": 258,
 }
