@@ -1,0 +1,93 @@
+#!/usr/bin/env python3
+"""rewrite-manifests TREE: rebrand the plugin manifests without touching plugin ids (spec 4.13).
+
+For every shell/plugins/**/manifest.json and shell/plugins/**/*.manifest.json under TREE:
+  * "author": "Omarchy" becomes "Tinkero (from Omarchy)";
+  * the word Omarchy becomes Tinkero in name, displayName and description, at the top
+    level and under barWidget.
+Nothing else changes: each new value replaces the JSON encoding of the old value in the
+file's text (exactly as often as fields carry that value), so upstream's formatting survives
+byte for byte, and the result is parsed again and compared with the intended object before
+it is written. Ids are never read.
+"""
+import glob
+import json
+import os
+import re
+import sys
+from collections import Counter
+
+AUTHOR_OLD, AUTHOR_NEW = "Omarchy", "Tinkero (from Omarchy)"
+WORD = re.compile(r"\bOmarchy\b")
+FIELDS = ("name", "displayName", "description")
+
+
+def fail(msg):
+    sys.exit(f"rewrite-manifests: {msg}")
+
+
+def new_value(old):
+    """The text-level replacement for an encoded value: the author's wording for the author's
+    value, the word swap for everything else. A field whose intended value differs (a name
+    that is exactly "Omarchy", say) is caught by the parse check in rewrite()."""
+    return AUTHOR_NEW if old == AUTHOR_OLD else WORD.sub("Tinkero", old)
+
+
+def changes(obj):
+    """[(container, key, old, new)] for the fields this transform owns."""
+    out = []
+    if obj.get("author") == AUTHOR_OLD:
+        out.append((obj, "author", AUTHOR_OLD, AUTHOR_NEW))
+    widget = obj.get("barWidget") if isinstance(obj.get("barWidget"), dict) else {}
+    for container in (obj, widget):
+        for key in FIELDS:
+            old = container.get(key)
+            if isinstance(old, str) and WORD.search(old):
+                out.append((container, key, old, WORD.sub("Tinkero", old)))
+    return out
+
+
+def rewrite(path):
+    with open(path, encoding="utf-8") as f:
+        raw = f.read()
+    obj = json.loads(raw)
+    todo = changes(obj)
+    if not todo:
+        return 0, 0
+    text = raw
+    # The same value may sit in two fields (a widget's name and displayName, say): the encoded
+    # old value must occur exactly as often as the fields that carry it, then all are replaced.
+    for old, n in Counter(old for _, _, old, _ in todo).items():
+        enc = json.dumps(old, ensure_ascii=False)
+        if text.count(enc) != n:
+            fail(f"{path}: {enc} occurs {text.count(enc)} time(s) in the text, expected {n}; cannot replace it safely")
+        text = text.replace(enc, json.dumps(new_value(old), ensure_ascii=False))
+    for container, key, old, new in todo:
+        container[key] = new
+    if json.loads(text) != obj:
+        fail(f"{path}: the rewritten text does not parse to the intended manifest")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text)
+    authors = sum(1 for c in todo if c[1] == "author")
+    return authors, len(todo) - authors
+
+
+def main(argv):
+    if len(argv) != 2:
+        fail("usage: rewrite-manifests TREE")
+    root = os.path.join(argv[1], "shell", "plugins")
+    files = sorted(set(glob.glob(os.path.join(root, "**", "manifest.json"), recursive=True))
+                   | set(glob.glob(os.path.join(root, "**", "*.manifest.json"), recursive=True)))
+    if not files:
+        fail(f"no plugin manifests under {root}")
+    authors = fields = touched = 0
+    for path in files:
+        a, f = rewrite(path)
+        authors += a
+        fields += f
+        touched += bool(a or f)
+    print(f"rewrite-manifests: {len(files)} manifests, {touched} rewritten: {authors} author(s), {fields} field(s)")
+
+
+if __name__ == "__main__":
+    main(sys.argv)

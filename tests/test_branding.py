@@ -186,7 +186,73 @@ class ApplyStrings(unittest.TestCase):
 
 
 
-# Task 4 appends class RewriteManifests here.
+class RewriteManifests(unittest.TestCase):
+    MENU = ('{\n  "schemaVersion": 1,\n  "id": "omarchy.menu",\n  "name": "Omarchy menu",\n  "author": "Omarchy",\n'
+            '  "description": "Quickshell-powered Omarchy command menu",\n  "kinds": ["menu", "bar-widget"],\n'
+            '  "barWidget": {\n    "displayName": "Omarchy menu",\n    "description": "Launches the Omarchy menu"\n  }\n}\n')
+    OTHER = '{\n  "id": "someone.widget",\n  "name": "Weather",\n  "author": "Someone"\n}\n'
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="tinkero-manifests.")
+        self.plugins = os.path.join(self.tmp, "shell", "plugins")
+        self.menu = os.path.join(self.plugins, "menu", "manifest.json")
+        self.other = os.path.join(self.plugins, "other", "manifest.json")
+        write(self.menu, self.MENU)
+        write(self.other, self.OTHER)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def run_tool(self, tree=None):
+        return subprocess.run([sys.executable, MANIFESTS, tree or self.tmp], capture_output=True, text=True)
+
+    def test_author_and_fields(self):
+        r = self.run_tool()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("rewrite-manifests: 2 manifests, 1 rewritten: 1 author(s), 4 field(s)", r.stdout)
+        expected = (self.MENU.replace('"author": "Omarchy"', '"author": "Tinkero (from Omarchy)"')
+                    .replace("Omarchy menu", "Tinkero menu").replace("Omarchy command", "Tinkero command"))
+        self.assertEqual(read(self.menu), expected)          # ids, key order and the one-line array survive
+
+    def test_untouched_manifest_keeps_its_bytes(self):
+        self.run_tool()
+        self.assertEqual(read(self.other), self.OTHER)
+
+    def test_widget_manifest_with_a_repeated_value(self):
+        widget = os.path.join(self.plugins, "bar", "widgets", "SystemUpdate.manifest.json")
+        write(widget, '{\n  "id": "omarchy.system-update",\n  "name": "Omarchy update",\n  "author": "Omarchy",\n'
+                      '  "barWidget": {\n    "displayName": "Omarchy update"\n  }\n}\n')
+        r = self.run_tool()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(read(widget).count('"Tinkero update"'), 2)
+        self.assertIn('"id": "omarchy.system-update"', read(widget))
+
+    def test_value_that_also_names_the_plugin_is_refused(self):
+        bad = os.path.join(self.plugins, "bad", "manifest.json")
+        write(bad, '{\n  "id": "omarchy.bad",\n  "name": "Omarchy",\n  "author": "Omarchy"\n}\n')
+        r = self.run_tool()
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("bad/manifest.json", r.stderr)
+        self.assertEqual(read(bad), '{\n  "id": "omarchy.bad",\n  "name": "Omarchy",\n  "author": "Omarchy"\n}\n')
+
+    def test_unlisted_fields_are_left_alone(self):
+        extra = os.path.join(self.plugins, "extra", "manifest.json")
+        write(extra, '{\n  "id": "omarchy.extra",\n  "homepage": "https://omarchy.org/Omarchy",\n  "author": "Omarchy"\n}\n')
+        self.run_tool()
+        self.assertIn('"homepage": "https://omarchy.org/Omarchy"', read(extra))
+        self.assertIn('"author": "Tinkero (from Omarchy)"', read(extra))
+
+    def test_second_run_is_a_noop(self):
+        self.run_tool()
+        after = read(self.menu)
+        r = self.run_tool()
+        self.assertIn("2 manifests, 0 rewritten: 0 author(s), 0 field(s)", r.stdout)
+        self.assertEqual(read(self.menu), after)
+
+    def test_tree_without_manifests_fails(self):
+        r = self.run_tool(os.path.join(self.tmp, "nowhere"))
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("no plugin manifests", r.stderr)
 
 if __name__ == "__main__":
     unittest.main()
