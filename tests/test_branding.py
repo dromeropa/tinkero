@@ -126,7 +126,66 @@ class RebuildFont(unittest.TestCase):
         self.assertIn("no glyph at U+E900", r.stderr)
 
 
-# Task 3 appends class ApplyStrings here.
+class ApplyStrings(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="tinkero-strings.")
+        self.tree = os.path.join(self.tmp, "tree")
+        write(os.path.join(self.tree, "a", "one.lua"), 'x = "Omarchy menu"\ny = "Omarchy menu"\n')
+        write(os.path.join(self.tree, "two.qml"), 'text: "Pending Omarchy Updates"\n')
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def tsv(self, *rows):
+        path = os.path.join(self.tmp, "strings.tsv")
+        write(path, "# comment line\n" + "".join("\t".join(r) + "\n" for r in rows))
+        return path
+
+    def run_tool(self, tsv):
+        return subprocess.run([sys.executable, APPLY, self.tree, tsv], capture_output=True, text=True)
+
+    def test_replaces_and_reports(self):
+        r = self.run_tool(self.tsv(("a/one.lua", '"Omarchy menu"', '"Tinkero menu"', "2"), ("two.qml", "Omarchy", "Tinkero", "1")))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("apply-strings: 2 row(s), 3 replacement(s) in 2 file(s)", r.stdout)
+        self.assertEqual(read(os.path.join(self.tree, "a", "one.lua")), 'x = "Tinkero menu"\ny = "Tinkero menu"\n')
+        self.assertEqual(read(os.path.join(self.tree, "two.qml")), 'text: "Pending Tinkero Updates"\n')
+
+    def test_count_mismatch_writes_nothing(self):
+        r = self.run_tool(self.tsv(("a/one.lua", '"Omarchy menu"', '"Tinkero menu"', "2"), ("two.qml", "Omarchy", "Tinkero", "3")))
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("nothing written", r.stderr)
+        self.assertIn("line 3: two.qml contains 'Omarchy' 1 time(s), expected 3", r.stderr)
+        self.assertEqual(read(os.path.join(self.tree, "a", "one.lua")), 'x = "Omarchy menu"\ny = "Omarchy menu"\n')
+
+    def test_missing_file_is_reported(self):
+        r = self.run_tool(self.tsv(("nope.lua", "Omarchy", "Tinkero", "1")))
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("line 2: cannot read nope.lua", r.stderr)
+
+    def test_second_run_fails(self):
+        tsv = self.tsv(("two.qml", "Omarchy", "Tinkero", "1"))
+        self.assertEqual(self.run_tool(tsv).returncode, 0)
+        r = self.run_tool(tsv)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("0 time(s), expected 1", r.stderr)
+
+    def test_malformed_row(self):
+        r = self.run_tool(self.tsv(("two.qml", "Omarchy", "Tinkero")))
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("line 2: expected 4 tab-separated fields, got 3", r.stderr)
+
+    def test_shipped_list_is_well_formed(self):
+        rows = [line.rstrip("\n").split("\t") for line in open(os.path.join(B, "strings.tsv"), encoding="utf-8")
+                if line.strip() and not line.startswith("#")]
+        self.assertEqual(len(rows), 5)
+        for row in rows:
+            self.assertEqual(len(row), 4, row)
+            self.assertTrue(row[3].isdigit() and int(row[3]) >= 1, row)
+            self.assertNotIn("Omarchy", row[2].replace("built on Omarchy", ""), row)
+
+
+
 # Task 4 appends class RewriteManifests here.
 
 if __name__ == "__main__":
