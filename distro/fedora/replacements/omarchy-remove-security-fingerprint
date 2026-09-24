@@ -1,0 +1,19 @@
+#!/bin/bash
+
+# omarchy:summary=Turn off fingerprint authentication for the whole host
+# omarchy:requires-sudo=true
+
+set -euo pipefail
+# shellcheck source=distro/fedora/lib/pkg.sh
+source "${TINKERO_PKG_LIB:-/usr/share/tinkero/pkg.sh}"
+
+echo -e "\033[32mRemoving fingerprint scanner from authentication.\n\033[0m"
+echo "This turns fingerprint login off for the whole host, GDM included, not just the lock screen."
+
+elevate authselect disable-feature with-fingerprint
+# system-auth no longer names pam_fprintd.so, so this also drops the lock screen's file.
+elevate omarchy-apply-lock
+
+# fprintd and fprintd-pam ship with Fedora Workstation (design D11): removing them would
+# erase a Fedora default. The enrolled prints stay; they are the user's and GNOME's too.
+echo -e "\033[32mFingerprint authentication has been turned off.\033[0m"

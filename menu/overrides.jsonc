@@ -34,6 +34,10 @@
     "learn.omarchy": {"icon":"","iconFont":"omarchy","label":"Tinkero","action":"omarchy-launch-browser https://github.com/dromeropa/tinkero#readme"},
     // update.omarchy ran omarchy-update; Tinkero updates through dnf, mise and flatpak (spec 4.7)
     "update.omarchy": {"icon":"","iconFont":"omarchy","label":"Packages","action":"omarchy-launch-floating-terminal-with-presentation tinkero-update"},
+    // remove.security.fingerprint: upstream gates the row on fprintd being installed; Fedora
+    // Workstation ships it by default and design D11 never removes it, so that guard is always
+    // true. Gate on the file omarchy-apply-lock actually writes instead (plan 2F, design D11).
+    "remove.security.fingerprint": {"icon":"󰈷","label":"Fingerprint","when":"test -f /etc/pam.d/omarchy-lock-fingerprint","action":"omarchy-launch-floating-terminal-with-presentation omarchy-remove-security-fingerprint"},
   },
   "add": {
     "learn.fedora": {"icon":"","label":"Fedora","action":"omarchy-launch-browser https://docs.fedoraproject.org/"},
