@@ -8,7 +8,8 @@
 #   tinkero-copr order [PKG...]      print the build order and exit
 #
 # Without PKG arguments every package in distro/fedora/specs/build-order.txt is
-# used; with them, only those, still in canonical order. Environment:
+# used; with them, only those, still in canonical order. The desktop package "tinkero"
+# is built last from tinkero.spec.in at the root (design 2F, D13). Environment:
 #   TINKERO_COPR_PROJECT  owner/project      (default dromero/tinkero)
 #   TINKERO_COPR_CLONE    git clone URL      (default https://github.com/dromeropa/tinkero.git)
 #   TINKERO_COPR_COMMIT   branch or commit   (default master)
@@ -30,7 +31,11 @@ run() {
 mapfile -t all < <(grep -vE '^\s*(#|$)' "$order_file")
 (( ${#all[@]} )) || die "no packages in $order_file"
 for p in "${all[@]}"; do
-  [[ -f $root/distro/fedora/specs/$p.spec ]] || die "$p is in build-order.txt but distro/fedora/specs/$p.spec does not exist"
+  if [[ $p == tinkero ]]; then
+    [[ -f $root/tinkero.spec.in ]] || die "$p is in build-order.txt but tinkero.spec.in does not exist"
+  else
+    [[ -f $root/distro/fedora/specs/$p.spec ]] || die "$p is in build-order.txt but distro/fedora/specs/$p.spec does not exist"
+  fi
 done
 
 cmd=${1:-}; shift || true
@@ -47,9 +52,15 @@ fi
 
 register_one() {
   local name=$1 add_err
-  local args=(--name "$name" --clone-url "$clone" --commit "$commit"
-              --subdir distro/fedora/specs --spec "$name.spec"
-              --type git --method make_srpm --timeout 18000 --webhook-rebuild off)
+  local args=(--name "$name" --clone-url "$clone" --commit "$commit")
+  # tinkero (the desktop package) is built from tinkero.spec.in at the root; the rest are
+  # built from distro/fedora/specs/<name>.spec
+  if [[ $name == tinkero ]]; then
+    args+=(--spec tinkero.spec)
+  else
+    args+=(--subdir distro/fedora/specs --spec "$name.spec")
+  fi
+  args+=(--type git --method make_srpm --timeout 18000 --webhook-rebuild off)
   # add fails when the package exists, edit fails when it does not: try both, and
   # if both fail show both messages (an auth or network error hits add first)
   if [[ ${TINKERO_COPR_DRY_RUN:-0} == 1 ]]; then
@@ -69,5 +80,5 @@ case $cmd in
   register) for p in "${pkgs[@]}"; do register_one "$p"; done ;;
   build)    for p in "${pkgs[@]}"; do build_one "$p"; done ;;
   all)      for p in "${pkgs[@]}"; do register_one "$p"; done; for p in "${pkgs[@]}"; do build_one "$p"; done ;;
-  *)        sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  *)        sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

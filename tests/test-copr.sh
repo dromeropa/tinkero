@@ -18,7 +18,8 @@ S
 chmod +x "$d/bin/copr-cli"; export PATH=$d/bin:$PATH EXISTING=$d/existing; : > "$EXISTING"
 T=$ROOT/build/tinkero-copr
 assert_eq "$("$T" order | head -n1)" tinkero-nerd-fonts "order: first package"
-assert_eq "$("$T" order | wc -l)" 25 "order: all 25"
+assert_eq "$("$T" order | wc -l)" 26 "order: all 26 (25 in specs, tinkero at root)"
+assert_eq "$("$T" order | tail -n1)" tinkero "order: tinkero is last"
 assert_eq "$("$T" order hyprutils glaze | paste -sd' ')" "glaze hyprutils" "order: subset keeps canonical order"
 "$T" build nope >/dev/null 2>&1; assert_eq "$?" 1 "unknown package is an error"
 : > "$LOG"; TINKERO_COPR_PROJECT=me/proj "$T" register glaze >/dev/null
@@ -34,7 +35,16 @@ assert_eq "$(wc -l < "$LOG")" 0 "dry run calls nothing"; assert_contains "$out" 
 out=$(TINKERO_COPR_DRY_RUN=1 "$T" register glaze 2>&1)
 assert_contains "$out" "copr-cli add-package-scm dromero/tinkero --name glaze" "dry run: register prints the add command"
 assert_contains "$out" "registered: glaze (dry run)" "dry run: register says it is a dry run"
-assert_eq "$(TINKERO_COPR_DRY_RUN=1 "$T" all 2>&1 | grep -c '^copr-cli ')" 50 "dry run: all prints 25 register and 25 build commands"
+: > "$LOG"; "$T" register tinkero >/dev/null
+assert_contains "$(cat "$LOG")" "add-package-scm dromero/tinkero --name tinkero --clone-url https://github.com/dromeropa/tinkero.git --commit master --spec tinkero.spec --type git --method make_srpm" "register tinkero: no --subdir, --spec tinkero.spec"
+if grep -qF -- '--subdir' "$LOG"; then
+  not_ok "register tinkero: must not have --subdir"
+else
+  ok "register tinkero: no --subdir"
+fi
+: > "$LOG"; "$T" build tinkero >/dev/null
+assert_contains "$(cat "$LOG")" "copr-cli build-package dromero/tinkero --name tinkero" "build tinkero: one build-package for tinkero"
+assert_eq "$(TINKERO_COPR_DRY_RUN=1 "$T" all 2>&1 | grep -c '^copr-cli ')" 52 "dry run: all prints 26 register and 26 build commands"
 out=$(FAIL_ALL=1 "$T" register glaze 2>&1); rc=$?
 assert_eq "$rc" 1 "register: both calls failing is an error"
 assert_contains "$out" "add-package-scm said: auth failed" "register: shows add's own error when both calls fail"

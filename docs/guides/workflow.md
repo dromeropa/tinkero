@@ -34,7 +34,7 @@ contract for people and for agent sessions alike. The design is in
 
 ## Four adaptations for this repository
 
-- **COPR builds are post-merge.** The 25 packages are registered against `master`, and a
+- **COPR builds are post-merge.** The 26 packages are registered against `master`, and a
   COPR build publishes to the user-facing repository, so it cannot be a PR check. An issue
   whose deliverable is "package X builds in COPR" (a spec bump, the first `tinkero` RPM)
   has two-stage verification: CI proves the spec parses, lints and produces an SRPM; the
