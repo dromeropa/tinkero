@@ -96,6 +96,20 @@ out=$(TINKERO_ROOT=$r "$ROOT/build/assemble" "$d/broken-install.tar.gz" "$d/dest
 assert_eq "$rc" 1 "a header the strip cannot recognise fails the build"
 assert_contains "$out" "still have [Install] after stripping" "and names the failure"
 
+# PAM variants and the host-only bin/ (plan 2F). The fixture root above has neither
+# distro/fedora/pam nor distro/fedora/bin, and the run at "$d/dest" above still assembled: both
+# steps are guarded. Add them now and assemble again to prove the positive path too.
+mkdir -p "$r/distro/fedora/pam" "$r/distro/fedora/bin"
+printf 'password fixture wrapped\n' > "$r/distro/fedora/pam/omarchy-lock-password.wrapped"
+printf 'password fixture plain\n' > "$r/distro/fedora/pam/omarchy-lock-password.plain"
+printf '#!/bin/bash\necho pam-sync fixture\n' > "$r/distro/fedora/bin/tinkero-pam-sync"
+run "$d/dest-pam" >/dev/null
+assert_eq "$(cat "$d/dest-pam/usr/share/tinkero/pam/omarchy-lock-password.wrapped")" "password fixture wrapped" "PAM wrapped variant shipped under usr/share/tinkero/pam"
+assert_eq "$(cat "$d/dest-pam/usr/share/tinkero/pam/omarchy-lock-password.plain")" "password fixture plain" "PAM plain variant shipped"
+assert_eq "$(stat -c %a "$d/dest-pam/usr/share/tinkero/pam/omarchy-lock-password.wrapped")" "644" "PAM variant installed mode 0644"
+assert_eq "$(tail -n1 "$d/dest-pam/usr/bin/tinkero-pam-sync")" "echo pam-sync fixture" "distro/fedora/bin/tinkero-* installed to usr/bin, like bin/tinkero-*"
+assert_eq "$(stat -c %a "$d/dest-pam/usr/bin/tinkero-pam-sync")" "755" "distro/fedora/bin/tinkero-pam-sync installed mode 0755"
+
 # 3b. Menu: the default menu is rewritten in place, in the tree, before relocation
 menu=$d/dest/usr/share/omarchy/default/omarchy/omarchy-menu.jsonc
 assert_file "$menu" "menu: still shipped at upstream's path"

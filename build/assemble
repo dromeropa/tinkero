@@ -21,6 +21,8 @@
 #                                        [Install] from the tree's units first), into
 #                                        /usr/lib/systemd/user alongside the tree's units
 #   session/uwsm-env.d/20-tinkero       the DCONF_PROFILE export, into /usr/share/uwsm/env.d
+#   distro/fedora/pam/*                  the PAM variants tinkero-pam-sync writes from (plan 2F)
+#   distro/fedora/bin/tinkero-*          host-only commands, installed like bin/tinkero-* (plan 2F)
 set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 root=${TINKERO_ROOT:-$(dirname "$here")}
@@ -166,6 +168,13 @@ install -Dm 0644 "${TINKERO_LOCK:-$root/upstream.lock}" "$dest/usr/share/tinkero
 install -Dm 0644 "$root/distro/fedora/lib/pkg.sh" "$dest/usr/share/tinkero/pkg.sh"
 install -Dm 0644 "$root/distro/fedora/pkgmap.tsv" "$dest/usr/share/tinkero/pkgmap.tsv"
 
+# The PAM variants tinkero-pam-sync writes from (design spec 4.8, plan 2F).
+if [[ -d $root/distro/fedora/pam ]]; then
+  for f in "$root"/distro/fedora/pam/*; do
+    [[ -f $f ]] && install -Dm 0644 "$f" "$dest/usr/share/tinkero/pam/$(basename "$f")"
+  done
+fi
+
 # Provisioning data (plan 2E): Tinkero's seeded config overrides, the skip list and the session
 # unit list, the per-bump config notes (none until the first bump) and the session's dconf profile.
 if [[ -d $root/config ]]; then
@@ -196,4 +205,10 @@ done
 for f in "$root"/bin/tinkero-*; do
   [[ -f $f ]] && install -m 0755 "$f" "$dest/usr/bin/$(basename "$f")"
 done
+# Host-only commands that need root, not user provisioning (distro/fedora, plan 2F).
+if [[ -d $root/distro/fedora/bin ]]; then
+  for f in "$root"/distro/fedora/bin/tinkero-*; do
+    [[ -f $f ]] && install -m 0755 "$f" "$dest/usr/bin/$(basename "$f")"
+  done
+fi
 echo "assembled $(find "$dest/usr/bin" -mindepth 1 -maxdepth 1 | wc -l) commands into $dest"

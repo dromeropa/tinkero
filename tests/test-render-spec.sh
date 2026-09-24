@@ -28,6 +28,11 @@ assert_contains "$s" "ppd-service" "power profiles through the virtual provide, 
 if [[ $s != *power-profiles-daemon* ]]; then ok "power-profiles-daemon is not required by name"; else not_ok "power-profiles-daemon is not required by name"; fi
 assert_contains "$s" " fcitx5" "fcitx5 is a hard requirement"
 assert_contains "$s" "Source0:        omarchy-c668141e9c42b13c80c9ca4ea108e11708c5e8a5.tar.gz" "source names the commit"
+assert_contains "$s" "%posttrans" "posttrans scriptlet present (plan 2F, PAM sync)"
+assert_contains "$s" "/usr/bin/tinkero-pam-sync" "posttrans runs tinkero-pam-sync"
+assert_contains "$s" "%ghost %attr(0644,root,root) %{_sysconfdir}/pam.d/omarchy-lock-password" "ghost: the password PAM file, no %config (D9)"
+assert_contains "$s" "%ghost %attr(0644,root,root) %{_sysconfdir}/pam.d/omarchy-lock-fingerprint" "ghost: the fingerprint PAM file, no %config (D9)"
+assert_contains "$s" "diffutils" "requires diffutils, for tinkero-pam-sync's cmp"
 assert_eq "$(grep -c '@[A-Z_]*@' "$d/out.spec")" "0" "no placeholder left"
 sed -i 's/^hyprland=.*/hyprland=0.56/' "$d/lock"
 assert_fails "a malformed hyprland version is rejected" r

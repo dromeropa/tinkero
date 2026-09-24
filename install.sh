@@ -70,6 +70,7 @@ cat <<EOF
 Plan:
   system stage (sudo):  dnf copr enable $copr
                         dnf install tinkero      (the desktop with its pinned Hyprland and Quickshell)
+                        tinkero-pam-sync         (writes the lock screen's PAM file for this host)
   user stage (you):     tinkero-provision        (its own plan is shown and confirmed first)
 Nothing else changes: no other repository, no versionlock, no Flathub, nothing under /etc beyond the package's files and the COPR repository file.
 
@@ -81,6 +82,9 @@ y=()
 if (( yes )); then y=(-y); fi
 sudo dnf copr enable "${y[@]}" "$copr"
 sudo dnf install "${y[@]}" tinkero
+# %posttrans already ran this once, but a re-run of install.sh is otherwise unable to repair a
+# variant an authselect change made stale in between (design spec 4.8, plan 2F design D8).
+sudo tinkero-pam-sync
 say "system stage done"
 
 # 4. The provisioning plan, the second gate, the user stage. The plan lists every file that
