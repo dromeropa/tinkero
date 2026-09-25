@@ -161,4 +161,78 @@ sed -i '/tinkero-t/d' "$d/images.tsv"
 out=$("$G" "$d/no-payload" "$d/images.tsv" "$d/strings.tsv" "$d/allow-b" 2>&1) && rc=0 || rc=$?
 assert_eq "$rc" 2 "branding: fails loudly without a payload"
 
+# session-units (plan 2F): unit-a is bound directly, unit-b only through a drop-in, unit-c is a
+# plain oneshot; all three pass, so this fixture is also the "bound through a drop-in" and
+# "oneshot passes" case, restored between the mutations below.
+su=$d/su
+mkdir -p "$su/usr/bin" "$su/usr/lib/systemd/user/unit-b.service.d" "$su/usr/share/omarchy/default/systemd/user"
+reset_su() {
+  printf '[Unit]\nPartOf=graphical-session.target\n\n[Service]\nExecStart=/usr/bin/true\n' > "$su/usr/lib/systemd/user/unit-a.service"
+  printf '[Unit]\nDescription=b\n\n[Service]\nExecStart=/usr/bin/true\n' > "$su/usr/lib/systemd/user/unit-b.service"
+  printf '[Unit]\nPartOf=graphical-session.target\n' > "$su/usr/lib/systemd/user/unit-b.service.d/tinkero.conf"
+  printf '[Unit]\nDescription=c\n\n[Service]\nType=oneshot\nExecStart=/usr/bin/true\n' > "$su/usr/lib/systemd/user/unit-c.service"
+  cp "$su/usr/lib/systemd/user/unit-a.service" "$su/usr/share/omarchy/default/systemd/user/unit-a.service"
+  cp "$su/usr/lib/systemd/user/unit-b.service" "$su/usr/share/omarchy/default/systemd/user/unit-b.service"
+  cp "$su/usr/lib/systemd/user/unit-c.service" "$su/usr/share/omarchy/default/systemd/user/unit-c.service"
+}
+reset_su
+printf '# comment\nunit-a.service\nunit-b.service\nunit-c.service\n' > "$d/session-units.list"
+GS=$ROOT/ci/gate-session-units
+
+out=$("$GS" "$su" "$d/session-units.list" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 0 "session-units: pass case (a bound directly, b through a drop-in, c a plain oneshot)"
+assert_eq "$out" "PASS: session units (3 listed, 3 unit files, no [Install])" "session-units: exact PASS line, comment line not counted"
+
+printf '\n[Install]\nWantedBy=graphical-session.target\n' >> "$su/usr/lib/systemd/user/unit-a.service"
+out=$("$GS" "$su" "$d/session-units.list" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 1 "session-units: [Install] in the usr/lib copy fails"
+assert_contains "$out" "usr/lib/systemd/user/unit-a.service" "session-units: names the usr/lib copy"
+reset_su
+
+printf '\n[Install]\nWantedBy=graphical-session.target\n' >> "$su/usr/share/omarchy/default/systemd/user/unit-a.service"
+out=$("$GS" "$su" "$d/session-units.list" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 1 "session-units: [Install] in the tree copy fails"
+assert_contains "$out" "usr/share/omarchy/default/systemd/user/unit-a.service" "session-units: names the tree copy"
+reset_su
+
+printf 'unit-a.service\nunit-missing.service\n' > "$d/session-units-missing.list"
+out=$("$GS" "$su" "$d/session-units-missing.list" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 1 "session-units: a listed unit with no file fails"
+assert_contains "$out" "listed unit has no file: unit-missing.service" "session-units: names it"
+
+rm -f "$su/usr/lib/systemd/user/unit-b.service.d/tinkero.conf"
+out=$("$GS" "$su" "$d/session-units.list" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 1 "session-units: a listed unit bound neither directly nor by a drop-in fails"
+assert_contains "$out" "neither bound to the session nor a plain oneshot: unit-b.service" "session-units: names it"
+reset_su
+
+printf 'RemainAfterExit=yes\n' >> "$su/usr/lib/systemd/user/unit-c.service"
+cp "$su/usr/lib/systemd/user/unit-c.service" "$su/usr/share/omarchy/default/systemd/user/unit-c.service"
+out=$("$GS" "$su" "$d/session-units.list" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 1 "session-units: a oneshot with RemainAfterExit=yes is no longer exempt"
+assert_contains "$out" "neither bound to the session nor a plain oneshot: unit-c.service" "session-units: names it"
+reset_su
+
+printf 'RemainAfterExit=true\n' >> "$su/usr/lib/systemd/user/unit-c.service"
+out=$("$GS" "$su" "$d/session-units.list" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 1 "session-units: RemainAfterExit=true is a remaining oneshot too"
+reset_su
+
+printf '[Unit]\nPartOf=pipewire.service graphical-session.target\n' > "$su/usr/lib/systemd/user/unit-b.service.d/tinkero.conf"
+out=$("$GS" "$su" "$d/session-units.list" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 0 "session-units: a PartOf= line naming several units binds the unit"
+reset_su
+
+out=$("$GS" "$su" "does-not-exist" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 2 "session-units: exits 2 on an unreadable list"
+assert_contains "$out" "cannot read session unit list" "session-units: and says so"
+
+out=$("$GS" "$d/no-such-payload" "$d/session-units.list" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 2 "session-units: exits 2 on a missing payload"
+assert_contains "$out" "no payload at DEST" "session-units: and says so"
+
+out=$("$GS" "$su" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 2 "session-units: exits 2 on the wrong number of arguments"
+assert_contains "$out" "usage: gate-session-units" "session-units: and prints usage"
+
 rm -rf "$d"; finish

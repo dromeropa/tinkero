@@ -24,7 +24,7 @@ Requires:       uwsm xdg-desktop-portal-hyprland xdg-desktop-portal-gtk hyprland
 Requires:       qt6-qtwayland qt6-qtmultimedia qt6-qtimageformats qt6-qtsvg gtk4-layer-shell
 Requires:       fontawesome-fonts-all yaru-icon-theme tinkero-nerd-fonts
 Requires:       polkit gnome-keyring pipewire wireplumber pipewire-pulseaudio pamixer brightnessctl
-Requires:       ppd-service bluez NetworkManager udiskie socat inotify-tools jq gum git-core fcitx5
+Requires:       ppd-service bluez bluez-tools NetworkManager udiskie socat inotify-tools jq gum git-core fcitx5 diffutils
 Requires:       foot xdg-terminal-exec tmux herdr mise
 Requires:       grim slurp wl-clipboard wtype tensaku hyprland-preview-share-picker ttfx
 
@@ -42,6 +42,12 @@ Built on Omarchy, https://github.com/omacom/omarchy, MIT licensed.
 %install
 TINKERO_ROOT=$PWD TINKERO_LOCK=$PWD/upstream.lock build/assemble %{SOURCE0} %{buildroot}
 
+# tinkero-pam-sync writes the lock-screen PAM file for the host it is installed on (design
+# spec 4.8, plan 2F); nothing is created in the build root, so this runs on every install and
+# upgrade. The message names the failure mode: the lock refuses to lock, not a lockout.
+%posttrans
+/usr/bin/tinkero-pam-sync || echo "tinkero: tinkero-pam-sync failed; the lock screen will refuse to lock until 'sudo tinkero-pam-sync' succeeds" >&2
+
 %files
 %license %{_datadir}/licenses/tinkero/LICENSE.omarchy
 %{_bindir}/omarchy*
@@ -49,6 +55,7 @@ TINKERO_ROOT=$PWD TINKERO_LOCK=$PWD/upstream.lock build/assemble %{SOURCE0} %{bu
 %{_datadir}/omarchy
 %{_datadir}/tinkero
 %{_datadir}/uwsm/env.d/10-omarchy
+%{_datadir}/uwsm/env.d/20-tinkero
 %{_datadir}/wayland-sessions/tinkero.desktop
 %{_datadir}/fonts/omarchy
 %{_datadir}/fontconfig/conf.avail/50-omarchy.conf
@@ -57,6 +64,8 @@ TINKERO_ROOT=$PWD TINKERO_LOCK=$PWD/upstream.lock build/assemble %{SOURCE0} %{bu
 %config %{_sysconfdir}/dconf/profile/tinkero
 %{_datadir}/icons/hicolor/512x512/apps/disk-usage.png
 %{_datadir}/icons/hicolor/512x512/apps/imv.png
+%ghost %attr(0644,root,root) %{_sysconfdir}/pam.d/omarchy-lock-password
+%ghost %attr(0644,root,root) %{_sysconfdir}/pam.d/omarchy-lock-fingerprint
 
 %changelog
 * @DATE@ Tinkero <noreply@tinkero.invalid> - @VERSION@-@RELEASE@

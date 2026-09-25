@@ -19,6 +19,7 @@ dropbox-cli	none	-
 firefox	dnf	firefox
 foot	dnf	foot
 fprintd	dnf	fprintd
+fprintd-pam	dnf	fprintd-pam
 fwupd	dnf	fwupd
 ghostty	none	-
 google-chrome	flatpak	com.google.Chrome

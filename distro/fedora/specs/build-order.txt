@@ -29,3 +29,5 @@ hyprland-guiutils
 hyprpicker
 hyprsunset
 xdg-desktop-portal-hyprland
+# the desktop package itself, spec rendered from tinkero.spec.in at the repo root by .copr/Makefile
+tinkero

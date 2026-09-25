@@ -8,3 +8,4 @@
 0008-omarchy-launch-about-fastfetch-config.patch
 0009-sshd-firewalld.patch
 0010-menu-package-guards-rpm.patch
+0011-omarchy-apply-lock-fingerprint-only.patch

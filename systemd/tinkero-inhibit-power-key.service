@@ -1,0 +1,13 @@
+[Unit]
+Description=Tinkero: the power key opens the shell's power menu instead of powering off
+# logind's default polkit policy grants handle-power-key to the active session without a
+# prompt (Phase 0, Q7); upstream binds XF86PowerOff to the power menu. Spec 4.2.
+After=graphical-session.target
+PartOf=graphical-session.target
+ConditionEnvironment=WAYLAND_DISPLAY
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/systemd-inhibit --what=handle-power-key --who=Tinkero --why="The power key opens the power menu" --mode=block /usr/bin/sleep infinity
+Restart=on-failure
+RestartSec=5

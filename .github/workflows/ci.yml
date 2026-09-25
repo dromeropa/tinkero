@@ -13,12 +13,12 @@ defaults:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     # Floats on purpose: CI should notice when Fedora's ShellCheck, rpmlint or rpm change.
     container: fedora:44
     steps:
       - name: Tools
-        run: dnf -y install git-core curl diffutils findutils ShellCheck rpmlint rpm-build rpmdevtools make nodejs python3 python3-fonttools ImageMagick
+        run: dnf -y install git-core curl diffutils findutils ShellCheck rpmlint rpm-build rpmdevtools make nodejs python3 python3-fonttools ImageMagick cpio
       - uses: actions/checkout@v4
       - name: Trust the workspace
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
@@ -26,11 +26,11 @@ jobs:
         run: >
           shellcheck -x -e SC1090,SC1091
           dev build/assemble build/fetch-upstream build/render-spec build/lib.sh
-          ci/gate-arch-leak ci/gate-dropped-refs ci/gate-single-copy ci/gate-name-map ci/gate-branding ci/lib-gate.sh
+          ci/gate-arch-leak ci/gate-dropped-refs ci/gate-single-copy ci/gate-name-map ci/gate-branding ci/gate-session-units ci/check-rpm ci/lib-gate.sh
           branding/render-wallpapers branding/inventory-images branding/contact-sheet
           tests/run tests/lib.sh tests/test-*.sh tests/fixtures/make-tree.sh install.sh tests/fixtures/make-payload.sh
           distro/fedora/replacements/* distro/fedora/lib/pkg.sh
-          distro/fedora/specs/srpm.sh build/tinkero-copr bin/tinkero-*
+          distro/fedora/specs/srpm.sh build/tinkero-copr bin/tinkero-* distro/fedora/bin/*
       - name: Unit tests
         run: ./dev check
       - name: Gates on the real upstream tree
@@ -59,3 +59,8 @@ jobs:
           mkdir -p "$PWD/.cache/srpm"
           make -f .copr/Makefile srpm outdir="$PWD/.cache/srpm"
           ls -l .cache/srpm/*.src.rpm
+      - name: The binary RPM builds from that SRPM and carries what plan 2F promises
+        run: |
+          rpmbuild --rebuild --define "_topdir $PWD/.cache/rpmbuild" .cache/srpm/*.src.rpm
+          ci/check-rpm .cache/rpmbuild/RPMS/noarch/tinkero-*.noarch.rpm .cache/rpm-payload
+          ./dev gates-at .cache/rpm-payload

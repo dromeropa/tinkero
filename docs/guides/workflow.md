@@ -10,10 +10,10 @@ contract for people and for agent sessions alike. The design is in
 - Baseline: plans 2A and 2B and Phase 1 (the 25-package COPR set) landed on `master` at
   `fd68ce4` on 2026-09-23, as one fast-forward from the branch they grew on. That branch
   predates the loop; nothing is retro-fitted onto it.
-- Done since: 2C (menu rewrite, 2026-09-23), 2E (provisioning and install, 2026-09-23) and 2D
-  (branding, 2026-09-24).
-- Then 2F (session integration, which makes the `tinkero` RPM installable), Phase 3
-  (maintenance), each planned when the one before it has landed.
+- Done since: 2C (menu rewrite, 2026-09-23), 2E (provisioning and install, 2026-09-23), 2D
+  (branding, 2026-09-24) and 2F (session integration, 2026-09-24; its first COPR build and VM
+  check are post-merge issues).
+- Then Phase 3 (maintenance), planned when 2F's post-merge issues are closed.
 
 ## The loop
 
@@ -34,7 +34,7 @@ contract for people and for agent sessions alike. The design is in
 
 ## Four adaptations for this repository
 
-- **COPR builds are post-merge.** The 25 packages are registered against `master`, and a
+- **COPR builds are post-merge.** The 26 packages are registered against `master`, and a
   COPR build publishes to the user-facing repository, so it cannot be a PR check. An issue
   whose deliverable is "package X builds in COPR" (a spec bump, the first `tinkero` RPM)
   has two-stage verification: CI proves the spec parses, lints and produces an SRPM; the

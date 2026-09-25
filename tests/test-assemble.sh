@@ -2,10 +2,16 @@
 source "$(dirname "$0")/lib.sh"
 d=$(mktmp); tb=$("$ROOT/tests/fixtures/make-tree.sh" "$d/src")
 # a private repo root so the test controls drop.list, patches and replacements
-r=$d/root; mkdir -p "$r"/{build,patches,distro/fedora/{replacements,lib,skills,dconf/profile},session,bin,config/hypr,provision,config-notes}
+r=$d/root; mkdir -p "$r"/{build,patches,distro/fedora/{replacements,lib,skills,dconf/profile},session/uwsm-env.d,bin,config/hypr,provision,config-notes}
+mkdir -p "$r"/systemd/{omarchy-fcitx5.service.d,bt-agent.service.d,omarchy-speaker-tuning.service.d}
 printf '# lib\n' > "$r/distro/fedora/lib/pkg.sh"; printf 'foot\tdnf\tfoot\n' > "$r/distro/fedora/pkgmap.tsv"
 cp "$ROOT/session/tinkero.desktop" "$r/session/"
 echo '# fixture host guide' > "$r/distro/fedora/skills/host.md"
+printf '[Unit]\nDescription=fixture inhibitor\n\n[Service]\nExecStart=/usr/bin/true\n' > "$r/systemd/tinkero-inhibit-power-key.service"
+printf '[Unit]\nConditionPathExists=/usr/bin/fcitx5\n' > "$r/systemd/omarchy-fcitx5.service.d/tinkero.conf"
+printf '[Unit]\nPartOf=graphical-session.target\n' > "$r/systemd/bt-agent.service.d/tinkero.conf"
+printf '[Unit]\nPartOf=graphical-session.target\n' > "$r/systemd/omarchy-speaker-tuning.service.d/tinkero.conf"
+printf 'export DCONF_PROFILE=tinkero\n' > "$r/session/uwsm-env.d/20-tinkero"
 echo '-- fixture bindings' > "$r/config/hypr/bindings.lua"
 printf 'chromium/\n' > "$r/provision/skip.list"
 printf 'omarchy-keep.service\n' > "$r/provision/session-units.list"
@@ -59,6 +65,50 @@ assert_file "$d/dest/usr/share/tinkero/config-notes/v0.md" "config notes shipped
 assert_file "$d/dest/etc/dconf/profile/tinkero" "dconf profile shipped"
 assert_file "$d/dest/usr/share/icons/hicolor/512x512/apps/disk-usage.png" "launcher icon shipped under its Icon= name"
 assert_file "$d/dest/usr/share/icons/hicolor/512x512/apps/imv.png" "imv icon shipped"
+
+# Session units (plan 2F): [Install] stripped in the tree, Tinkero's own units join it
+assert_contains "$out" "stripped [Install] from 1 unit(s)" "assemble logs how many units were stripped"
+for copy in "$d/dest/usr/lib/systemd/user" "$o/default/systemd/user"; do
+  if grep -rq '^\[Install\]' "$copy"; then not_ok "no [Install] survives in $copy"; else ok "no [Install] survives in $copy"; fi
+done
+assert_eq "$(sed -n '/^\[Service\]/,$p' "$d/dest/usr/lib/systemd/user/omarchy-keep.service")" "$(printf '[Service]\nExecStart=/usr/bin/omarchy-keep-me')" \
+  "a section after [Install] survives intact"
+assert_file "$d/dest/usr/lib/systemd/user/omarchy-no-install.service" "a unit with no [Install] section is untouched"
+assert_file "$d/dest/usr/lib/systemd/user/tinkero-inhibit-power-key.service" "Tinkero's inhibitor unit lands beside the tree's units"
+assert_file "$d/dest/usr/lib/systemd/user/omarchy-fcitx5.service.d/tinkero.conf" "Tinkero's fcitx5 drop-in lands"
+assert_file "$d/dest/usr/lib/systemd/user/bt-agent.service.d/tinkero.conf" "Tinkero's bt-agent drop-in lands"
+assert_file "$d/dest/usr/lib/systemd/user/omarchy-speaker-tuning.service.d/tinkero.conf" "Tinkero's speaker-tuning drop-in lands"
+assert_eq "$(cat "$d/dest/usr/share/uwsm/env.d/20-tinkero")" "export DCONF_PROFILE=tinkero" "the DCONF_PROFILE env file lands"
+
+# a fixture root without systemd/ still assembles (other tests' private roots have none)
+r2=$d/root-nosystemd; cp -a "$r" "$r2"; rm -rf "$r2/systemd"
+TINKERO_ROOT=$r2 "$ROOT/build/assemble" "$tb" "$d/dest-nosystemd" >/dev/null
+assert_no_path "$d/dest-nosystemd/usr/lib/systemd/user/tinkero-inhibit-power-key.service" "no Tinkero units without a systemd/ dir in the root"
+assert_file "$d/dest-nosystemd/usr/lib/systemd/user/omarchy-keep.service" "the tree's own units still land"
+
+# a unit whose [Install] header the strip cannot recognise (leading whitespace) fails the build
+mkdir -p "$d/y"
+tar -xzf "$tb" -C "$d/y"
+printf '[Unit]\nDescription=broken\n\n  [Install]\nWantedBy=graphical-session.target\n' \
+  > "$d/y/omarchy-fixture/default/systemd/user/omarchy-broken-install.service"
+tar -C "$d/y" -czf "$d/broken-install.tar.gz" omarchy-fixture
+out=$(TINKERO_ROOT=$r "$ROOT/build/assemble" "$d/broken-install.tar.gz" "$d/dest-broken" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 1 "a header the strip cannot recognise fails the build"
+assert_contains "$out" "still have [Install] after stripping" "and names the failure"
+
+# PAM variants and the host-only bin/ (plan 2F). The fixture root above has neither
+# distro/fedora/pam nor distro/fedora/bin, and the run at "$d/dest" above still assembled: both
+# steps are guarded. Add them now and assemble again to prove the positive path too.
+mkdir -p "$r/distro/fedora/pam" "$r/distro/fedora/bin"
+printf 'password fixture wrapped\n' > "$r/distro/fedora/pam/omarchy-lock-password.wrapped"
+printf 'password fixture plain\n' > "$r/distro/fedora/pam/omarchy-lock-password.plain"
+printf '#!/bin/bash\necho pam-sync fixture\n' > "$r/distro/fedora/bin/tinkero-pam-sync"
+run "$d/dest-pam" >/dev/null
+assert_eq "$(cat "$d/dest-pam/usr/share/tinkero/pam/omarchy-lock-password.wrapped")" "password fixture wrapped" "PAM wrapped variant shipped under usr/share/tinkero/pam"
+assert_eq "$(cat "$d/dest-pam/usr/share/tinkero/pam/omarchy-lock-password.plain")" "password fixture plain" "PAM plain variant shipped"
+assert_eq "$(stat -c %a "$d/dest-pam/usr/share/tinkero/pam/omarchy-lock-password.wrapped")" "644" "PAM variant installed mode 0644"
+assert_eq "$(tail -n1 "$d/dest-pam/usr/bin/tinkero-pam-sync")" "echo pam-sync fixture" "distro/fedora/bin/tinkero-* installed to usr/bin, like bin/tinkero-*"
+assert_eq "$(stat -c %a "$d/dest-pam/usr/bin/tinkero-pam-sync")" "755" "distro/fedora/bin/tinkero-pam-sync installed mode 0755"
 
 # 3b. Menu: the default menu is rewritten in place, in the tree, before relocation
 menu=$d/dest/usr/share/omarchy/default/omarchy/omarchy-menu.jsonc

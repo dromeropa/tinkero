@@ -1911,7 +1911,7 @@ In `docs/research/arch-coupling-audit.md`, section 4.3: in the `omarchy-remove-s
 Roadmap, the 2F row's Status cell becomes `**done** 2026-09-XX: \`2026-09-24-phase-2f-session-integration.md\`; design \`specs/2026-09-24-phase-2f-session-design.md\`; the first COPR build and the VM check are its post-merge issues`. Add before "## What executing 2E added to the queue":
 
 ```
-## What executing 2F added to the queue (2026-09-XX)
+## What executing 2F added to the queue (2026-09-24)
 
 - **Post-merge (this plan's own issues):** the first COPR build of `tinkero` (Task 8: build, log facts, `ci/check-rpm` on the COPR's RPM, the `nwg-panel` depsolve), then the VM check (`docs/guides/phase-2f-vm-check.md`, Task 9).
 - **Phase 3, `tinkero-status`:** `tinkero-pam-sync --check` is the PAM drift report (exit 0 or 1, one line; both PAM files are `%ghost` with no `%config`, so `rpm -V` does not see them, design D9); the release workflow archives `tinkero` with the set (it is the last line of `build-order.txt`).
@@ -2178,6 +2178,12 @@ A failure of the GNOME invariant (guide section 4) opens an issue for design D4'
 ## Deviations
 
 Filled by the PR that implements Tasks 1 to 7 (and by Task 8's and 9's issues for theirs), per task, when anything deviated from this plan.
+
+- Tasks 2, 4 and 5: `./dev gates` (and `./dev gates-at`) print seven `PASS` lines, not six: `ci/gate-branding` already printed two (Omarchy string literals, branding) before 2F, so session-units is the sixth gate call and the seventh line, printed last.
+- Task 1: `tests/test-branding-render.sh` builds its own fixture root for assemble's step 3d, so it also gains `session/uwsm-env.d/20-tinkero` (the plan listed only `tests/fixtures/make-tree.sh`); caught by CI, where that test does not skip.
+- Task 4: `omarchy-setup-security-fingerprint` calls bare `fprintd-enroll`, as design section 5.2 step 3 says, instead of the plan's `fprintd-enroll "$USER"`: `$USER` is unset under `set -u` in CI's root container, which aborted the script after `omarchy-pkg-add`.
+- Task 5: `ci/check-rpm` sits after `ci/gate-session-units` in the ShellCheck list (Task 2 had already put that gate after `ci/gate-branding`).
+- Final review: `ci/check-rpm` matches the path on the last field of `rpm -qp --qf`'s line rather than the fourth, so a file with no flags reports the flags failure instead of "not in the package"; master spec 4.6 says the listed units are session-bound or a plain oneshot.
 
 ## What this plan deliberately leaves out
 

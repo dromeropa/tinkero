@@ -3,8 +3,8 @@
 source "$(dirname "$0")/lib.sh"
 D=$ROOT/distro/fedora/specs
 mapfile -t order < <(grep -vE '^\s*(#|$)' "$D/build-order.txt")
-assert_eq "${#order[@]}" 25 "build-order.txt lists 25 packages"
-specs=("$D"/*.spec); assert_eq "${#specs[@]}" 25 "there are 25 spec files"
+assert_eq "${#order[@]}" 26 "build-order.txt lists 26 packages (25 in distro/fedora/specs, tinkero at root)"
+specs=("$D"/*.spec); assert_eq "${#specs[@]}" 25 "there are 25 spec files in distro/fedora/specs (tinkero.spec.in is at the root)"
 for s in "${specs[@]}"; do
   n=$(basename "$s" .spec)
   name=$(grep -m1 -E '^Name:' "$s" | awk '{print $2}')
@@ -24,6 +24,13 @@ for s in "${specs[@]}"; do
   [[ -z $hits ]] || not_ok "$n: forbidden dependency line" "$hits"
 done
 ok "per-spec checks ran"
+# tinkero (the desktop package) is built from tinkero.spec.in at the root, not from distro/fedora/specs
+if printf '%s\n' "${order[@]}" | grep -qx tinkero; then
+  ok "tinkero is in build-order.txt"
+else
+  not_ok "tinkero is in build-order.txt" "not found"
+fi
+assert_file "$ROOT/tinkero.spec.in" "tinkero.spec.in present at the root"
 assert_file "$D/srpm.sh" "srpm.sh present"; assert_file "$D/macros.hyprland" "hyprland macros present"
 assert_file "$D/herdr-libvt-only.patch" "herdr patch present"
 if grep -q "omedora-self" "$D/srpm.sh"; then not_ok "srpm.sh still has the self-source mode"; else ok "srpm.sh has no self-source mode"; fi

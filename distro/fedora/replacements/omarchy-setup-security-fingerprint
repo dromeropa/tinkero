@@ -1,0 +1,45 @@
+#!/bin/bash
+
+# omarchy:summary=Set up fingerprint authentication for the lock screen
+# omarchy:requires-sudo=true
+
+# Tinkero: sudo, polkit and the clamshell gate stay authselect's (design D12); this only
+# enrolls a print and turns the host's own with-fingerprint feature on, which is what
+# omarchy-apply-lock reads to decide whether the lock screen offers a finger too.
+set -euo pipefail
+# shellcheck source=distro/fedora/lib/pkg.sh
+source "${TINKERO_PKG_LIB:-/usr/share/tinkero/pkg.sh}"
+
+echo -e "\033[32mSetting up fingerprint scanner for authentication.\n\033[0m"
+
+# Bail before installing anything if there's no reader to talk to.
+if ! omarchy-hw-fingerprint; then
+  echo -e "\033[31mNo fingerprint sensor detected.\033[0m"
+  exit 1
+fi
+
+omarchy-pkg-add fprintd fprintd-pam
+
+# Fedora's fprintd polkit policy lets the active session enroll its own finger, so no
+# sudo (unlike upstream's Arch stack, which runs this as root).
+echo -e "\033[32m\nLet's set up your right index finger as the first fingerprint.\033[0m"
+echo -e "Keep moving the finger around on the sensor until the process completes.\n"
+
+if fprintd-enroll; then
+  echo -e "\033[32m\nFingerprint enrolled successfully!\033[0m"
+
+  echo -e "\nNow let's verify that it's working correctly.\n"
+  if fprintd-verify; then
+    # A no-op when the feature is already on, which it is by default on Fedora 44
+    # Workstation. omarchy-apply-lock then offers the lock screen a finger too.
+    elevate authselect enable-feature with-fingerprint
+    elevate omarchy-apply-lock
+    echo -e "\033[32m\nPerfect! Fingerprint authentication is now configured.\033[0m"
+    echo "You can use your fingerprint for the lock screen (Super + Ctrl + L)."
+  else
+    echo -e "\033[31m\nVerification failed. You may want to try enrolling again.\033[0m"
+  fi
+else
+  echo -e "\033[31m\nEnrollment failed. Please try again.\033[0m"
+  exit 1
+fi

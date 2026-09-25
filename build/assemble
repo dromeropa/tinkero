@@ -17,6 +17,12 @@
 #   config/**, provision/*.list, config-notes/*.md, distro/fedora/dconf/profile/tinkero
 #                                        provisioning data under /usr/share/tinkero and /etc/dconf
 #   applications/icons/{Disk Usage,imv}.png   the icons the seeded launchers name, under hicolor
+#   systemd/**                          Tinkero's own session units and drop-ins (step 3e strips
+#                                        [Install] from the tree's units first), into
+#                                        /usr/lib/systemd/user alongside the tree's units
+#   session/uwsm-env.d/20-tinkero       the DCONF_PROFILE export, into /usr/share/uwsm/env.d
+#   distro/fedora/pam/*                  the PAM variants tinkero-pam-sync writes from (plan 2F)
+#   distro/fedora/bin/tinkero-*          host-only commands, installed like bin/tinkero-* (plan 2F)
 set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 root=${TINKERO_ROOT:-$(dirname "$here")}
@@ -108,6 +114,37 @@ if [[ -f $root/branding/strings.tsv ]]; then
   "$root/branding/render-wallpapers" "$tree" "$root/branding/images.tsv" "$root/branding/wordmark.svg" || die "wallpaper rendering failed"
 fi
 
+# 3e. Strip [Install] from every session unit, in the tree (not just the copy): a unit that
+# omarchy-audio-tuning installs from here into ~/.config/systemd/user keeps whatever section is
+# still here, and `systemctl --user enable` on a unit with an [Install] section registers it, so
+# a later GNOME login that reuses the still-running user manager would start it (design D1, D2).
+units=$tree/default/systemd/user
+[[ -d $units ]] || die "upstream has no default/systemd/user; decide where session units go"
+n=0
+while IFS= read -r -d '' f; do
+  # A section header is a whole line (trailing whitespace ignored) of the form [Name]; the
+  # Install section runs from its header to the next section header or EOF. Trimming only for the
+  # comparison keeps every other line's exact bytes.
+  awk '
+    { line = $0; sub(/[ \t\r]+$/, "", line) }
+    line ~ /^\[.*\]$/ { in_install = (line == "[Install]") }
+    !in_install
+  ' "$f" > "$f.tinkero"
+  # N counts units actually changed by the strip, not every file the find below matches: a unit
+  # that already ships with no [Install] section (none does at v4.0.4, but the fixture tree
+  # carries one to prove this) does not add to it.
+  cmp -s "$f" "$f.tinkero" || n=$((n + 1))
+  mv "$f.tinkero" "$f"
+done < <(find "$units" -type f \( -name '*.service' -o -name '*.socket' -o -name '*.timer' -o -name '*.path' -o -name '*.target' \) -print0)
+echo "stripped [Install] from $n unit(s)"
+# Unanchored on purpose: a header the strip failed to recognise (leading whitespace, say) still
+# contains the literal text and must fail the build rather than ship unnoticed. Anchoring this
+# check the same way the stripper recognises headers would make the safety net blind to exactly
+# the failure mode it exists for; the broken-header fixture case above (Step 2) is what this
+# check is for.
+remaining=$(grep -rl '\[Install\]' "$units" 2>/dev/null | sed "s|^$units/||" || true)
+[[ -z $remaining ]] || die "unit(s) still have [Install] after stripping: $remaining"
+
 # 4. Relocate the two etc/ files Tinkero keeps, then drop the rest of etc/.
 install -Dm 0644 "$tree/etc/fastfetch/config.jsonc" "$dest/usr/share/tinkero/fastfetch/config.jsonc"
 install -Dm 0644 "$tree/etc/mise/conf.d/omarchy.toml" "$dest/etc/mise/conf.d/omarchy.toml"
@@ -115,16 +152,28 @@ rm -rf "${tree:?}/etc"
 
 # 5. System files that live outside the tree.
 install -Dm 0644 "$tree/default/uwsm/env.d/10-omarchy" "$dest/usr/share/uwsm/env.d/10-omarchy"
+install -Dm 0644 "$root/session/uwsm-env.d/20-tinkero" "$dest/usr/share/uwsm/env.d/20-tinkero"
 install -Dm 0644 "$root/session/tinkero.desktop" "$dest/usr/share/wayland-sessions/tinkero.desktop"
 install -Dm 0644 "$tree/default/fonts/omarchy/omarchy.ttf" "$dest/usr/share/fonts/omarchy/omarchy.ttf"
 install -Dm 0644 "$tree/default/fontconfig/conf.avail/50-omarchy.conf" "$dest/usr/share/fontconfig/conf.avail/50-omarchy.conf"
 mkdir -p "$dest/usr/lib/systemd/user"
 cp -a "$tree/default/systemd/user/." "$dest/usr/lib/systemd/user/"
+# Tinkero's own session units and drop-ins (design section 2.3), joining the tree's units in the
+# same directory so systemd reads a drop-in for either one the same way; after the copy above,
+# so a name collision would overwrite the tree's file rather than the other way round.
+[[ -d $root/systemd ]] && cp -a "$root/systemd/." "$dest/usr/lib/systemd/user/"
 install -Dm 0644 "$tree/LICENSE" "$dest/usr/share/licenses/tinkero/LICENSE.omarchy"
 install -Dm 0644 "${TINKERO_LOCK:-$root/upstream.lock}" "$dest/usr/share/tinkero/upstream.lock"
 # The package wrappers' library and name map (distro/fedora, plan 2B).
 install -Dm 0644 "$root/distro/fedora/lib/pkg.sh" "$dest/usr/share/tinkero/pkg.sh"
 install -Dm 0644 "$root/distro/fedora/pkgmap.tsv" "$dest/usr/share/tinkero/pkgmap.tsv"
+
+# The PAM variants tinkero-pam-sync writes from (design spec 4.8, plan 2F).
+if [[ -d $root/distro/fedora/pam ]]; then
+  for f in "$root"/distro/fedora/pam/*; do
+    [[ -f $f ]] && install -Dm 0644 "$f" "$dest/usr/share/tinkero/pam/$(basename "$f")"
+  done
+fi
 
 # Provisioning data (plan 2E): Tinkero's seeded config overrides, the skip list and the session
 # unit list, the per-bump config notes (none until the first bump) and the session's dconf profile.
@@ -156,4 +205,10 @@ done
 for f in "$root"/bin/tinkero-*; do
   [[ -f $f ]] && install -m 0755 "$f" "$dest/usr/bin/$(basename "$f")"
 done
+# Host-only commands that need root, not user provisioning (distro/fedora, plan 2F).
+if [[ -d $root/distro/fedora/bin ]]; then
+  for f in "$root"/distro/fedora/bin/tinkero-*; do
+    [[ -f $f ]] && install -m 0755 "$f" "$dest/usr/bin/$(basename "$f")"
+  done
+fi
 echo "assembled $(find "$dest/usr/bin" -mindepth 1 -maxdepth 1 | wc -l) commands into $dest"

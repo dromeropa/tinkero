@@ -20,6 +20,11 @@ echo "tinkero-provision $*" >> "$LOG"
 [[ $1 == --plan ]] && printf 'seed\t.config/hypr/hyprland.lua\n'
 exit 0
 S
+cat > "$d/bin/tinkero-pam-sync" <<'S'
+#!/bin/bash
+echo "tinkero-pam-sync $*" >> "$LOG"
+exit 0
+S
 printf '#!/bin/bash\necho Enforcing\n' > "$d/bin/getenforce"
 # shellcheck disable=SC2016  # the stub reads ARCH at run time
 printf '#!/bin/bash\necho "${ARCH:-x86_64}"\n' > "$d/bin/uname"
@@ -40,10 +45,11 @@ assert_eq "$(sed -n 's/^TINKERO_FEDORA=\([0-9]*\)$/\1/p' "$I")" "$(sed -n 's/^fe
 # the happy path
 run --yes
 assert_eq "$rc" 0 "install: exit 0"
-assert_eq "$(paste -sd'|' "$LOG")" "dnf repoquery --installed --queryformat %{name} %{from_repo}\n hyprland quickshell omedora omedora-settings|sudo dnf copr enable -y dromero/tinkero|dnf copr enable -y dromero/tinkero|sudo dnf install -y tinkero|dnf install -y tinkero|tinkero-provision --plan|tinkero-provision --yes" "install: preflight query, copr enable, install, plan, provision, in that order"
+assert_eq "$(paste -sd'|' "$LOG")" "dnf repoquery --installed --queryformat %{name} %{from_repo}\n hyprland quickshell omedora omedora-settings|sudo dnf copr enable -y dromero/tinkero|dnf copr enable -y dromero/tinkero|sudo dnf install -y tinkero|dnf install -y tinkero|sudo tinkero-pam-sync|tinkero-pam-sync |tinkero-provision --plan|tinkero-provision --yes" "install: preflight query, copr enable, install, pam-sync, plan, provision, in that order"
 assert_contains "$out" "SELinux is Enforcing" "install: reports SELinux"
 assert_contains "$out" "Log out and choose Tinkero" "install: says what comes next"
 assert_contains "$out" $'seed\t.config/hypr/hyprland.lua' "install: shows the provisioning plan"
+assert_contains "$out" "tinkero-pam-sync" "install: the printed plan names tinkero-pam-sync"
 run --yes; assert_eq "$rc" 0 "install: re-running is fine (both stages are no-ops on a current machine)"
 
 # the gates

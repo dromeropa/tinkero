@@ -1,0 +1,45 @@
+#!/bin/bash
+# check-rpm RPM DIR: what plan 2F promises about the built package (design 2F, D14). CI runs it
+# on the binary RPM it rebuilds from the SRPM, then runs the gates on DIR (./dev gates-at DIR).
+# Unpacks the payload into DIR (which must be empty or absent) and checks:
+#   1. the two PAM files are %ghost entries with their flags, mode 0644, root:root, and are not
+#      in the payload;
+#   2. %posttrans runs tinkero-pam-sync;
+#   3. the payload has tinkero-pam-sync, both PAM variants and uwsm's 20-tinkero env file.
+# Needs rpm, rpm2cpio and cpio.
+set -euo pipefail
+[[ $# -eq 2 && -f $1 ]] || { echo "usage: check-rpm RPM DIR" >&2; exit 2; }
+rpm=$1; dir=$2
+[[ ! -e $dir || -z $(ls -A "$dir" 2>/dev/null) ]] || { echo "check-rpm: DIR must be empty: $dir" >&2; exit 2; }
+rc=0
+fail() { echo "FAIL: $*"; rc=1; }
+
+# 1. File flags: fflags prints c (config), m (missingok), n (noreplace), g (ghost), in that order.
+files=$(rpm -qp --qf '[%{FILEFLAGS:fflags} %{FILEMODES:perms} %{FILEUSERNAME}:%{FILEGROUPNAME} %{FILENAMES}\n]' "$rpm")
+want() {   # PATH FLAGS
+  local line
+  line=$(awk -v p="$1" '$NF == p' <<<"$files")
+  if [[ -z $line ]]; then fail "$1 is not in the package"; return; fi
+  [[ $line == "$2 -rw-r--r-- root:root $1" ]] || fail "$1: want '$2 -rw-r--r-- root:root', got '${line% "$1"}'"
+}
+want /etc/pam.d/omarchy-lock-password g
+want /etc/pam.d/omarchy-lock-fingerprint g
+
+# 2. The scriptlet.
+posttrans=$(rpm -qp --qf '%{POSTTRANS}\n' "$rpm")
+grep -q '^/usr/bin/tinkero-pam-sync' <<<"$posttrans" || fail "%posttrans does not run /usr/bin/tinkero-pam-sync: $posttrans"
+
+# 3. The payload.
+mkdir -p "$dir"
+rpm2cpio "$rpm" | ( cd "$dir" && cpio -idm --quiet )
+for p in usr/bin/tinkero-pam-sync usr/share/tinkero/pam/omarchy-lock-password.wrapped \
+         usr/share/tinkero/pam/omarchy-lock-password.plain usr/share/uwsm/env.d/20-tinkero; do
+  [[ -f $dir/$p ]] || fail "payload lacks /$p"
+done
+[[ -x $dir/usr/bin/tinkero-pam-sync ]] || fail "/usr/bin/tinkero-pam-sync is not executable"
+for p in etc/pam.d/omarchy-lock-password etc/pam.d/omarchy-lock-fingerprint; do
+  [[ ! -e $dir/$p ]] || fail "%ghost file /$p has content in the payload"
+done
+
+if ((rc == 0)); then echo "PASS: rpm $(basename "$rpm") (ghost PAM files, %posttrans, payload files)"; fi
+exit $rc

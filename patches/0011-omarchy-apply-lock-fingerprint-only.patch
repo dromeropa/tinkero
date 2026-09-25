@@ -1,0 +1,44 @@
+Port omarchy-apply-lock to write only the fingerprint PAM file.
+
+The password file is tinkero-pam-sync's (spec 4.8): it is built for a Fedora
+password-auth stack, not written here, so the block that shelled out to
+Arch's pam_unix/pam_systemd_home stack is deleted outright. The fingerprint
+file is still this script's job, gated on the host's own login offering a
+finger too (system-auth naming pam_fprintd.so), so removing fingerprint with
+`authselect disable-feature with-fingerprint` also takes it off the lock; its
+account line includes password-auth, which exists on Fedora, instead of
+system-local-login, which does not.
+
+--- a/bin/omarchy-apply-lock
++++ b/bin/omarchy-apply-lock
+@@ -26,27 +26,14 @@
+   fi
+ }
+
+-echo "Configuring lock screen password authentication..."
+-
+-as_root tee /etc/pam.d/omarchy-lock-password >/dev/null <<'EOF'
+-#%PAM-1.0
+-auth       required                    pam_faillock.so preauth silent deny=10 unlock_time=120
+--auth      [success=2 default=ignore]  pam_systemd_home.so
+-auth       [success=1 default=bad]     pam_unix.so try_first_pass nullok
+-auth       [default=die]               pam_faillock.so authfail deny=10 unlock_time=120
+-auth       optional                    pam_permit.so
+-auth       required                    pam_env.so
+-auth       required                    pam_faillock.so authsucc
+-account    include                     system-local-login
+-EOF
+-
+ if [[ -x /usr/bin/fprintd-list ]] &&
+-  /usr/bin/fprintd-list "$target_user" 2>/dev/null | grep -qi finger; then
++  /usr/bin/fprintd-list "$target_user" 2>/dev/null | grep -qi finger &&
++  grep -qE '^[[:space:]]*-?auth[[:space:]].*pam_fprintd\.so' /etc/pam.d/system-auth 2>/dev/null; then
+   echo "Configuring lock screen fingerprint authentication..."
+   as_root tee /etc/pam.d/omarchy-lock-fingerprint >/dev/null <<'EOF'
+ #%PAM-1.0
+ auth       required                    pam_fprintd.so
+-account    include                     system-local-login
++account    include                     password-auth
+ EOF
+ else
+   as_root rm -f /etc/pam.d/omarchy-lock-fingerprint

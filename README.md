@@ -22,7 +22,7 @@ Until the first release is tagged, the URL above installs from `master`. Release
 
 ## Remove
 
-`tinkero-provision --remove`, then `sudo dnf remove tinkero` and `sudo dnf copr remove dromero/tinkero`. Files you changed are listed and kept. Your GNOME session was never touched; logging into it is always a way back, and after a crash Hyprland starts in Safe Mode (`Super+M` leaves it).
+`tinkero-provision --remove`, then `sudo dnf remove tinkero` and `sudo dnf copr remove dromero/tinkero`. Files you changed are listed and kept. Removing the package also removes the lock screen's two PAM files; a fingerprint setup made from the menu stays as the host's authselect setting, and the menu's Remove > Fingerprint entry is how to turn it off. Your GNOME session was never touched; logging into it is always a way back, and after a crash Hyprland starts in Safe Mode (`Super+M` leaves it).
 
 ## Principles
 

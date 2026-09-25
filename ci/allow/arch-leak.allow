@@ -2,7 +2,6 @@
 # Most are work owed by a later plan; a few are permanent (comment-only mentions). See the audit.
 usr/bin/omarchy-default-agent   # comment only, permanent
 usr/bin/omarchy-install-openclaw-cli   # comment only, permanent
-usr/bin/omarchy-setup-security-fingerprint   # plan 2F
 usr/share/omarchy/default/agents/skills/omarchy/hooks.md   # comment only, permanent
 usr/share/omarchy/default/fonts/omarchy/README.md   # comment only, permanent
 usr/share/omarchy/default/hypr/input.lua   # comment only, permanent

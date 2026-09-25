@@ -4,6 +4,7 @@
 #   ./dev lock       first fetch: record omarchy_sha256 in upstream.lock
 #   ./dev payload    fetch (verified) and assemble the real payload into .cache/payload
 #   ./dev gates      assemble, then run the CI gates against the real payload
+#   ./dev gates-at DIR   run the CI gates against an unpacked payload (CI: the binary RPM's)
 #   ./dev baseline   assemble, then rewrite the allowlists from the findings (review the diff!)
 #   ./dev spec       render tinkero.spec from the template and the lock
 #   ./dev clean
@@ -24,6 +25,7 @@ gates() {
   ci/gate-dropped-refs "$payload" build/drop.list "$allow/dropped-refs.allow" || rc=1
   ci/gate-name-map "$payload" distro/fedora/pkgmap.tsv || rc=1
   ci/gate-branding "$payload" branding/images.tsv branding/strings.tsv "$allow/branding.allow" || rc=1
+  ci/gate-session-units "$payload" provision/session-units.list || rc=1
   return $rc
 }
 
@@ -32,8 +34,9 @@ case ${1:-} in
   lock)     build/fetch-upstream --record ;;
   payload)  assemble ;;
   gates)    assemble; gates ;;
+  gates-at) [[ -d ${2:-} ]] || { echo "usage: ./dev gates-at DIR" >&2; exit 2; }; payload=$2; gates ;;
   baseline) assemble; mkdir -p "$allow"; TINKERO_GATE_WRITE=1 gates ;;
   spec)     build/render-spec ;;
   clean)    rm -rf .cache tinkero.spec ;;
-  *)        sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  *)        sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

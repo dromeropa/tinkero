@@ -1,0 +1,111 @@
+#!/bin/bash
+# tinkero-pam-sync: keep /etc/pam.d/omarchy-lock-password in the variant the host's own PAM
+# stack calls for (design spec 4.8; plan 2F design: docs/superpowers/specs/
+# 2026-09-24-phase-2f-session-design.md, section 4). Run after any authselect change;
+# %posttrans and install.sh both call it, so a fresh install and an authselect drift both land
+# on the right variant.
+#
+#   tinkero-pam-sync              write the variant the host calls for; a no-op if already current
+#   tinkero-pam-sync --variant    print the variant the host calls for ("wrapped" or "plain")
+#   tinkero-pam-sync --check      exit 0 when the installed file matches; exit 1 and say why not
+#
+# "wrapped" adds its own pam_faillock.so around password-auth, for a host whose password-auth
+# has none; "plain" just includes password-auth, for a host whose password-auth already counts
+# failures, so the lock does not double-count them (D6: read from password-auth's own content,
+# not from `authselect current`, so this works on every authselect profile and off it too).
+set -euo pipefail
+
+TINKERO_PAM_DIR=${TINKERO_PAM_DIR:-/etc/pam.d}
+TINKERO_SHARE=${TINKERO_SHARE:-/usr/share/tinkero}
+target=$TINKERO_PAM_DIR/omarchy-lock-password
+password_auth=$TINKERO_PAM_DIR/password-auth
+pam_dir=$TINKERO_SHARE/pam
+
+usage() { sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; }
+die() { echo "tinkero-pam-sync: $1" >&2; exit "${2:-2}"; }   # default: bad input
+
+TMP=""
+cleanup() { [[ -z $TMP ]] || rm -f -- "$TMP"; }
+trap cleanup EXIT
+
+# variant_wanted: "plain" when password-auth has an active auth line naming pam_faillock.so
+# (a "-auth" line counts; a commented "#auth" one does not), else "wrapped".
+variant_wanted() {
+  [[ -r $password_auth ]] || die "no $password_auth to read (is authselect installed?)"
+  if grep -Eq '^[[:space:]]*-?auth[[:space:]]+.*pam_faillock\.so' "$password_auth"; then
+    echo plain
+  else
+    echo wrapped
+  fi
+}
+
+# variant_file VARIANT: the packaged source for that variant, or die (a packaging problem).
+variant_file() {
+  local f=$pam_dir/omarchy-lock-password.$1
+  [[ -r $f ]] || die "no variant file $f (package problem; reinstall tinkero)"
+  printf '%s\n' "$f"
+}
+
+do_write() {
+  [[ ${TINKERO_EUID:-$EUID} == 0 ]] || die "must be root to write $target; run: sudo tinkero-pam-sync"
+  local want src
+  want=$(variant_wanted)
+  src=$(variant_file "$want")
+  if [[ -f $target ]] && cmp -s "$src" "$target"; then
+    echo "current: $want"
+    return 0
+  fi
+  # Atomic write (D7): mktemp in the PAM dir itself, so the file inherits the directory's
+  # SELinux context with no restorecon, mode 0644, then mv over the target so a crash never
+  # leaves a half-written PAM file.
+  TMP=$(mktemp "$TINKERO_PAM_DIR/.omarchy-lock-password.XXXXXX") || die "mktemp failed in $TINKERO_PAM_DIR"
+  cp "$src" "$TMP"
+  chmod 0644 "$TMP"
+  mv -f "$TMP" "$target"
+  TMP=""
+  echo "wrote $want"
+}
+
+do_check() {
+  local want got wrapped_src plain_src
+  want=$(variant_wanted)
+  if [[ ! -f $target ]]; then
+    echo missing
+    exit 1
+  fi
+  wrapped_src=$(variant_file wrapped)
+  plain_src=$(variant_file plain)
+  if cmp -s "$wrapped_src" "$target"; then got=wrapped
+  elif cmp -s "$plain_src" "$target"; then got=plain
+  else got=modified
+  fi
+  if [[ $got == "$want" ]]; then
+    echo "current: $want"
+    return 0
+  elif [[ $got == modified ]]; then
+    echo modified
+    exit 1
+  else
+    echo "$got installed, $want needed"
+    exit 1
+  fi
+}
+
+main() {
+  local mode=write
+  while (($#)); do
+    case $1 in
+      --check) mode=check ;;
+      --variant) mode=variant ;;
+      -h|--help) usage; exit 0 ;;
+      *) die "unknown option: $1 (see --help)" ;;
+    esac
+    shift
+  done
+  case $mode in
+    write)   do_write ;;
+    check)   do_check ;;
+    variant) variant_wanted ;;
+  esac
+}
+main "$@"
