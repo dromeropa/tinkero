@@ -101,6 +101,13 @@ for f in omarchy-cmdsub-present omarchy-pipe-tail-present; do
   if [[ $out == *"$f"* ]]; then not_ok "dropped-refs does not misread trailing shell punctuation as part of the target ($f)" "$out"
   else ok "dropped-refs does not misread trailing shell punctuation as part of the target ($f)"; fi
 done
+# Clean up both sourced-file blocks' fixtures now, before the next case asserts a clean PASS
+# against a fresh allowlist: leaving any of these around would still trip the gate and the
+# assertion would be failing on stale fixtures rather than on what it actually tests.
+rm -rf "$p/usr/share/omarchy/install" "$p/usr/share/omarchy/ok" "$p/usr/share/omarchy/x.sh" \
+  "$p/usr/bin/omarchy-sources-present" "$p/usr/bin/omarchy-sources-dropped" "$p/usr/bin/omarchy-sources-variable" \
+  "$p/usr/bin/omarchy-split-quote" "$p/usr/bin/omarchy-single-quote" "$p/usr/bin/omarchy-brace-form" \
+  "$p/usr/bin/omarchy-cmdsub-present" "$p/usr/bin/omarchy-pipe-tail-present"
 
 # dropped-refs edge case: a name that merely starts with the same letters is a different variable
 # shellcheck disable=SC2016
@@ -108,10 +115,7 @@ printf '#!/bin/bash\nOMARCHY_PATHX=/opt/x\nsource "$OMARCHY_PATHX/gone.sh"\n' > 
 : > "$d/allow10"
 "$ROOT/ci/gate-dropped-refs" "$p" "$d/drop-nobin.list" "$d/allow10" >/dev/null 2>&1
 assert_eq "$?" "0" "dropped-refs does not read \$OMARCHY_PATHX as a continuation of \$OMARCHY_PATH"
-rm -rf "$p/usr/share/omarchy/install" "$p/usr/share/omarchy/ok" "$p/usr/share/omarchy/x.sh" \
-  "$p/usr/bin/omarchy-sources-present" "$p/usr/bin/omarchy-sources-dropped" "$p/usr/bin/omarchy-sources-variable" \
-  "$p/usr/bin/omarchy-split-quote" "$p/usr/bin/omarchy-single-quote" "$p/usr/bin/omarchy-brace-form" \
-  "$p/usr/bin/omarchy-cmdsub-present" "$p/usr/bin/omarchy-pipe-tail-present" "$p/usr/bin/omarchy-lookalike-var"
+rm -f "$p/usr/bin/omarchy-lookalike-var"
 
 # single-copy
 "$ROOT/ci/gate-single-copy" "$p" >/dev/null 2>&1; assert_eq "$?" "0" "single-copy passes on a correct layout"
