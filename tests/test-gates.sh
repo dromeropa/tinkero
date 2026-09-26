@@ -61,6 +61,58 @@ out=$("$ROOT/ci/gate-dropped-refs" "$p" "$d/drop-badglob.list" "$d/allow7" 2>&1)
 assert_eq "$rc" "2" "dropped-refs rejects an unsupported glob character"
 assert_contains "$out" "unsupported glob" "and says so"
 
+# dropped-refs edge cases: sourced files
+mkdir -p "$p/usr/share/omarchy/install/helpers"
+printf 'echo present\n' > "$p/usr/share/omarchy/install/helpers/present.sh"
+# shellcheck disable=SC2016  # the $OMARCHY_PATH literals below belong to the stub scripts being written, not to this shell
+printf '#!/bin/bash\nsource "$OMARCHY_PATH/install/helpers/present.sh"\n' > "$p/usr/bin/omarchy-sources-present"
+# shellcheck disable=SC2016
+printf '#!/bin/bash\nsource "$OMARCHY_PATH/install/helpers/browser-policy.sh"\n' > "$p/usr/bin/omarchy-sources-dropped"
+# shellcheck disable=SC2016
+printf '#!/bin/bash\ntheme=t\n. "$OMARCHY_PATH/themes/$theme/init.sh"\n' > "$p/usr/bin/omarchy-sources-variable"
+: > "$d/allow8"
+out=$("$ROOT/ci/gate-dropped-refs" "$p" "$d/drop-nobin.list" "$d/allow8" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" "1" "dropped-refs fails on a sourced file the drop list removed"
+assert_contains "$out" "usr/bin/omarchy-sources-dropped:usr/share/omarchy/install/helpers/browser-policy.sh" "reports path:target"
+if [[ $out == *omarchy-sources-present* ]]; then not_ok "dropped-refs does not flag a sourced file that is present" "$out"; else ok "dropped-refs does not flag a sourced file that is present"; fi
+if [[ $out == *omarchy-sources-variable* ]]; then not_ok "dropped-refs ignores a sourced path that is not fully literal" "$out"; else ok "dropped-refs ignores a sourced path that is not fully literal"; fi
+printf 'usr/bin/omarchy-sources-dropped:usr/share/omarchy/install/helpers/browser-policy.sh\n' > "$d/allow8"
+"$ROOT/ci/gate-dropped-refs" "$p" "$d/drop-nobin.list" "$d/allow8" >/dev/null 2>&1; assert_eq "$?" "0" "dropped-refs passes on a sourced-file finding once allowlisted"
+
+# dropped-refs edge cases: quoting and trailing-punctuation variants around a dropped target
+mkdir -p "$p/usr/share/omarchy/ok"
+printf 'ok\n' > "$p/usr/share/omarchy/ok/a.sh"
+printf 'ok\n' > "$p/usr/share/omarchy/x.sh"
+# shellcheck disable=SC2016
+printf '#!/bin/bash\nsource "$OMARCHY_PATH"/install/helpers/browser-policy.sh\n' > "$p/usr/bin/omarchy-split-quote"
+printf "#!/bin/bash\nsource '/usr/share/omarchy/install/helpers/browser-policy.sh'\n" > "$p/usr/bin/omarchy-single-quote"
+# shellcheck disable=SC2016
+printf '#!/bin/bash\nsource "${OMARCHY_PATH}/install/helpers/browser-policy.sh"\n' > "$p/usr/bin/omarchy-brace-form"
+# shellcheck disable=SC2016
+printf '#!/bin/bash\nx=$(source $OMARCHY_PATH/ok/a.sh)\n' > "$p/usr/bin/omarchy-cmdsub-present"
+printf '#!/bin/bash\n. /usr/share/omarchy/x.sh|| true\n' > "$p/usr/bin/omarchy-pipe-tail-present"
+: > "$d/allow9"
+out=$("$ROOT/ci/gate-dropped-refs" "$p" "$d/drop-nobin.list" "$d/allow9" 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" "1" "dropped-refs fails on a dropped target reached through split/single/braced quoting"
+assert_contains "$out" "usr/bin/omarchy-split-quote:usr/share/omarchy/install/helpers/browser-policy.sh" "catches the variable quoted, rest bare idiom (quote closed right after the variable)"
+assert_contains "$out" "usr/bin/omarchy-single-quote:usr/share/omarchy/install/helpers/browser-policy.sh" "catches a single-quoted literal path"
+assert_contains "$out" "usr/bin/omarchy-brace-form:usr/share/omarchy/install/helpers/browser-policy.sh" "catches the braced variable form"
+for f in omarchy-cmdsub-present omarchy-pipe-tail-present; do
+  if [[ $out == *"$f"* ]]; then not_ok "dropped-refs does not misread trailing shell punctuation as part of the target ($f)" "$out"
+  else ok "dropped-refs does not misread trailing shell punctuation as part of the target ($f)"; fi
+done
+
+# dropped-refs edge case: a name that merely starts with the same letters is a different variable
+# shellcheck disable=SC2016
+printf '#!/bin/bash\nOMARCHY_PATHX=/opt/x\nsource "$OMARCHY_PATHX/gone.sh"\n' > "$p/usr/bin/omarchy-lookalike-var"
+: > "$d/allow10"
+"$ROOT/ci/gate-dropped-refs" "$p" "$d/drop-nobin.list" "$d/allow10" >/dev/null 2>&1
+assert_eq "$?" "0" "dropped-refs does not read \$OMARCHY_PATHX as a continuation of \$OMARCHY_PATH"
+rm -rf "$p/usr/share/omarchy/install" "$p/usr/share/omarchy/ok" "$p/usr/share/omarchy/x.sh" \
+  "$p/usr/bin/omarchy-sources-present" "$p/usr/bin/omarchy-sources-dropped" "$p/usr/bin/omarchy-sources-variable" \
+  "$p/usr/bin/omarchy-split-quote" "$p/usr/bin/omarchy-single-quote" "$p/usr/bin/omarchy-brace-form" \
+  "$p/usr/bin/omarchy-cmdsub-present" "$p/usr/bin/omarchy-pipe-tail-present" "$p/usr/bin/omarchy-lookalike-var"
+
 # single-copy
 "$ROOT/ci/gate-single-copy" "$p" >/dev/null 2>&1; assert_eq "$?" "0" "single-copy passes on a correct layout"
 rm "$p/usr/share/omarchy/bin/omarchy-clean"; cp "$p/usr/bin/omarchy-clean" "$p/usr/share/omarchy/bin/omarchy-clean"
