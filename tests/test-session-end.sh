@@ -14,8 +14,12 @@ case $1 in
   show-environment) cat "$W/env" 2>/dev/null || true ;;
   unset-environment) exit 0 ;;
   list-units) cat "$W/units" 2>/dev/null || true ;;
-  show) u=${*: -1}; cat "$W/pid.$u" 2>/dev/null || echo 0 ;;
-  stop) u=${*: -1}; [[ -f $W/fail.$u ]] && exit 1; exit 0 ;;
+  show) u=${*: -1}
+    case $3 in
+      MainPID) cat "$W/pid.$u" 2>/dev/null || echo 0 ;;
+      Transient) if [[ -f $W/transient.$u ]]; then echo yes; else echo no; fi ;;
+    esac ;;
+  stop|restart) u=${*: -1}; [[ -f $W/fail.$u ]] && exit 1; exit 0 ;;
 esac
 S
 chmod +x "$d/bin/systemctl"; export PATH=$d/bin:$PATH
@@ -27,21 +31,25 @@ svc() {
   echo "$pid" > "$W/pid.$name"
   if [[ $pid != 0 ]]; then mkdir -p "$TINKERO_PROC/$pid"; printf '%s\0' "$@" > "$TINKERO_PROC/$pid/environ"; fi
 }
+# touched NAME: how many stop or restart calls the stub logged for NAME
+touched() { grep -cF -e "stop $1" -e "restart $1" "$LOG"; }
 reset() { rm -rf "$W" "$TINKERO_PROC" "$LOG"; mkdir -p "$W" "$TINKERO_PROC"; : > "$LOG"; }
 
-# 1. A live session: nothing is stopped or unset, whatever the services carry.
+# 1. A live session: nothing is stopped, restarted or unset, whatever the services carry.
 reset; : > "$W/active"; echo DCONF_PROFILE=tinkero > "$W/env"
 svc dconf.service 101 HOME=/h DCONF_PROFILE=tinkero
 out=$("$T" 2>&1); rc=$?
 assert_eq "$rc" 0 "live session: exits 0"
 assert_contains "$out" "graphical session is active" "live session: says why it does nothing"
-assert_eq "$(grep -c ' stop \| unset-environment ' "$LOG")" 0 "live session: nothing stopped or unset"
+assert_eq "$(grep -c ' stop \| restart \| unset-environment ' "$LOG")" 0 "live session: nothing stopped, restarted or unset"
 
-# 2. Ended session: only exact DCONF_PROFILE=tinkero main processes are stopped.
+# 2. Ended session: only exact DCONF_PROFILE=tinkero main processes are touched: D-Bus's
+# transient units are stopped (they cannot be restarted), every other one restarted so a user's
+# own long-running service is not left down.
 reset
 svc dconf.service 101 HOME=/h DCONF_PROFILE=tinkero
 svc pipewire-pulse.service 102 DCONF_PROFILE=tinkero LANG=C
-svc 'dbus-:1.2-org.gnome.Identity@0.service' 103 DCONF_PROFILE=tinkero
+svc 'dbus-:1.2-org.gnome.Identity@0.service' 103 DCONF_PROFILE=tinkero; : > "$W/transient.dbus-:1.2-org.gnome.Identity@0.service"
 svc own-profile.service 104 DCONF_PROFILE=user
 svc near-miss.service 105 DCONF_PROFILE=tinkero2 XDCONF_PROFILE=tinkero
 svc clean.service 106 HOME=/h
@@ -49,30 +57,35 @@ svc no-main-pid.service 0
 svc vanished.service 107; rm -rf "$TINKERO_PROC/107"
 out=$("$T" 2>&1); rc=$?
 assert_eq "$rc" 0 "ended: exits 0"
-for u in dconf.service pipewire-pulse.service 'dbus-:1.2-org.gnome.Identity@0.service'; do
-  assert_contains "$(cat "$LOG")" "stop $u" "ended: stops $u"
+for u in dconf.service pipewire-pulse.service; do
+  assert_contains "$(cat "$LOG")" "systemctl --user restart $u" "ended: restarts $u"
+  assert_eq "$(grep -cF "systemctl --user stop $u" "$LOG")" 0 "ended: does not stop $u"
 done
+u='dbus-:1.2-org.gnome.Identity@0.service'
+assert_contains "$(cat "$LOG")" "systemctl --user stop $u" "ended: stops the transient $u"
+assert_eq "$(grep -cF "systemctl --user restart $u" "$LOG")" 0 "ended: does not restart the transient $u"
 for u in own-profile.service near-miss.service clean.service no-main-pid.service vanished.service; do
-  assert_eq "$(grep -cF "stop $u" "$LOG")" 0 "ended: leaves $u alone"
+  assert_eq "$(touched "$u")" 0 "ended: leaves $u alone"
 done
-assert_contains "$out" "stopping dconf.service" "ended: names each service it stops"
+assert_contains "$out" "restarting dconf.service" "ended: names each service it restarts"
+assert_contains "$out" "stopping dbus-:1.2-org.gnome.Identity@0.service" "ended: names each service it stops"
 assert_eq "$(grep -c 'unset-environment' "$LOG")" 0 "ended: manager already clean, nothing unset"
 
-# 3. The manager still has DCONF_PROFILE=tinkero: unset first, before any stop.
+# 3. The manager still has DCONF_PROFILE=tinkero: unset first, before any restart.
 reset; printf 'HOME=/h\nDCONF_PROFILE=tinkero\n' > "$W/env"
 svc dconf.service 101 DCONF_PROFILE=tinkero
 "$T" >/dev/null 2>&1
 assert_contains "$(cat "$LOG")" "systemctl --user unset-environment DCONF_PROFILE" "leftover: unsets the manager's copy"
 first_unset=$(grep -n 'unset-environment' "$LOG" | head -1 | cut -d: -f1)
-first_stop=$(grep -n ' stop ' "$LOG" | head -1 | cut -d: -f1)
-if (( first_unset < first_stop )); then ok "leftover: unset comes before the stops"; else not_ok "leftover: unset comes before the stops" "$(cat "$LOG")"; fi
+first_restart=$(grep -n ' restart ' "$LOG" | head -1 | cut -d: -f1)
+if (( ${first_unset:-0} > 0 && ${first_unset:-0} < ${first_restart:-0} )); then ok "leftover: unset comes before the restarts"; else not_ok "leftover: unset comes before the restarts" "$(cat "$LOG")"; fi
 
 # 4. A user's own DCONF_PROFILE in the manager is not ours to remove.
 reset; echo DCONF_PROFILE=custom > "$W/env"
 "$T" >/dev/null 2>&1
 assert_eq "$(grep -c 'unset-environment' "$LOG")" 0 "own profile: manager env left alone"
 
-# 5. The user bus and the sweep itself are never stopped; a failed stop does not end the sweep.
+# 5. The user bus and the sweep itself are never touched; a failed restart does not end the sweep.
 reset
 svc dbus-broker.service 201 DCONF_PROFILE=tinkero
 svc dbus.service 202 DCONF_PROFILE=tinkero
@@ -80,12 +93,12 @@ svc tinkero-session-end.service 203 DCONF_PROFILE=tinkero
 svc a-fails.service 204 DCONF_PROFILE=tinkero; : > "$W/fail.a-fails.service"
 svc b-after.service 205 DCONF_PROFILE=tinkero
 out=$("$T" 2>&1); rc=$?
-assert_eq "$rc" 0 "safety: exits 0 even when a stop fails"
+assert_eq "$rc" 0 "safety: exits 0 even when a restart fails"
 for u in dbus-broker.service dbus.service tinkero-session-end.service; do
-  assert_eq "$(grep -cF "stop $u" "$LOG")" 0 "safety: never stops $u"
+  assert_eq "$(touched "$u")" 0 "safety: never stops or restarts $u"
 done
-assert_contains "$out" "a-fails.service" "safety: a failed stop is reported"
-assert_contains "$(cat "$LOG")" "stop b-after.service" "safety: the sweep goes on after a failed stop"
+assert_contains "$out" "could not restart a-fails.service" "safety: a failed restart is reported"
+assert_contains "$(cat "$LOG")" "restart b-after.service" "safety: the sweep goes on after a failed restart"
 
 # 6. The units: session-end only, after uwsm's env cleanup, nothing enabled.
 u=$ROOT/systemd/tinkero-session-end.service; di=$ROOT/systemd/wayland-session-shutdown.target.d/tinkero.conf

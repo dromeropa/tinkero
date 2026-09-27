@@ -2,8 +2,10 @@
 # tinkero-session-end: after a Tinkero session has ended, stop the user services that were
 # started during it and still carry DCONF_PROFILE=tinkero (issue #30, design spec 4.9). With
 # lingering, the user manager outlives the session; a service D-Bus- or socket-activated inside
-# it keeps the Tinkero dconf profile, and a later GNOME login would talk to it. Stopped here, it
-# is activated again on first use with the manager's clean environment.
+# it keeps the Tinkero dconf profile, and a later GNOME login would talk to it. Each one is
+# restarted, so it keeps running with the manager's now clean environment; D-Bus's transient
+# dbus-*.service units cannot be restarted, so those are stopped and D-Bus activates them again,
+# clean, on first use.
 # Run by tinkero-session-end.service, which uwsm's wayland-session-shutdown.target wants: that
 # target becomes active only after uwsm's cleanup-env has unset the session's variables.
 set -euo pipefail
@@ -31,7 +33,12 @@ while read -r unit _; do
   [[ $pid =~ ^[0-9]+$ && $pid -gt 0 ]] || continue
   [[ -r $proc/$pid/environ ]] || continue
   grep -qxz 'DCONF_PROFILE=tinkero' "$proc/$pid/environ" 2>/dev/null || continue
-  say "stopping $unit (started in the Tinkero session, still on its dconf profile)"
-  systemctl --user stop "$unit" || say "could not stop $unit"
+  if [[ $(systemctl --user show -p Transient --value "$unit" 2>/dev/null || true) == yes ]]; then
+    say "stopping $unit (started in the Tinkero session, still on its dconf profile)"
+    systemctl --user stop "$unit" || say "could not stop $unit"
+  else
+    say "restarting $unit (started in the Tinkero session, still on its dconf profile)"
+    systemctl --user restart "$unit" || say "could not restart $unit"
+  fi
 done < <(systemctl --user list-units --type=service --state=running --no-legend --plain)
 exit 0

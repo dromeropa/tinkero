@@ -1,5 +1,5 @@
 [Unit]
-Description=Tinkero: stop user services still on the session's dconf profile after it ends
+Description=Tinkero: refresh user services still on the session's dconf profile after it ends
 # uwsm starts wayland-session-shutdown.target at every session end, and only once its
 # cleanup-env has unset the session's variables; Tinkero's drop-in on the target wants this unit.
 # A service left running with DCONF_PROFILE=tinkero would serve a later GNOME login from the
