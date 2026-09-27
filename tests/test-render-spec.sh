@@ -27,6 +27,7 @@ assert_contains "$s" "tinkero-nerd-fonts" "the Nerd font from the COPR is a hard
 assert_contains "$s" "ppd-service" "power profiles through the virtual provide, not power-profiles-daemon"
 if [[ $s != *power-profiles-daemon* ]]; then ok "power-profiles-daemon is not required by name"; else not_ok "power-profiles-daemon is not required by name"; fi
 assert_contains "$s" " fcitx5" "fcitx5 is a hard requirement"
+assert_contains "$s" " fastfetch" "fastfetch is a hard requirement (drives the About screen)"
 assert_contains "$s" "Source0:        omarchy-c668141e9c42b13c80c9ca4ea108e11708c5e8a5.tar.gz" "source names the commit"
 assert_contains "$s" "%posttrans" "posttrans scriptlet present (plan 2F, PAM sync)"
 assert_contains "$s" "/usr/bin/tinkero-pam-sync" "posttrans runs tinkero-pam-sync"
