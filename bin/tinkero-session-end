@@ -1,0 +1,37 @@
+#!/bin/bash
+# tinkero-session-end: after a Tinkero session has ended, stop the user services that were
+# started during it and still carry DCONF_PROFILE=tinkero (issue #30, design spec 4.9). With
+# lingering, the user manager outlives the session; a service D-Bus- or socket-activated inside
+# it keeps the Tinkero dconf profile, and a later GNOME login would talk to it. Stopped here, it
+# is activated again on first use with the manager's clean environment.
+# Run by tinkero-session-end.service, which uwsm's wayland-session-shutdown.target wants: that
+# target becomes active only after uwsm's cleanup-env has unset the session's variables.
+set -euo pipefail
+proc=${TINKERO_PROC:-/proc}
+say() { echo "tinkero-session-end: $*"; }
+
+# A live session is never touched, whatever started this.
+if systemctl --user is-active --quiet graphical-session.target; then
+  say "graphical session is active; nothing to do"
+  exit 0
+fi
+
+# Belt and braces for uwsm's cleanup: nothing started from here on may inherit the profile.
+if systemctl --user show-environment | grep -qx 'DCONF_PROFILE=tinkero'; then
+  say "the user manager still has DCONF_PROFILE=tinkero; unsetting it"
+  systemctl --user unset-environment DCONF_PROFILE || say "could not unset DCONF_PROFILE"
+fi
+
+while read -r unit _; do
+  case $unit in
+    # The user bus outlives every session by design; this unit is the sweep itself.
+    dbus.service | dbus-broker.service | tinkero-session-end.service) continue ;;
+  esac
+  pid=$(systemctl --user show -p MainPID --value "$unit" 2>/dev/null || echo 0)
+  [[ $pid =~ ^[0-9]+$ && $pid -gt 0 ]] || continue
+  [[ -r $proc/$pid/environ ]] || continue
+  grep -qxz 'DCONF_PROFILE=tinkero' "$proc/$pid/environ" 2>/dev/null || continue
+  say "stopping $unit (started in the Tinkero session, still on its dconf profile)"
+  systemctl --user stop "$unit" || say "could not stop $unit"
+done < <(systemctl --user list-units --type=service --state=running --no-legend --plain)
+exit 0

@@ -3,11 +3,14 @@ source "$(dirname "$0")/lib.sh"
 d=$(mktmp); tb=$("$ROOT/tests/fixtures/make-tree.sh" "$d/src")
 # a private repo root so the test controls drop.list, patches and replacements
 r=$d/root; mkdir -p "$r"/{build,patches,distro/fedora/{replacements,lib,skills,dconf/profile},session/uwsm-env.d,bin,config/hypr,provision,config-notes}
-mkdir -p "$r"/systemd/{omarchy-fcitx5.service.d,bt-agent.service.d,omarchy-speaker-tuning.service.d}
+mkdir -p "$r"/systemd/{omarchy-fcitx5.service.d,bt-agent.service.d,omarchy-speaker-tuning.service.d,wayland-session-shutdown.target.d}
 printf '# lib\n' > "$r/distro/fedora/lib/pkg.sh"; printf 'foot\tdnf\tfoot\n' > "$r/distro/fedora/pkgmap.tsv"
 cp "$ROOT/session/tinkero.desktop" "$r/session/"
 echo '# fixture host guide' > "$r/distro/fedora/skills/host.md"
 printf '[Unit]\nDescription=fixture inhibitor\n\n[Service]\nExecStart=/usr/bin/true\n' > "$r/systemd/tinkero-inhibit-power-key.service"
+printf '[Unit]\nDescription=fixture session-end\nAfter=wayland-session-shutdown.target\n\n[Service]\nType=oneshot\nExecStart=/usr/bin/tinkero-session-end\n' > "$r/systemd/tinkero-session-end.service"
+printf '[Unit]\nWants=tinkero-session-end.service\n' > "$r/systemd/wayland-session-shutdown.target.d/tinkero.conf"
+printf '#!/bin/bash\necho fixture session-end\n' > "$r/bin/tinkero-session-end"
 printf '[Unit]\nConditionPathExists=/usr/bin/fcitx5\n' > "$r/systemd/omarchy-fcitx5.service.d/tinkero.conf"
 printf '[Unit]\nPartOf=graphical-session.target\n' > "$r/systemd/bt-agent.service.d/tinkero.conf"
 printf '[Unit]\nPartOf=graphical-session.target\n' > "$r/systemd/omarchy-speaker-tuning.service.d/tinkero.conf"
@@ -75,6 +78,9 @@ assert_eq "$(sed -n '/^\[Service\]/,$p' "$d/dest/usr/lib/systemd/user/omarchy-ke
   "a section after [Install] survives intact"
 assert_file "$d/dest/usr/lib/systemd/user/omarchy-no-install.service" "a unit with no [Install] section is untouched"
 assert_file "$d/dest/usr/lib/systemd/user/tinkero-inhibit-power-key.service" "Tinkero's inhibitor unit lands beside the tree's units"
+assert_file "$d/dest/usr/lib/systemd/user/tinkero-session-end.service" "Tinkero's session-end sweep unit lands"
+assert_file "$d/dest/usr/lib/systemd/user/wayland-session-shutdown.target.d/tinkero.conf" "Tinkero's shutdown-target drop-in lands"
+assert_file "$d/dest/usr/bin/tinkero-session-end" "the sweep command lands in /usr/bin"
 assert_file "$d/dest/usr/lib/systemd/user/omarchy-fcitx5.service.d/tinkero.conf" "Tinkero's fcitx5 drop-in lands"
 assert_file "$d/dest/usr/lib/systemd/user/bt-agent.service.d/tinkero.conf" "Tinkero's bt-agent drop-in lands"
 assert_file "$d/dest/usr/lib/systemd/user/omarchy-speaker-tuning.service.d/tinkero.conf" "Tinkero's speaker-tuning drop-in lands"
