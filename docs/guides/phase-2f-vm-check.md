@@ -113,8 +113,9 @@ Each cycle: inside Tinkero, `omarchy-theme-set tokyo-night`, then `omarchy-theme
 - [ ] cycle 3: the diff is empty
 - [ ] in each snapshot, `user env` is `none` (uwsm's cleanup removed `DCONF_PROFILE` even with lingering on), no running user service sees `DCONF_PROFILE`, and `tinkero units` is empty
 - [ ] inside Tinkero after cycle 3, `gsettings get org.gnome.desktop.interface text-scaling-factor` prints `1.3636...` (16 px): the session kept its own value
+- [ ] after each cycle, `journalctl --user -b -u tinkero-session-end.service` shows a run at that session end naming the services it stopped (issue #30), and no `stopping` line from inside a live session
 
-If `user env` shows `DCONF_PROFILE=tinkero` in any GNOME snapshot, that is design D4's fallback case; if the checksum moved with `user env` at `none`, a key leaked some other way (find it with `dconf dump /` under GNOME against the baseline) and spec 4.9's restore unit is the fallback. Record which.
+If `user env` shows `DCONF_PROFILE=tinkero` in any GNOME snapshot, that is design D4's fallback case; if the checksum moved with `user env` at `none`, a key leaked some other way (find it with `dconf dump /` under GNOME against the baseline) and spec 4.9's restore unit is the fallback. Record which. A service under the `DCONF_PROFILE` heading with `user env` at `none` means the session-end sweep did not run or missed it (issue #30): record the unit and that journal.
 
 ## 5. Milestone B lines 2D could not check
 
