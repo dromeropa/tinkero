@@ -8,6 +8,7 @@
 #   tinkero-pam-sync              write the variant the host calls for; a no-op if already current
 #   tinkero-pam-sync --variant    print the variant the host calls for ("wrapped" or "plain")
 #   tinkero-pam-sync --check      exit 0 when the installed file matches; exit 1 and say why not
+#   tinkero-pam-sync --tally USER install a tmpfiles.d entry that recreates /run/faillock/USER
 #
 # "wrapped" adds its own pam_faillock.so around password-auth, for a host whose password-auth
 # has none; "plain" just includes password-auth, for a host whose password-auth already counts
@@ -17,6 +18,7 @@ set -euo pipefail
 
 TINKERO_PAM_DIR=${TINKERO_PAM_DIR:-/etc/pam.d}
 TINKERO_SHARE=${TINKERO_SHARE:-/usr/share/tinkero}
+TINKERO_TMPFILES_DIR=${TINKERO_TMPFILES_DIR:-/etc/tmpfiles.d}
 target=$TINKERO_PAM_DIR/omarchy-lock-password
 password_auth=$TINKERO_PAM_DIR/password-auth
 pam_dir=$TINKERO_SHARE/pam
@@ -91,12 +93,60 @@ do_check() {
   fi
 }
 
+# do_tally USER: install a tmpfiles.d entry that recreates /run/faillock/USER on every boot,
+# owned user:root and mode 0660, exactly as `faillock` itself creates it. The Quickshell lock runs
+# pam_faillock as the unprivileged user, but /run/faillock is 0755 root:root and emptied at boot,
+# so the lock cannot create its own tally file and pam_faillock silently records nothing: the
+# wrapped variant then never locks out (issue #29). A tmpfiles.d entry does the creation as root,
+# every boot. On a with-faillock host GDM's own login already seeds the file, so this is a
+# harmless no-op there. The file is per-user and written at install time, not owned by the RPM.
+do_tally() {
+  local user=${1:-}
+  [[ -n $user ]] || die "--tally needs a user name"
+  [[ ${TINKERO_EUID:-$EUID} == 0 ]] || die "must be root to write $TINKERO_TMPFILES_DIR; run: sudo tinkero-pam-sync --tally $user"
+  # The name goes straight into the tally path /run/faillock/$user and a tmpfiles.d field, so a
+  # "/" or ".." would escape the directory and whitespace would corrupt the line (linux-pam
+  # guards its own tally path the same way). install.sh always passes a real, trusted user, but a
+  # future caller might not, so validate and confirm the account exists rather than silently
+  # writing a dead entry that fails to chown every boot (issue #29).
+  [[ $user =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.@-]*$ ]] || die "invalid user name: $user"
+  if [[ ${TINKERO_TALLY_CHECK_USER:-1} == 1 ]]; then
+    id -u -- "$user" >/dev/null 2>&1 || die "no such user: $user"
+  fi
+  local file=$TINKERO_TMPFILES_DIR/tinkero-lockout-$user.conf
+  TMP=$(mktemp "$TINKERO_TMPFILES_DIR/.tinkero-lockout.XXXXXX") || die "mktemp failed in $TINKERO_TMPFILES_DIR"
+  {
+    echo "# tinkero (issue #29): the Quickshell lock runs pam_faillock as the unprivileged user,"
+    echo "# but /run/faillock is root-owned and cleared at boot, so the lock cannot create its own"
+    echo "# tally file. Recreate it here every boot, owned user:root and mode 0660, as faillock does."
+    echo "# Written by 'tinkero-pam-sync --tally'; not owned by the RPM."
+    echo "f /run/faillock/$user 0660 $user root -"
+  } > "$TMP"
+  chmod 0644 "$TMP"
+  if [[ -f $file ]] && cmp -s "$TMP" "$file"; then
+    rm -f -- "$TMP"; TMP=""
+    echo "current: tally $user"
+  else
+    mv -f "$TMP" "$file"; TMP=""
+    echo "wrote tally $user"
+  fi
+  # Create the file now, for the current boot, so a fresh install locks out without a reboot.
+  # Idempotent; tests seam this off with TINKERO_TMPFILES_APPLY=0.
+  if [[ ${TINKERO_TMPFILES_APPLY:-1} == 1 ]] && command -v systemd-tmpfiles >/dev/null 2>&1; then
+    systemd-tmpfiles --create -- "$file" || true
+  fi
+}
+
 main() {
-  local mode=write
+  local mode=write tally_user=""
   while (($#)); do
     case $1 in
       --check) mode=check ;;
       --variant) mode=variant ;;
+      --tally)
+        mode=tally
+        [[ $# -ge 2 ]] || die "--tally needs a user name"
+        tally_user=$2; shift ;;
       -h|--help) usage; exit 0 ;;
       *) die "unknown option: $1 (see --help)" ;;
     esac
@@ -106,6 +156,7 @@ main() {
     write)   do_write ;;
     check)   do_check ;;
     variant) variant_wanted ;;
+    tally)   do_tally "$tally_user" ;;
   esac
 }
 main "$@"
