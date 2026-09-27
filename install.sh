@@ -71,8 +71,9 @@ Plan:
   system stage (sudo):  dnf copr enable $copr
                         dnf install tinkero      (the desktop with its pinned Hyprland and Quickshell)
                         tinkero-pam-sync         (writes the lock screen's PAM file for this host)
+                        tinkero-pam-sync --tally (a tmpfiles.d entry so the lock can record failures)
   user stage (you):     tinkero-provision        (its own plan is shown and confirmed first)
-Nothing else changes: no other repository, no versionlock, no Flathub, nothing under /etc beyond the package's files and the COPR repository file.
+Nothing else changes: no other repository, no versionlock, no Flathub, nothing under /etc beyond the package's files, the COPR repository file and one tmpfiles.d entry for the lock screen's failure tally.
 
 EOF
 confirm "Continue with the system stage?"
@@ -85,6 +86,11 @@ sudo dnf install "${y[@]}" tinkero
 # %posttrans already ran this once, but a re-run of install.sh is otherwise unable to repair a
 # variant an authselect change made stale in between (design spec 4.8, plan 2F design D8).
 sudo tinkero-pam-sync
+# The lock screen authenticates as the unprivileged user, but /run/faillock is root-owned and
+# cleared at boot, so it cannot create its own pam_faillock tally file; a tmpfiles.d entry seeds
+# it every boot so the lockout actually records (issue #29). %posttrans cannot do this because it
+# does not know which user the desktop is for, so install.sh does it here for the installing user.
+sudo tinkero-pam-sync --tally "${USER:-$(id -un)}"
 say "system stage done"
 
 # 4. The provisioning plan, the second gate, the user stage. The plan lists every file that

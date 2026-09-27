@@ -237,18 +237,23 @@ Design: the RPM ships two variants under `/usr/share/tinkero/pam/` and owns `/et
 
 ```
 # variant "wrapped": host WITHOUT with-faillock
-auth     required       pam_faillock.so preauth silent deny=10 unlock_time=120
-auth     include        password-auth
-auth     [default=die]  pam_faillock.so authfail deny=10 unlock_time=120
-account  required       pam_faillock.so
-account  include        password-auth
+auth     required                 pam_faillock.so preauth silent deny=10 unlock_time=120
+auth     [success=1 default=bad]  substack  password-auth
+auth     [default=die]            pam_faillock.so authfail deny=10 unlock_time=120
+auth     sufficient               pam_faillock.so authsucc deny=10 unlock_time=120
+auth     required                 pam_deny.so
+account  required                 pam_faillock.so
+account  include                  password-auth
 
-# variant "plain": host WITH with-faillock (password-auth already does it)
-auth     include        password-auth
-account  include        password-auth
+# variant "plain": host WITH with-faillock (password-auth already counts; add only the reset)
+auth     [success=ok default=die]  substack  password-auth
+auth     required                  pam_faillock.so authsucc
+account  include                   password-auth
 ```
 
-In the wrapped variant, a correct password ends the stack at `pam_unix.so sufficient` inside the include, before `authfail`; a wrong one falls through `pam_deny.so required` to the outer `authfail`, which records it once. If the user later toggles `with-faillock`, the installed variant no longer matches: enabling it leaves the wrapped file double counting (fails safe: lockout comes sooner, and how much sooner depends on the host's own `deny=` in `/etc/security/faillock.conf`, whose default of 3 is far stricter than the wrapper's 10); disabling it leaves the plain file with no lockout (fails open). `tinkero-status` therefore compares the installed file with the variant the current profile calls for and reports a mismatch as actionable, with `sudo tinkero-pam-sync` as the fix. The ghost entry is `%attr(0644,root,root)`; removal of the RPM removes the file. Phase 0 validates both variants on a real host, including the lockout count.
+**The reset runs in the auth phase, not the account phase.** The Quickshell lock authenticates through Quickshell's `PamContext`, which runs only `pam_authenticate` and never `pam_acct_mgmt` (confirmed at the pinned commit and on Quickshell master; the account phase would need root). So `pam_faillock`'s usual reset-on-success line, `account required pam_faillock.so`, never runs under the lock, and a successful unlock would otherwise leave earlier failures on the tally until `fail_interval` (15 min) ages them out (issue #29). The variants therefore reset with an `authsucc` line in the *auth* phase, exactly as upstream's own lock stack does. This forces the second change: the host stack is pulled in with **`substack`, not `include`**. Under `include`, a `sufficient pam_unix`/`pam_sss` inside `password-auth` short-circuits the whole stack on success, so no trailing `authsucc` would ever run; under `substack` that `sufficient` completes only the substack and returns control to this file, where the `success=` jump reaches `authsucc` and clears the tally. In the wrapped variant a wrong password falls through to `authfail` (recorded once) and `[default=die]` returns before `authsucc`; in the plain variant `password-auth`'s own faillock records the one failure and `default=die` returns before the added `authsucc`, so there is still no double count. The `account` lines are kept but are dead under the lock (harmless, and correct if any tool ever does call `pam_acct_mgmt`). If the user later toggles `with-faillock`, the installed variant no longer matches: enabling it leaves the wrapped file double counting (fails safe: lockout comes sooner, and how much sooner depends on the host's own `deny=` in `/etc/security/faillock.conf`, whose default of 3 is far stricter than the wrapper's 10); disabling it leaves the plain file with no lockout (fails open). `tinkero-status` therefore compares the installed file with the variant the current profile calls for and reports a mismatch as actionable, with `sudo tinkero-pam-sync` as the fix. The ghost entry is `%attr(0644,root,root)`; removal of the RPM removes the file.
+
+**The tally file must exist before the unprivileged lock can record into it.** `pam_faillock` keeps its per-user tally in `/run/faillock/<user>`, and `/run/faillock` is `0755 root:root` and emptied at every boot. On a `with-faillock` host GDM's login stack (running as root) creates `/run/faillock/<user>` at login, so the `plain` variant inherits a file the lock can update. On a stock `local`-profile host nothing privileged runs `pam_faillock`, so the file is never created, and the `wrapped` lock — running as the unprivileged user (uid 1000) — cannot create it in a root-owned directory; `pam_faillock` then records nothing, silently, and never locks out (issue #29). Tinkero adds no privileged runtime actor (spec 5.3), so the file is seeded by a **tmpfiles.d entry**: `tinkero-pam-sync --tally <user>` (root, after validating the name and that the account exists) writes `/etc/tmpfiles.d/tinkero-lockout-<user>.conf` with `f /run/faillock/<user> 0660 <user> root -`, which systemd recreates every boot as `faillock` itself would (owner the user, group root, mode 0660). `install.sh` runs it for the installing user after `dnf install`, because `%posttrans` cannot (it does not know which user the desktop is for). This entry is per-user and not owned by the RPM; the trade-off (an untracked `/etc` file, single-user scope, no automatic cleanup on removal) is a documented follow-up, not solved in this revision. Phase 0 validated authentication itself on a real host; the auth-phase reset, the `substack` behavior and the `tmpfiles.d` tally seeding across a real boot under SELinux are re-checked by the 2F VM re-run.
 
 The fingerprint variant, `/etc/pam.d/omarchy-lock-fingerprint`, is the one dynamic file: the patched `omarchy-apply-lock` writes it only when `fprintd-list` shows enrolments for the target user (upstream's `SUDO_USER`/`PKEXEC_UID` logic) and the host's `system-auth` uses `pam_fprintd.so` (plan 2F, design D10), and removes it otherwise. The RPM owns it as `%ghost`, no `%config` (rpm does not verify ghosts), so removal of the package removes it (D9). It runs only from the fingerprint setup and removal commands, on the user's request.
 

@@ -128,6 +128,71 @@ run --nope
 assert_eq "$rc" 2 "unknown option: exit 2"
 assert_contains "$out" "unknown option" "unknown option: says so"
 
+# --- the packaged variants reset the tally in the auth phase (issue #29) ----------------------
+# The Quickshell lock runs only pam_authenticate, so the reset must be an authsucc line and the
+# host stack must come in as `substack` (an `include` would short-circuit past authsucc).
+w=$ROOT/distro/fedora/pam/omarchy-lock-password.wrapped
+p=$ROOT/distro/fedora/pam/omarchy-lock-password.plain
+assert_contains "$(cat "$w")" "substack  password-auth" "wrapped: pulls the host stack in with substack, not include"
+assert_contains "$(cat "$w")" "[success=1 default=bad]" "wrapped: success jumps over authfail, failure falls through to it"
+assert_contains "$(cat "$w")" "[default=die]" "wrapped: a wrong password dies at authfail, never reaching authsucc"
+assert_contains "$(cat "$w")" "pam_faillock.so authsucc" "wrapped: resets the tally on success (authsucc)"
+assert_contains "$(cat "$w")" "pam_faillock.so authfail" "wrapped: still records a failure once (authfail)"
+assert_eq "$(grep -c 'include *password-auth' "$w")" "1" "wrapped: does not include password-auth in the auth phase (substack there, include only for account)"
+assert_contains "$(cat "$p")" "substack  password-auth" "plain: pulls the host stack in with substack"
+assert_contains "$(cat "$p")" "[success=ok default=die]" "plain: success falls through to authsucc, failure dies before it"
+assert_contains "$(cat "$p")" "pam_faillock.so authsucc" "plain: resets the tally on success (authsucc)"
+assert_eq "$(grep -Ec 'pam_faillock\.so (preauth|authfail)' "$p")" "0" "plain: adds no preauth/authfail, so it never double-counts the host's own faillock"
+
+# --- --tally: the per-boot tmpfiles.d entry for /run/faillock/<user> (issue #29) --------------
+tf=$d/tmpfiles; mkdir -p "$tf"
+# TINKERO_TALLY_CHECK_USER=0: the fixture users below need not exist on the test host.
+export TINKERO_TMPFILES_DIR=$tf TINKERO_TMPFILES_APPLY=0 TINKERO_TALLY_CHECK_USER=0
+tally_file=$tf/tinkero-lockout-alice.conf
+no_tally_temp() { [[ -z $(find "$tf" -maxdepth 1 -name '.tinkero-lockout.*') ]]; }
+
+euid=1000 run --tally alice
+assert_eq "$rc" 2 "tally: non-root refuses (exit 2)"
+assert_contains "$out" "sudo" "tally: names sudo"
+assert_no_path "$tally_file" "tally: non-root wrote nothing"
+if no_tally_temp; then ok "tally: non-root left no temp file"; else not_ok "tally: non-root left no temp file"; fi
+
+euid=0 run --tally alice
+assert_eq "$rc" 0 "tally: root writes the entry (exit 0)"
+assert_eq "$out" "wrote tally alice" "tally: names what it wrote"
+assert_file "$tally_file" "tally: the tmpfiles.d entry exists"
+assert_contains "$(cat "$tally_file")" "f /run/faillock/alice 0660 alice root -" "tally: seeds /run/faillock/alice 0660 owned user:root, as faillock does"
+assert_eq "$(stat -c %a "$tally_file")" "644" "tally: the entry file is mode 0644"
+if no_tally_temp; then ok "tally: no temp file left"; else not_ok "tally: no temp file left"; fi
+
+mt1=$(stat -c %Y "$tally_file"); sleep 1
+euid=0 run --tally alice
+assert_eq "$rc" 0 "tally again: exit 0"
+assert_eq "$out" "current: tally alice" "tally again: already current, says so"
+assert_eq "$(stat -c %Y "$tally_file")" "$mt1" "tally again: the file is not rewritten"
+
+euid=0 run --tally bob
+assert_file "$tf/tinkero-lockout-bob.conf" "tally: a second user gets its own entry"
+assert_contains "$(cat "$tf/tinkero-lockout-bob.conf")" "f /run/faillock/bob 0660 bob root -" "tally: the second user's entry names that user"
+
+euid=0 run --tally
+assert_eq "$rc" 2 "tally: a missing user name is an error (exit 2)"
+assert_contains "$out" "user name" "tally: says a user name is needed"
+
+# a name that would escape /run/faillock or corrupt the tmpfiles.d line is refused (charset check
+# is always on, even with the existence check seamed off)
+euid=0 run --tally "../evil"
+assert_eq "$rc" 2 "tally: a path-traversal user name is refused (exit 2)"
+assert_contains "$out" "invalid user name" "tally: says the name is invalid"
+assert_no_path "$tf/tinkero-lockout-../evil.conf" "tally: nothing was written for a bad name"
+
+# the existence check (seamed on) refuses a user with no account
+out=$(TINKERO_EUID=0 TINKERO_TALLY_CHECK_USER=1 "$S" --tally tinkero_nosuchuser_zzz 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 2 "tally: a nonexistent account is refused (exit 2)"
+assert_contains "$out" "no such user" "tally: says there is no such user"
+
+unset TINKERO_TMPFILES_DIR TINKERO_TMPFILES_APPLY TINKERO_TALLY_CHECK_USER
+
 # -h/--help
 out=$("$S" -h); assert_contains "$out" "tinkero-pam-sync --check" "help: usage lists --check"
 out=$("$S" --help); rc=$?

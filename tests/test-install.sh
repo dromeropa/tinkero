@@ -34,7 +34,7 @@ printf 'ID=fedora\nVERSION_ID=43\n' > "$d/os-release-43"
 ln -s /usr/lib/systemd/system/gdm.service "$d/dm-gdm"
 ln -s /usr/lib/systemd/system/sddm.service "$d/dm-sddm"
 : > "$d/none"
-export PATH=$d/bin:$PATH TINKERO_OS_RELEASE=$d/os-release TINKERO_DM_UNIT=$d/dm-gdm TINKERO_EUID=1000 REPOQUERY=$d/none
+export PATH=$d/bin:$PATH TINKERO_OS_RELEASE=$d/os-release TINKERO_DM_UNIT=$d/dm-gdm TINKERO_EUID=1000 REPOQUERY=$d/none USER=tinkerotest
 unset TINKERO_FEDORA TINKERO_REF
 run() { : > "$LOG"; out=$(bash "$I" "$@" 2>&1 </dev/null) && rc=0 || rc=$?; }
 
@@ -45,11 +45,12 @@ assert_eq "$(sed -n 's/^TINKERO_FEDORA=\([0-9]*\)$/\1/p' "$I")" "$(sed -n 's/^fe
 # the happy path
 run --yes
 assert_eq "$rc" 0 "install: exit 0"
-assert_eq "$(paste -sd'|' "$LOG")" "dnf repoquery --installed --queryformat %{name} %{from_repo}\n hyprland quickshell omedora omedora-settings|sudo dnf copr enable -y dromero/tinkero|dnf copr enable -y dromero/tinkero|sudo dnf install -y tinkero|dnf install -y tinkero|sudo tinkero-pam-sync|tinkero-pam-sync |tinkero-provision --plan|tinkero-provision --yes" "install: preflight query, copr enable, install, pam-sync, plan, provision, in that order"
+assert_eq "$(paste -sd'|' "$LOG")" "dnf repoquery --installed --queryformat %{name} %{from_repo}\n hyprland quickshell omedora omedora-settings|sudo dnf copr enable -y dromero/tinkero|dnf copr enable -y dromero/tinkero|sudo dnf install -y tinkero|dnf install -y tinkero|sudo tinkero-pam-sync|tinkero-pam-sync |sudo tinkero-pam-sync --tally tinkerotest|tinkero-pam-sync --tally tinkerotest|tinkero-provision --plan|tinkero-provision --yes" "install: preflight query, copr enable, install, pam-sync, tally, plan, provision, in that order"
 assert_contains "$out" "SELinux is Enforcing" "install: reports SELinux"
 assert_contains "$out" "Log out and choose Tinkero" "install: says what comes next"
 assert_contains "$out" $'seed\t.config/hypr/hyprland.lua' "install: shows the provisioning plan"
 assert_contains "$out" "tinkero-pam-sync" "install: the printed plan names tinkero-pam-sync"
+assert_contains "$out" "tmpfiles.d entry so the lock can record failures" "install: the printed plan names the faillock tally step"
 run --yes; assert_eq "$rc" 0 "install: re-running is fine (both stages are no-ops on a current machine)"
 
 # the gates
