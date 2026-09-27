@@ -251,7 +251,11 @@ seed_bashrc() {
       read -r -p "Append one line to ~/.bashrc that loads Tinkero's bash setup only inside the Tinkero session? [y/N] " a || a=""
       if [[ $a != [yY]* ]]; then say "bashrc: ~/.bashrc left alone"; return 0; fi ;;
   esac
-  if [[ -s $rc ]]; then printf '\n%s\n' "$bashrc_line" >> "$rc"; else printf '%s\n' "$bashrc_line" >> "$rc"; fi
+  # Terminate the file's last existing line first if it lacks one (so the guarded line does not
+  # merge into it), but never add a blank line of our own: --remove only drops the guarded line
+  # itself, so a blank line we added here would survive removal and break byte-for-byte restore.
+  if [[ -s $rc ]] && [[ -n $(tail -c 1 -- "$rc") ]]; then printf '\n' >> "$rc"; fi
+  printf '%s\n' "$bashrc_line" >> "$rc"
   say "bashrc: appended the guarded line to ~/.bashrc"
 }
 show_notes() {
@@ -353,7 +357,7 @@ in_session_steps() {
 # errexit for its whole body, not just its final status: every command inside that matters (the
 # backup below, on failure) must therefore fail explicitly rather than rely on set -e to stop it.
 seed_dconf() {
-  local db=$config_home/dconf/tinkero
+  local db=$config_home/dconf/tinkero tmp_profile
   if [[ $1 == 0 && -f $state/done/dconf ]]; then return 0; fi
   if [[ ! -f $TINKERO_DCONF_PROFILE ]]; then say "dconf: $TINKERO_DCONF_PROFILE is missing; skipped"; return 2; fi
   if ! command -v dconf >/dev/null 2>&1; then say "dconf: dconf is not installed; skipped"; return 2; fi
@@ -364,9 +368,18 @@ seed_dconf() {
   if [[ $1 == 1 && -f $db ]]; then
     cp -p -- "$db" "$db.bak.$(date +%s)" || { FAILED+=(dconf); say "dconf: could not back up $db; not reset"; return 1; }
   fi
-  if DCONF_PROFILE=user dconf dump / | DCONF_PROFILE=tinkero dconf load /; then
+  tmp_profile=$(mktemp) || { FAILED+=(dconf); say "dconf: could not create a temp dconf profile; not seeded"; return 1; }
+  # Dump the user db alone (not dconf's merged "user" profile view, which on Fedora also carries
+  # authselect's locked org/gnome/login-screen keys from /etc/dconf/db/distro.d/) so the load into
+  # the tinkero profile, which stacks that same distro db, is never refused (issue #28).
+  if ! printf 'user-db:user\n' > "$tmp_profile"; then
+    rm -f -- "$tmp_profile"; FAILED+=(dconf); say "dconf: could not write a temp dconf profile; not seeded"; return 1
+  fi
+  if DCONF_PROFILE=$tmp_profile dconf dump / | DCONF_PROFILE=tinkero dconf load /; then
+    rm -f -- "$tmp_profile"
     mark dconf; say "dconf: seeded the session's settings from GNOME's"
   else
+    rm -f -- "$tmp_profile"
     FAILED+=(dconf); say "dconf: seeding failed"; return 1
   fi
 }
@@ -440,7 +453,18 @@ do_remove() {
     done
   done
   if [[ -f $HOME/.bashrc ]] && grep -qF -- "$bashrc_tag" "$HOME/.bashrc"; then
-    grep -vxF -- "$bashrc_line" "$HOME/.bashrc" > "$HOME/.bashrc.tinkero-tmp" || true
+    # Drop the guarded line and, if one comes right before it, the blank line seed_bashrc used to
+    # add there (a .bashrc seeded before that was fixed): that keeps removal byte for byte on a
+    # home upgraded from an older tinkero-provision, not just a freshly seeded one (issue #28).
+    awk -v line="$bashrc_line" '
+      { buf[NR] = $0 }
+      END {
+        for (i = 1; i <= NR; i++) {
+          if (buf[i] == line) { skip[i] = 1; if (i > 1 && buf[i - 1] == "") skip[i - 1] = 1 }
+        }
+        for (i = 1; i <= NR; i++) if (!(i in skip)) print buf[i]
+      }
+    ' "$HOME/.bashrc" > "$HOME/.bashrc.tinkero-tmp" || true
     cat "$HOME/.bashrc.tinkero-tmp" > "$HOME/.bashrc"
     rm -f -- "$HOME/.bashrc.tinkero-tmp"
   fi

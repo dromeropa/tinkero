@@ -10,8 +10,27 @@ for s in systemctl omarchy-notification-send omarchy-notification-wait omarchy-t
 done
 cat > "$d/bin/dconf" <<'S'
 #!/bin/bash
-echo "dconf $* profile=${DCONF_PROFILE:-}" >> "$LOG"
-case $1 in dump) printf '[org/gnome]\nk=1\n' ;; load) cat > "$DCONF_IN" ;; esac
+# DCONF_PROFILE is either a literal profile name ("tinkero") or, for the isolated user-db dump,
+# a path to a one-line profile file; log the file's content so tests can tell which was used.
+p=${DCONF_PROFILE:-}; content=$p; [[ -f $p ]] && content=$(cat -- "$p")
+echo "dconf $* profile=$content" >> "$LOG"
+case $1 in
+  dump)
+    # DCONF_AUTHSELECT_LOCK simulates Fedora's authselect locks: a merged/"user"-profile dump
+    # would carry org/gnome/login-screen, which the tinkero profile's load then refuses.
+    if [[ ${DCONF_AUTHSELECT_LOCK:-} == 1 && $content != user-db:user ]]; then
+      printf '[org/gnome]\nk=1\n\n[org/gnome/login-screen]\nlogo=true\n'
+    else
+      printf '[org/gnome]\nk=1\n'
+    fi ;;
+  load)
+    data=$(cat)
+    if [[ $data == *login-screen* ]]; then
+      echo "error: The operation attempted to modify one or more non-writable keys" >&2
+      exit 1
+    fi
+    printf '%s' "$data" > "$DCONF_IN" ;;
+esac
 S
 printf '#!/bin/bash\nexit 1\n' > "$d/bin/git"     # no global identity configured
 cat > "$d/bin/omarchy-default-agent" <<'S'
@@ -227,7 +246,7 @@ assert_eq "$(grep -o '^leaf [a-z-]*' "$LOG" | paste -sd' ')" "leaf theme leaf mi
 assert_contains "$(cat "$LOG")" "leaf theme headless=1" "steps: the first theme is headless outside a session"
 assert_symlink "$HOME/.claude/skills/omarchy" "$OMARCHY_PATH/default/agents/skills/omarchy" "steps: skills linked (claude)"
 assert_symlink "$HOME/.hermes/skills/diagnose-crash" "$OMARCHY_PATH/default/agents/skills/diagnose-crash" "steps: skills linked (hermes)"
-assert_contains "$(cat "$LOG")" "dconf dump / profile=user" "dconf: GNOME's settings are dumped from the user profile"
+assert_contains "$(cat "$LOG")" "dconf dump / profile=user-db:user" "dconf: GNOME's user db alone is dumped, through a one-line profile file"
 assert_contains "$(cat "$LOG")" "dconf load / profile=tinkero" "dconf: and loaded into the tinkero profile"
 assert_eq "$(cat "$DCONF_IN")" $'[org/gnome]\nk=1' "dconf: the dump is what gets loaded"
 assert_contains "$out" "step mise: ok" "steps: reported"
@@ -243,6 +262,17 @@ assert_eq "$(grep -c '^dconf' "$LOG")" 0 "reset dconf: nothing ran"
 : > "$LOG"; out=$(DBUS_SESSION_BUS_ADDRESS='' "$T" --reset dconf 2>&1) && rc=0 || rc=$?
 assert_eq "$rc" 2 "reset dconf: a skipped reset (no session bus) does not exit 0 either"
 assert_eq "$(grep -c '^dconf' "$LOG")" 0 "reset dconf: nothing ran, again"
+
+# dconf: seeding must not fail on authselect's locked keys (issue #28). A merged/"user"-profile
+# dump would carry org/gnome/login-screen, which the tinkero profile's load refuses (the stub
+# simulates dconf's real refusal); the fix dumps the user db alone through a one-line profile
+# file, so login-screen never appears in the dump and the load succeeds.
+newhome 22
+out=$(DCONF_AUTHSELECT_LOCK=1 "$T" --yes 2>&1)
+assert_contains "$(cat "$LOG")" "dconf dump / profile=user-db:user" "dconf/authselect: the dump uses the isolated user db, not the merged view"
+assert_contains "$out" "dconf: seeded the session's settings from GNOME's" "dconf/authselect: seeding succeeds despite the locked login-screen keys"
+if grep -q "seeding failed" <<<"$out"; then not_ok "dconf/authselect: the load is not refused"; else ok "dconf/authselect: the load is not refused"; fi
+assert_eq "$(cat "$DCONF_IN")" $'[org/gnome]\nk=1' "dconf/authselect: login-screen never reaches the load"
 
 # calling seed_dconf on the left of "||" (as --reset dconf does) turns off errexit for its whole
 # body, not just its final status, so a failed backup must stop it explicitly, not rely on set -e
@@ -383,6 +413,28 @@ echo edited >> "$HOME/.local/share/applications/foot.desktop"
 out=$("$T" --remove 2>&1)
 assert_contains "$out" "kept (you changed it): .local/share/applications/foot.desktop" "robustness: an orphaned row is listed"
 assert_file "$HOME/.local/share/applications/foot.desktop" "robustness: and kept"
+
+# (6) --remove restores a non-empty ~/.bashrc byte for byte (issue #28 comment): seed_bashrc must
+# not leave a blank line behind that --remove's grep -vxF does not know to drop.
+newhome 21
+printf 'echo mine\n' > "$HOME/.bashrc"
+before=$(sha "$HOME/.bashrc")
+"$T" --yes >/dev/null 2>&1
+assert_eq "$(grep -c 'tinkero-provision' "$HOME/.bashrc")" 1 "robustness: seed_bashrc actually appended the guarded line"
+assert_eq "$(grep -c '^$' "$HOME/.bashrc")" 0 "robustness: seed_bashrc appends without a leading blank line"
+"$T" --remove >/dev/null 2>&1
+assert_eq "$(sha "$HOME/.bashrc")" "$before" "robustness: --remove restores a non-empty .bashrc byte for byte"
+
+# (7) --remove also drops a leading blank line from an old-style seed (one a pre-fix
+# tinkero-provision left behind), so an upgraded home still restores byte for byte.
+newhome 23
+printf 'echo mine\n' > "$HOME/.bashrc"
+before=$(sha "$HOME/.bashrc")
+# shellcheck disable=SC2016  # the guarded line is written literally, as a pre-fix tinkero-provision wrote it
+printf '\n%s\n' '[[ ${XDG_SESSION_DESKTOP:-} == Hyprland && -r /usr/share/omarchy/default/bash/rc ]] && source /usr/share/omarchy/default/bash/rc  # tinkero-provision' >> "$HOME/.bashrc"
+"$T" --remove >/dev/null 2>&1
+assert_eq "$(sha "$HOME/.bashrc")" "$before" "robustness: --remove also drops a leading blank line from an old-style (pre-fix) seed"
+
 "$ROOT/tests/fixtures/make-payload.sh" "$d/payload" >/dev/null
 
 rm -rf "$d"; finish
