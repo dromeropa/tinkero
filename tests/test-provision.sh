@@ -75,8 +75,9 @@ TABLE
 # 2. --plan on an empty home writes nothing and names every file
 newhome 1
 out=$("$T" --plan)
-assert_eq "$(grep -c $'^seed\t' <<<"$out")" 12 "plan: twelve files to seed on an empty home"
+assert_eq "$(grep -c $'^seed\t' <<<"$out")" 13 "plan: thirteen files to seed on an empty home"
 assert_contains "$out" $'seed\t.config/hypr/bindings.lua' "plan: config files"
+assert_contains "$out" $'seed\t.config/xdg-terminals.list' "plan: xdg-terminals.list is seeded (issue #35)"
 assert_contains "$out" $'seed\t.local/share/applications/Disk Usage.desktop' "plan: a launcher with a space in its name"
 assert_contains "$out" $'seed\t.XCompose' "plan: the XCompose file upstream's leaf would write"
 assert_contains "$out" $'seed\t.local/state/omarchy/preinstalls-removed' "plan: the preinstalls marker"
@@ -96,7 +97,9 @@ assert_no_path "$HOME/.local/share/applications/YouTube.desktop" "provision: web
 assert_no_path "$HOME/.config/chromium" "provision: skip list honoured"
 assert_file "$HOME/.local/state/omarchy/preinstalls-removed" "provision: preinstalls marker"
 assert_eq "$(sed -n 2p "$HOME/.XCompose")" '<Multi_key> <space> <n> : ""' "provision: XCompose from upstream's leaf, no identity"
-assert_eq "$(tsv | wc -l)" 12 "provision: twelve rows recorded"
+assert_eq "$(tsv | wc -l)" 13 "provision: thirteen rows recorded"
+assert_eq "$(cat "$HOME/.config/xdg-terminals.list")" "$(cat "$TINKERO_SHARE/config/xdg-terminals.list")" "provision: xdg-terminals.list seeded from Tinkero's override"
+assert_contains "$(cat "$HOME/.config/xdg-terminals.list")" "foot.desktop" "provision: xdg-terminals.list defaults to foot (issue #35)"
 assert_eq "$(row .config/hypr/hyprland.lua)" "$(sha "$HOME/.config/hypr/hyprland.lua")"$'\tv4.0.4-1\tseeded' "provision: a row is sha256, release, state"
 assert_eq "$(row '.local/share/applications/Disk Usage.desktop' | cut -f3)" seeded "provision: the row with a space in its path"
 assert_eq "$(grep -c 'tinkero-provision' "$HOME/.bashrc")" 1 "provision: the guarded bashrc line, once"
@@ -105,7 +108,7 @@ assert_eq "$(cat "$HOME/.local/state/tinkero/release")" "v4.0.4-1" "provision: r
 assert_contains "$out" "Note for v4.0.4" "provision: config notes shown"
 assert_eq "$(stat -c %a "$HOME/.config/hypr/hyprland.lua")" 644 "provision: seeded files are 0644"
 : > "$LOG"; out2=$("$T" --yes 2>&1)
-assert_eq "$(grep -c $'^current\t' <<<"$("$T" --plan)")" 12 "re-run: everything is current"
+assert_eq "$(grep -c $'^current\t' <<<"$("$T" --plan)")" 13 "re-run: everything is current"
 assert_eq "$(grep -c 'tinkero-provision' "$HOME/.bashrc")" 1 "re-run: the bashrc line is not duplicated"
 if grep -q "Note for" <<<"$out2"; then not_ok "re-run: notes are shown once"; else ok "re-run: notes are shown once"; fi
 
@@ -118,7 +121,7 @@ assert_eq "$(cat "$HOME/.config/hypr/hyprland.lua")" "mine" "conflict: the user'
 assert_contains "$out" "conflict: .config/hypr/hyprland.lua" "conflict: reported"
 assert_contains "$out" "diff $OMARCHY_PATH/config/hypr/hyprland.lua $HOME/.config/hypr/hyprland.lua" "conflict: with a diff command"
 assert_symlink "$HOME/.config/git/config" /dev/null "conflict: a symlinked target is never written through"
-assert_eq "$(tsv | wc -l)" 10 "conflict: neither file is recorded"
+assert_eq "$(tsv | wc -l)" 11 "conflict: neither file is recorded"
 assert_contains "$("$T" --plan)" $'conflict\t.config/git/config' "conflict: still reported by --plan"
 
 # 5. The git rule: no git configuration at all, or none is seeded
@@ -172,7 +175,7 @@ assert_eq "$rc" 1 "reset: an unknown path fails"
 echo x > "$HOME/.config/hypr/looknfeel.lua"; echo y > "$HOME/.local/state/tensaku/state.toml"
 "$T" --reset-all >/dev/null
 assert_eq "$(cat "$HOME/.config/hypr/looknfeel.lua")$(cat "$HOME/.local/state/tensaku/state.toml")" "-- looknfeel v1annotation-size-factor = 2.0" "reset-all: every packaged default restored"
-assert_eq "$(grep -c $'^current\t' <<<"$("$T" --plan)")" 12 "reset-all: everything current afterwards"
+assert_eq "$(grep -c $'^current\t' <<<"$("$T" --plan)")" 13 "reset-all: everything current afterwards"
 sed -i 's/tinkero_rev=2/tinkero_rev=1/' "$TINKERO_SHARE/upstream.lock"
 
 # 8. Refusals
@@ -182,7 +185,7 @@ newhome 5; "$T" --yes >/dev/null 2>&1
 echo 'broken line' >> "$HOME/.local/state/tinkero/seeded.tsv"
 out=$("$T" --plan 2>&1) && rc=0 || rc=$?
 assert_eq "$rc" 1 "a malformed seeded.tsv stops the run"
-assert_contains "$out" "seeded.tsv line 14" "and names the line"
+assert_contains "$out" "seeded.tsv line 15" "and names the line"
 
 # 8b. Robustness (review of plan 2E, Task 3)
 # (1) a write failure mid apply_plan does not abort the run or lose already-written rows
@@ -190,7 +193,7 @@ newhome 11
 mkdir -p "$HOME/.local/share"; : > "$HOME/.local/share/applications"
 out=$("$T" --yes 2>&1) && rc=0 || rc=$?
 assert_eq "$rc" 1 "robustness: a write failure mid-apply exits 1"
-assert_eq "$(tsv | wc -l)" 10 "robustness: only the files that could not be written are unrecorded"
+assert_eq "$(tsv | wc -l)" 11 "robustness: only the files that could not be written are unrecorded"
 assert_eq "$(row .config/hypr/hyprland.lua | cut -f3)" seeded "robustness: an unaffected file is still recorded"
 assert_contains "$out" "not complete:" "robustness: reported as not complete"
 assert_no_path "$HOME/.local/state/tinkero/release" "robustness: no release file when a file failed to write"
@@ -200,7 +203,7 @@ if grep -q $'conflict\t.config/hypr/hyprland.lua' <<<"$plan"; then not_ok "robus
 rm "$HOME/.local/share/applications"
 out=$("$T" --yes 2>&1) && rc=0 || rc=$?
 assert_eq "$rc" 0 "robustness: a further run succeeds once the obstruction is gone"
-assert_eq "$(tsv | wc -l)" 12 "robustness: all twelve rows recorded once the obstruction is gone"
+assert_eq "$(tsv | wc -l)" 13 "robustness: all thirteen rows recorded once the obstruction is gone"
 
 # (2) a directory at a target path is never written through or deleted
 newhome 12
@@ -208,7 +211,7 @@ mkdir -p "$HOME/.config/hypr/looknfeel.lua"
 "$T" --yes >/dev/null 2>&1 || true
 if [[ -d "$HOME/.config/hypr/looknfeel.lua" ]]; then ok "robustness: the directory at a target path is untouched"; else not_ok "robustness: the directory at a target path is untouched"; fi
 assert_eq "$(find "$HOME/.config/hypr/looknfeel.lua" -mindepth 1 | wc -l)" 0 "robustness: nothing was written into the directory"
-assert_eq "$(tsv | wc -l)" 11 "robustness: the directory's row is not recorded"
+assert_eq "$(tsv | wc -l)" 12 "robustness: the directory's row is not recorded"
 plan=$("$T" --plan) && rc2=0 || rc2=$?
 assert_eq "$rc2" 0 "robustness: --plan still succeeds with a directory at a target path"
 assert_contains "$plan" $'conflict\t.config/hypr/looknfeel.lua' "robustness: the directory is reported as a conflict"

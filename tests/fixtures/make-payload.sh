@@ -42,6 +42,7 @@ leaf audio-tuning first-run/audio-tuning.sh
 # shellcheck disable=SC2016
 printf 'tee ~/.XCompose >/dev/null <<EOF\ninclude "/usr/share/omarchy/default/xcompose"\n<Multi_key> <space> <n> : "$OMARCHY_USER_NAME"\nEOF\n' > "$o/install/user/xcompose.sh"
 echo '-- tinkero bindings: tmux and herdr' > "$t/config/hypr/bindings.lua"
+printf '# Terminal emulator preference order for xdg-terminal-exec\n# The first found and valid terminal will be used\nfoot.desktop\n' > "$t/config/xdg-terminals.list"
 printf 'chromium/\nchromium-flags.conf\n' > "$t/provision/skip.list"
 printf '# fixture units\nomarchy-keep.service\nmissing.service\n' > "$t/provision/session-units.list"
 printf 'omarchy_tag=v4.0.4\ntinkero_rev=1\n' > "$t/upstream.lock"
