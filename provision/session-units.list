@@ -7,5 +7,6 @@ omarchy-recover-internal-monitor.service
 omarchy-fcitx5.service
 bt-agent.service
 tinkero-inhibit-power-key.service
-# installed under ~/.config/systemd/user by `omarchy-audio-tuning on` on the laptops it matches (design D4)
+# file always installed by the package; gated by ConditionPathExists on the tuning config
+# `omarchy-audio-tuning on` writes only on the laptops it matches (design D4, issue #34)
 omarchy-speaker-tuning.service
