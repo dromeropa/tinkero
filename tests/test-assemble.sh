@@ -80,6 +80,25 @@ assert_file "$d/dest/usr/lib/systemd/user/bt-agent.service.d/tinkero.conf" "Tink
 assert_file "$d/dest/usr/lib/systemd/user/omarchy-speaker-tuning.service.d/tinkero.conf" "Tinkero's speaker-tuning drop-in lands"
 assert_eq "$(cat "$d/dest/usr/share/uwsm/env.d/20-tinkero")" "export DCONF_PROFILE=tinkero" "the DCONF_PROFILE env file lands"
 
+# install/helpers: browser-policy.sh (and as-root.sh, which it sources) must survive even though
+# install/helpers is otherwise dropped; only logging.sh, unused by anything kept, goes (issue #32:
+# omarchy-theme-set-browser and omarchy-install-browser source browser-policy.sh at build time).
+r3=$d/root-helpers; cp -a "$r" "$r3"
+echo 'install/helpers/logging.sh' >> "$r3/build/drop.list"
+mkdir -p "$d/h"; tar -xzf "$tb" -C "$d/h"
+mkdir -p "$d/h/omarchy-fixture/install/helpers"
+# shellcheck disable=SC2016  # the fixture helper expands BASH_SOURCE at run time
+printf 'source "$(dirname -- "${BASH_SOURCE[0]}")/as-root.sh"\nbrowser_policy_theme_hex() { :; }\n' \
+  > "$d/h/omarchy-fixture/install/helpers/browser-policy.sh"
+printf 'as_root() { "$@"; }\n' > "$d/h/omarchy-fixture/install/helpers/as-root.sh"
+printf 'omarchy_log_line() { :; }\n' > "$d/h/omarchy-fixture/install/helpers/logging.sh"
+tar -C "$d/h" -czf "$d/helpers.tar.gz" omarchy-fixture
+TINKERO_ROOT=$r3 "$ROOT/build/assemble" "$d/helpers.tar.gz" "$d/dest-helpers" >/dev/null
+oh=$d/dest-helpers/usr/share/omarchy
+assert_file "$oh/install/helpers/browser-policy.sh" "the kept helper lands in the assembled payload"
+assert_file "$oh/install/helpers/as-root.sh" "the helper it sources also lands"
+assert_no_path "$oh/install/helpers/logging.sh" "the other helper is still dropped"
+
 # a fixture root without systemd/ still assembles (other tests' private roots have none)
 r2=$d/root-nosystemd; cp -a "$r" "$r2"; rm -rf "$r2/systemd"
 TINKERO_ROOT=$r2 "$ROOT/build/assemble" "$tb" "$d/dest-nosystemd" >/dev/null

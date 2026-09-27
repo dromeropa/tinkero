@@ -31,7 +31,10 @@ config/omarchy/hooks/pre-refresh-pacman.d
 # --- upstream installer and first-run chain (audit section 6); tinkero-provision replaces it
 install/config
 install/hardware
-install/helpers
+# browser-policy.sh and as-root.sh (which it sources) stay: omarchy-theme-set-browser and
+# omarchy-install-browser, both kept, source browser-policy.sh at $OMARCHY_PATH/install/helpers
+# (issue #32). logging.sh is only used by the dropped installer chain.
+install/helpers/logging.sh
 install/login
 install/post-install
 install/provisioning
