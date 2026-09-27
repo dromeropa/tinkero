@@ -291,4 +291,20 @@ out=$("$GS" "$su" 2>&1) && rc=0 || rc=$?
 assert_eq "$rc" 2 "session-units: exits 2 on the wrong number of arguments"
 assert_contains "$out" "usage: gate-session-units" "session-units: and prints usage"
 
+# omarchy-speaker-tuning (issue #34): its unit file always ships, so gate-session-units' binding
+# check (above) passes on hardware no tuning matches too -- only the drop-in's own condition on
+# the config `omarchy-audio-tuning on` writes keeps the unit from crash-looping there. Guard the
+# real repo's drop-in directly, since the gate itself checks binding, not conditions.
+spk_conf=$(cat "$ROOT/systemd/omarchy-speaker-tuning.service.d/tinkero.conf")
+assert_contains "$spk_conf" 'ConditionPathExists=%E/pipewire/omarchy-speaker-tuning.conf' \
+  "speaker-tuning: drop-in gates on the tuning config omarchy-audio-tuning writes"
+assert_contains "$spk_conf" 'PartOf=graphical-session.target' \
+  "speaker-tuning: drop-in still stops with the session"
+
+if grep -q 'installed under ~/.config/systemd/user by' "$ROOT/provision/session-units.list"; then
+  not_ok "session-units.list: speaker-tuning comment no longer claims the file-existence check gates it"
+else
+  ok "session-units.list: speaker-tuning comment corrected"
+fi
+
 rm -rf "$d"; finish
