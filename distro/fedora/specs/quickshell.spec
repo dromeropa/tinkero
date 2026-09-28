@@ -10,6 +10,8 @@
 # Recipe ADAPTED from Fedora's own quickshell.spec (Neal Gompa / Jan Grulich,
 # the authoritative BuildRequires + cmake-flags reference), advanced to Omarchy
 # beta's exact 28771c7 snapshot, with these deviations:
+#   * Patch0 quickshell-pam-acct-mgmt.patch: PamContext also calls pam_acct_mgmt
+#                              after a successful pam_authenticate (Tinkero issue #46).
 #   * Source: pinned GitHub-mirror commit tarball (byte-stable archive), the
 #     omedora convention; sha256 in quickshell.spec.sources.
 #   * -DCRASH_HANDLER=OFF     — the crash handler needs cpptrace, which is NOT in
@@ -37,7 +39,7 @@
 
 Name:               quickshell
 Version:            0.3.0^20.git28771c7
-Release:            1%{?dist}
+Release:            2%{?dist}
 Summary:            Flexible QtQuick based desktop shell toolkit
 # Code is LGPL, Hyprland protocols are BSD-3-Clause, wlr protocols are HPND-sell-variant
 License:            LGPL-3.0-only AND BSD-3-Clause AND HPND-sell-variant
@@ -45,6 +47,9 @@ URL:                https://quickshell.org/
 # Pinned Omarchy 4 beta snapshot from the GitHub mirror. Unpacks to
 # quickshell-%%{commit}/.
 Source0:            https://codeload.github.com/quickshell-mirror/quickshell/tar.gz/%{commit}#/%{name}-%{version}.tar.gz
+# Tinkero: run PAM's account phase after authentication, so pam_faillock's tally reset runs
+# under the lock screen (issue #46). Applied by %%autosetup -p1.
+Patch0:             quickshell-pam-acct-mgmt.patch
 
 # https://fedoraproject.org/wiki/Changes/EncourageI686LeafRemoval
 ExcludeArch:        %{ix86}
@@ -137,6 +142,10 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/*.desktop
 %{_qt6_qmldir}/Quickshell/
 
 %changelog
+* Mon Sep 28 2026 Tinkero <noreply@tinkero> - 0.3.0^20.git28771c7-2
+- Call pam_acct_mgmt after a successful pam_authenticate, so the lock screen's
+  pam_faillock tally resets on unlock (issue #46).
+
 * Wed Aug 12 2026 omedora <noreply@omedora> - 0.3.0^20.git28771c7-1
 - Match Omarchy 4 beta's exact post-0.3.0 snapshot.
 - Include synchronous quickshell kill and IpcHandler lifetime fixes required by

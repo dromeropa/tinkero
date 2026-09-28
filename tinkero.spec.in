@@ -12,7 +12,8 @@ BuildRequires:  git-core python3 python3-fonttools ImageMagick
 
 # The pin (design spec 4.2): tree and compositor move in one transaction.
 Requires:       (hyprland >= @HYPRLAND@ with hyprland < @HYPRLAND_NEXT@)
-Requires:       quickshell = @QUICKSHELL@
+# The release floor is Tinkero's patched build (pam_acct_mgmt for the lock screen, issue #46).
+Requires:       (quickshell = @QUICKSHELL@ with quickshell >= @QUICKSHELL@-@QUICKSHELL_RELEASE@)
 Conflicts:      omedora
 Conflicts:      omedora-settings
 # Fedora's nwg-panel declares Supplements: hyprland; a conflict makes dnf drop that weak

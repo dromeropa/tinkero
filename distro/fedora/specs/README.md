@@ -9,7 +9,8 @@ Forked on 2026-09-22 from Omedora's packaging, `AndrewGaspar/omedora` branch `om
 commit `9672f96fd49addfcc953a7c4ac3b7c9a5b45bca5`, directory `omedora/packaging/copr/`
 (MIT licensed; see `../../../LICENSE` for Tinkero's own MIT terms). Changes at the fork:
 `omedora-nerd-fonts` became `tinkero-nerd-fonts`; `uwsm` no longer recommends `wofi` or
-`whiptail`; `srpm.sh` lost Omedora's self-source mode. The 24 other specs are byte-identical to
+`whiptail`; `srpm.sh` lost Omedora's self-source mode; `quickshell` later gained
+`quickshell-pam-acct-mgmt.patch` (issue #46). The 23 other specs are byte-identical to
 Omedora's; their comments still say "omedora" where they describe history.
 
 ## Layout
@@ -23,7 +24,8 @@ Omedora's; their comments still say "omedora" where they describe history.
 - `build-order.txt`: the order `build/tinkero-copr` submits builds in. The Hyprland stack
   has deep intra-stack BuildRequires; each `-devel` must be published before the next
   package builds.
-- `macros.hyprland`, `herdr-libvt-only.patch`: local sources two specs need.
+- `macros.hyprland`, `herdr-libvt-only.patch`, `quickshell-pam-acct-mgmt.patch`: local
+  sources three specs need.
 
 ## Bumping a package
 
