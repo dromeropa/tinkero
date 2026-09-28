@@ -208,9 +208,13 @@ The second terminal is a text console. The viewer does not pass `Ctrl+Alt+F3` to
 
 `Super+Ctrl+L`, type a wrong password twice, and leave the lock up.
 
+- [ ] `rpm -q quickshell` prints `quickshell-0.3.0^20.git28771c7-2.fc44.x86_64` (Tinkero's build with the account-phase patch, #46)
 - [ ] the lock appears and refuses both wrong passwords
+- [ ] the on-screen counter reads `(1)` after the first wrong password and `(2)` after the second (#46 saw +2 per attempt; that came from the broken file's error path)
 - [ ] from the TTY, `sudo faillock --user "$USER" | tee ~/vmcheck/3-lock.txt` shows 2 failures, both from `omarchy-lock-password` (#29, first defect: none were recorded after a boot)
-- [ ] back in the session, the right password unlocks; then from the TTY, `sudo faillock --user "$USER" | tee -a ~/vmcheck/3-lock.txt` shows no failures (#29, second defect: the unlock never reset the tally; the `wrapped` variant now resets with `pam_faillock authsucc` in the auth phase)
+- [ ] back in the session, the right password unlocks; then from the TTY, `sudo faillock --user "$USER" | tee -a ~/vmcheck/3-lock.txt` shows no failures (#29, second defect, fixed by #46: the lock now runs the account phase, whose `pam_faillock` resets the tally)
+- [ ] the right password unlocks on the first try (#46: before the fix, no password did)
+- [ ] `journalctl --user -b | grep -i "module is unknown"` prints nothing
 - [ ] `sudo ausearch -m AVC -ts recent` prints `<no matches>`
 
 Then switch the host to `with-faillock` and let the sync follow it. From the TTY, clear the tally first: `with-faillock` puts the host's own `pam_faillock` into `system-auth` and `password-auth` with its default `deny=3`, so a failure still on the tally plus the next check's wrong password, or a sudo typo, can lock both the lock screen and `sudo` out.
@@ -224,8 +228,10 @@ tinkero-pam-sync --check; echo $?     # "current: plain", 0
 ```
 
 - [ ] the three outputs are as commented
-- [ ] lock again, one wrong password, then `sudo faillock --user "$USER" | tee -a ~/vmcheck/3-lock.txt` from the TTY shows exactly 1 failure (not 2: the `plain` variant does not double count); the right password unlocks, and `sudo faillock --user "$USER"` then shows no failures (the `plain` variant's `authsucc`, #29)
+- [ ] lock again, one wrong password, then `sudo faillock --user "$USER" | tee -a ~/vmcheck/3-lock.txt` from the TTY shows exactly 1 failure (not 2: the `plain` variant does not double count); the right password unlocks, and `sudo faillock --user "$USER"` then shows no failures (`password-auth`'s own account-phase `pam_faillock`, run by the patched Quickshell, #46)
 - [ ] `sudo authselect disable-feature with-faillock && sudo tinkero-pam-sync` prints `wrote wrapped`
+
+Fingerprint unlock is not checked (the VM has no reader); the account phase applies to it too (spec 4.8).
 
 ## 4. The GNOME invariant, three ways
 

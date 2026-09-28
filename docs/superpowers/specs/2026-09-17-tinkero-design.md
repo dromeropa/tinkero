@@ -77,11 +77,11 @@ The agent CLIs are **not packaged**. They are installed lazily through mise stub
 
 ```
 Requires: (hyprland >= 0.56.2 with hyprland < 0.57)
-Requires: quickshell = 0.3.0^20.git28771c7
+Requires: (quickshell = 0.3.0^20.git28771c7 with quickshell >= 0.3.0^20.git28771c7-2)
 Conflicts: omedora, omedora-settings
 ```
 
-The `with` form is RPM's rich-dependency idiom for a version range on one package; `rpmspec --parse` in CI lint confirms the generated spec parses. A tree bump and the compositor bump it needs therefore land in the same dnf transaction or not at all. There is no `dnf versionlock`, nothing to unlock per machine, and nothing left behind on removal.
+The release floor is Tinkero's own patched build (4.8), taken from the lock's `quickshell_release`. The `with` form is RPM's rich-dependency idiom for a version range on one package; `rpmspec --parse` in CI lint confirms the generated spec parses. A tree bump and the compositor bump it needs therefore land in the same dnf transaction or not at all. There is no `dnf versionlock`, nothing to unlock per machine, and nothing left behind on removal.
 
 **`%install`**, in this order:
 
@@ -206,7 +206,7 @@ On every machine: `sudo dnf upgrade --refresh`, `mise up`, and `flatpak update` 
 
 For the packager:
 
-- **When wanted (monthly or less): bump the tree.** Follow the bump checklist in the audit, section 10: re-run the coupling greps on the new tag, diff the provisioning chain, the roster and the menu ids, classify new migrations into config notes, rebase the eleven patches, set the new Hyprland and Quickshell pins in `upstream.lock`, bump `tinkero_rev`. CI (section 8) must pass, including the VM smoke test, before the COPR build is tagged for release.
+- **When wanted (monthly or less): bump the tree.** Follow the bump checklist in the audit, section 10: re-run the coupling greps on the new tag, diff the provisioning chain, the roster and the menu ids, classify new migrations into config notes, rebase the eleven patches, set the new Hyprland and Quickshell pins in `upstream.lock`, bump `tinkero_rev`, rebase `quickshell-pam-acct-mgmt.patch` onto the new snapshot, and drop it once upstream Quickshell calls `pam_acct_mgmt` (4.8). CI (section 8) must pass, including the VM smoke test, before the COPR build is tagged for release.
 - **When Fedora's Qt minor version changes:** rebuild Quickshell (4.1).
 - **Twice a year: Fedora major upgrade.** Add the new chroot to the COPR and get green builds before upgrading any machine.
 
@@ -237,23 +237,21 @@ Design: the RPM ships two variants under `/usr/share/tinkero/pam/` and owns `/et
 
 ```
 # variant "wrapped": host WITHOUT with-faillock
-auth     required                 pam_faillock.so preauth silent deny=10 unlock_time=120
-auth     [success=1 default=bad]  substack  password-auth
-auth     [default=die]            pam_faillock.so authfail deny=10 unlock_time=120
-auth     sufficient               pam_faillock.so authsucc deny=10 unlock_time=120
-auth     required                 pam_deny.so
-account  required                 pam_faillock.so
-account  include                  password-auth
+auth     required       pam_faillock.so preauth silent deny=10 unlock_time=120
+auth     include        password-auth
+auth     [default=die]  pam_faillock.so authfail deny=10 unlock_time=120
+auth     required       pam_deny.so
+account  required       pam_faillock.so
+account  include        password-auth
 
 # variant "plain": host WITH with-faillock (password-auth already counts; add only the reset)
-auth     [success=ok default=die]  substack  password-auth
-auth     required                  pam_faillock.so authsucc
-account  include                   password-auth
+auth     include  password-auth
+account  include  password-auth
 ```
 
-**The reset runs in the auth phase, not the account phase.** The Quickshell lock authenticates through Quickshell's `PamContext`, which runs only `pam_authenticate` and never `pam_acct_mgmt` (confirmed at the pinned commit and on Quickshell master; the account phase would need root). So `pam_faillock`'s usual reset-on-success line, `account required pam_faillock.so`, never runs under the lock, and a successful unlock would otherwise leave earlier failures on the tally until `fail_interval` (15 min) ages them out (issue #29). The variants therefore reset with an `authsucc` line in the *auth* phase, exactly as upstream's own lock stack does. This forces the second change: the host stack is pulled in with **`substack`, not `include`**. Under `include`, a `sufficient pam_unix`/`pam_sss` inside `password-auth` short-circuits the whole stack on success, so no trailing `authsucc` would ever run; under `substack` that `sufficient` completes only the substack and returns control to this file, where the `success=` jump reaches `authsucc` and clears the tally. In the wrapped variant a wrong password falls through to `authfail` (recorded once) and `[default=die]` returns before `authsucc`; in the plain variant `password-auth`'s own faillock records the one failure and `default=die` returns before the added `authsucc`, so there is still no double count. The `account` lines are kept but are dead under the lock (harmless, and correct if any tool ever does call `pam_acct_mgmt`). If the user later toggles `with-faillock`, the installed variant no longer matches: enabling it leaves the wrapped file double counting (fails safe: lockout comes sooner, and how much sooner depends on the host's own `deny=` in `/etc/security/faillock.conf`, whose default of 3 is far stricter than the wrapper's 10); disabling it leaves the plain file with no lockout (fails open). `tinkero-status` therefore compares the installed file with the variant the current profile calls for and reports a mismatch as actionable, with `sudo tinkero-pam-sync` as the fix. The ghost entry is `%attr(0644,root,root)`; removal of the RPM removes the file.
+**The reset runs in the account phase, which Tinkero's Quickshell build runs.** The Quickshell lock authenticates through `PamContext`. At the pinned commit it runs only `pam_authenticate`, so `pam_faillock`'s reset-on-success (`account required pam_faillock.so`) never ran (issue #29). Issue #29's first fix reset with `authsucc` in the auth phase and pulled `password-auth` in as `[success=...] substack`. That line is invalid: `substack` and `include` take no bracketed control, and libpam loaded a module literally named `substack`, so nobody could unlock (issue #46). No valid static file can do it either: after an `include` or `substack` the parent stack has no result to branch on, so a trailing `authsucc` either runs after a wrong password too (clearing the tally, which removes the lockout) or never runs. This was checked against real libpam. The fix is the standard one: Tinkero's `quickshell` RPM carries `quickshell-pam-acct-mgmt.patch`, which calls `pam_acct_mgmt` after a successful `pam_authenticate`. PR #43's belief that the account phase needs root was wrong: it runs unprivileged (`pam_unix` uses the same `unix_chkpwd` helper as the auth phase). Semantics: success unlocks; an expired password (`PAM_NEW_AUTHTOK_REQD`) still unlocks and is logged; any other account failure refuses the unlock, as a fresh login would be refused. It applies to every `PamContext`, including the fingerprint service, where `pam_faillock`'s account hook does nothing. Wrapped: a wrong password is recorded once by the outer `authfail` and `[default=die]` stops there; a correct one ends the stack at `password-auth`'s `sufficient` line. Plain: `password-auth`'s own faillock counts once and its own account line resets. No double count in either. Under an unpatched Quickshell the files still authenticate and count; only the reset is missing, so the build order is a dependency question, not a safety one. `tinkero` requires `quickshell >= <version>-<quickshell_release>` (4.12). `tests/test_pam_real.py` runs both variants through real libpam in CI. If the user later toggles `with-faillock`, the installed variant no longer matches: enabling it leaves the wrapped file double counting (fails safe: lockout comes sooner, and how much sooner depends on the host's own `deny=` in `/etc/security/faillock.conf`, whose default of 3 is far stricter than the wrapper's 10); disabling it leaves the plain file with no lockout (fails open). `tinkero-status` therefore compares the installed file with the variant the current profile calls for and reports a mismatch as actionable, with `sudo tinkero-pam-sync` as the fix. The ghost entry is `%attr(0644,root,root)`; removal of the RPM removes the file.
 
-**The tally file must exist before the unprivileged lock can record into it.** `pam_faillock` keeps its per-user tally in `/run/faillock/<user>`, and `/run/faillock` is `0755 root:root` and emptied at every boot. On a `with-faillock` host GDM's login stack (running as root) creates `/run/faillock/<user>` at login, so the `plain` variant inherits a file the lock can update. On a stock `local`-profile host nothing privileged runs `pam_faillock`, so the file is never created, and the `wrapped` lock — running as the unprivileged user (uid 1000) — cannot create it in a root-owned directory; `pam_faillock` then records nothing, silently, and never locks out (issue #29). Tinkero adds no privileged runtime actor (spec 5.3), so the file is seeded by a **tmpfiles.d entry**: `tinkero-pam-sync --tally <user>` (root, after validating the name and that the account exists) writes `/etc/tmpfiles.d/tinkero-lockout-<user>.conf` with `f /run/faillock/<user> 0660 <user> root -`, which systemd recreates every boot as `faillock` itself would (owner the user, group root, mode 0660). `install.sh` runs it for the installing user after `dnf install`, because `%posttrans` cannot (it does not know which user the desktop is for). This entry is per-user and not owned by the RPM; the trade-off (an untracked `/etc` file, single-user scope, no automatic cleanup on removal) is a documented follow-up, not solved in this revision. Phase 0 validated authentication itself on a real host; the auth-phase reset, the `substack` behavior and the `tmpfiles.d` tally seeding across a real boot under SELinux are re-checked by the 2F VM re-run.
+**The tally file must exist before the unprivileged lock can record into it.** `pam_faillock` keeps its per-user tally in `/run/faillock/<user>`, and `/run/faillock` is `0755 root:root` and emptied at every boot. On a `with-faillock` host GDM's login stack (running as root) creates `/run/faillock/<user>` at login, so the `plain` variant inherits a file the lock can update. On a stock `local`-profile host nothing privileged runs `pam_faillock`, so the file is never created, and the `wrapped` lock, running as the unprivileged user (uid 1000), cannot create it in a root-owned directory; `pam_faillock` then records nothing, silently, and never locks out (issue #29). Tinkero adds no privileged runtime actor (spec 5.3), so the file is seeded by a **tmpfiles.d entry**: `tinkero-pam-sync --tally <user>` (root, after validating the name and that the account exists) writes `/etc/tmpfiles.d/tinkero-lockout-<user>.conf` with `f /run/faillock/<user> 0660 <user> root -`, which systemd recreates every boot as `faillock` itself would (owner the user, group root, mode 0660). `install.sh` runs it for the installing user after `dnf install`, because `%posttrans` cannot (it does not know which user the desktop is for). This entry is per-user and not owned by the RPM; the trade-off (an untracked `/etc` file, single-user scope, no automatic cleanup on removal) is a documented follow-up, not solved in this revision. Phase 0 validated authentication itself on a real host; the account-phase reset under the patched Quickshell and the `tmpfiles.d` tally seeding across a real boot under SELinux are re-checked by the 2F VM re-run.
 
 The fingerprint variant, `/etc/pam.d/omarchy-lock-fingerprint`, is the one dynamic file: the patched `omarchy-apply-lock` writes it only when `fprintd-list` shows enrolments for the target user (upstream's `SUDO_USER`/`PKEXEC_UID` logic) and the host's `system-auth` uses `pam_fprintd.so` (plan 2F, design D10), and removes it otherwise. The RPM owns it as `%ghost`, no `%config` (rpm does not verify ghosts), so removal of the package removes it (D9). It runs only from the fingerprint setup and removal commands, on the user's request.
 
@@ -293,12 +291,14 @@ omarchy_commit=c668141e9c42b13c80c9ca4ea108e11708c5e8a5
 hyprland=0.56.2
 quickshell=0.3.0^20.git28771c7
 quickshell_commit=28771c7c74b42e20afca0b1b63980cb46515537c
+quickshell_release=2
 fedora=44
 tinkero_rev=1
 ```
 
 - `omarchy_commit` and `omarchy_sha256` exist because tags are mutable; the SRPM build fails if either does not match.
 - `hyprland` sets the lower bound and, through its minor version, the upper bound of the RPM requirement. The `Version:` in `distro/fedora/specs/hyprland.spec` is independent and may be newer within the same minor; CI fails if the COPR's Hyprland does not satisfy the lock.
+- `quickshell_release`: the lowest `quickshell` RPM release `tinkero` accepts, the first one carrying Tinkero's patch (4.8); `tests/test-specs.sh` checks it equals `quickshell.spec`'s `Release:`.
 - `fedora` is the release `install.sh` accepts. On any other release it stops and points at `tinkero-status`.
 - `tinkero_rev` increments whenever patches, replacements or menu overrides change without a tag change.
 
