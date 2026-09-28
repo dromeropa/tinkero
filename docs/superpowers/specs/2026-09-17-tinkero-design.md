@@ -293,14 +293,14 @@ quickshell=0.3.0^20.git28771c7
 quickshell_commit=28771c7c74b42e20afca0b1b63980cb46515537c
 quickshell_release=2
 fedora=44
-tinkero_rev=1
+tinkero_rev=2
 ```
 
 - `omarchy_commit` and `omarchy_sha256` exist because tags are mutable; the SRPM build fails if either does not match.
 - `hyprland` sets the lower bound and, through its minor version, the upper bound of the RPM requirement. The `Version:` in `distro/fedora/specs/hyprland.spec` is independent and may be newer within the same minor; CI fails if the COPR's Hyprland does not satisfy the lock.
 - `quickshell_release`: the lowest `quickshell` RPM release `tinkero` accepts, the first one carrying Tinkero's patch (4.8); `tests/test-specs.sh` checks it equals `quickshell.spec`'s `Release:`.
 - `fedora` is the release `install.sh` accepts. On any other release it stops and points at `tinkero-status`.
-- `tinkero_rev` increments whenever patches, replacements or menu overrides change without a tag change.
+- `tinkero_rev` increments whenever patches, replacements or menu overrides change without a tag change, and more generally whenever the `tinkero` package's content or dependencies change without a tag change: COPR keeps earlier builds in the repository, so a rebuild with an unchanged release has the same NVR as the build it replaces, and dnf may install either (issue #48, after #46's PAM and Quickshell change shipped as a second `4.0.4-1`).
 
 ### 4.13 Branding
 

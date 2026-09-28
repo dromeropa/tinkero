@@ -162,7 +162,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/dromeropa/tinkero/master/ins
 
 - [ ] `install.sh` finishes with "Log out and choose Tinkero" and `install.txt` shows `tinkero-provision: dconf: seeded the session's settings from GNOME's` and `tinkero-provision: provisioned for <release>`, not `not complete` (#28); `install.txt` shows `wrote wrapped` inside dnf's scriptlet output (`%posttrans`), then `current: wrapped` from `install.sh`'s own `sudo tinkero-pam-sync`, then `wrote tally <your user>` from `sudo tinkero-pam-sync --tally` (#29)
 - [ ] `diff ~/vmcheck/snap-0-baseline.txt ~/vmcheck/snap-0b-installed.txt` is clean (see "Reading a diff"): installing and provisioning changed nothing GNOME sees (the guarded `~/.bashrc` line is filtered out by the snapshot, and since #28 no blank line comes with it)
-- [ ] `rpm -qf /etc/pam.d/omarchy-lock-password` prints `tinkero-4.0.4-1.fc44.noarch`
+- [ ] `rpm -qf /etc/pam.d/omarchy-lock-password` prints `tinkero-4.0.4-2.fc44.noarch` (#48: the #46 build supersedes the pre-fix `-1`)
 - [ ] `rpm -q quickshell` prints `quickshell-0.3.0^20.git28771c7-2.fc44.x86_64`: Tinkero's build with the account-phase patch (#46). A `-1` means the COPR rebuild is missing; stop here, the lock would unlock but never clear its tally
 - [ ] `rpm -q --requires tinkero | grep quickshell` prints `(quickshell = 0.3.0^20.git28771c7 with quickshell >= 0.3.0^20.git28771c7-2)`
 - [ ] `grep -c substack /etc/pam.d/omarchy-lock-password` prints `0` and `grep -v '^#' /etc/pam.d/omarchy-lock-password` shows `auth include password-auth` between `preauth` and `authfail` (the #46 file, not #43's)
