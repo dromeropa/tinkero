@@ -8,4 +8,4 @@ quickshell=0.3.0^20.git28771c7
 quickshell_commit=28771c7c74b42e20afca0b1b63980cb46515537c
 quickshell_release=2
 fedora=44
-tinkero_rev=1
+tinkero_rev=2
