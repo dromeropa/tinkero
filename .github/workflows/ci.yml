@@ -32,6 +32,10 @@ jobs:
           distro/fedora/replacements/* distro/fedora/lib/pkg.sh
           distro/fedora/specs/srpm.sh build/tinkero-copr bin/tinkero-* distro/fedora/bin/*
       - name: Unit tests
+        # TINKERO_PAM_REAL=1: tests/test_pam_real.py must run (the job is root in a container);
+        # a missing prerequisite fails the job instead of skipping it.
+        env:
+          TINKERO_PAM_REAL: "1"
         run: ./dev check
       - name: Gates on the real upstream tree
         run: ./dev gates

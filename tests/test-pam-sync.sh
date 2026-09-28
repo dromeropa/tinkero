@@ -128,21 +128,27 @@ run --nope
 assert_eq "$rc" 2 "unknown option: exit 2"
 assert_contains "$out" "unknown option" "unknown option: says so"
 
-# --- the packaged variants reset the tally in the auth phase (issue #29) ----------------------
-# The Quickshell lock runs only pam_authenticate, so the reset must be an authsucc line and the
-# host stack must come in as `substack` (an `include` would short-circuit past authsucc).
+# --- the packaged variants (issue #46) --------------------------------------------------------
+# tests/test_pam_real.py runs these files through real libpam; the text checks below only pin
+# their shape. The tally reset is the account phase's `pam_faillock.so`, which the lock runs
+# through Tinkero's patched quickshell (pam_acct_mgmt), so neither file needs authsucc.
 w=$ROOT/distro/fedora/pam/omarchy-lock-password.wrapped
 p=$ROOT/distro/fedora/pam/omarchy-lock-password.plain
-assert_contains "$(cat "$w")" "substack  password-auth" "wrapped: pulls the host stack in with substack, not include"
-assert_contains "$(cat "$w")" "[success=1 default=bad]" "wrapped: success jumps over authfail, failure falls through to it"
-assert_contains "$(cat "$w")" "[default=die]" "wrapped: a wrong password dies at authfail, never reaching authsucc"
-assert_contains "$(cat "$w")" "pam_faillock.so authsucc" "wrapped: resets the tally on success (authsucc)"
-assert_contains "$(cat "$w")" "pam_faillock.so authfail" "wrapped: still records a failure once (authfail)"
-assert_eq "$(grep -c 'include *password-auth' "$w")" "1" "wrapped: does not include password-auth in the auth phase (substack there, include only for account)"
-assert_contains "$(cat "$p")" "substack  password-auth" "plain: pulls the host stack in with substack"
-assert_contains "$(cat "$p")" "[success=ok default=die]" "plain: success falls through to authsucc, failure dies before it"
-assert_contains "$(cat "$p")" "pam_faillock.so authsucc" "plain: resets the tally on success (authsucc)"
-assert_eq "$(grep -Ec 'pam_faillock\.so (preauth|authfail)' "$p")" "0" "plain: adds no preauth/authfail, so it never double-counts the host's own faillock"
+active() { grep -vE '^[[:space:]]*(#|$)' "$1"; }
+assert_contains "$(active "$w")" "pam_faillock.so preauth silent deny=10 unlock_time=120" "wrapped: preauth with upstream's deny=10 unlock_time=120"
+assert_contains "$(active "$w")" "include        password-auth" "wrapped: the host stack comes in with include"
+assert_contains "$(active "$w")" "[default=die]  pam_faillock.so authfail deny=10 unlock_time=120" "wrapped: a wrong password is recorded once and dies at authfail"
+assert_contains "$(active "$w")" "account  required       pam_faillock.so" "wrapped: the account phase clears the tally"
+assert_eq "$(active "$w" | grep -c 'authsucc' || true)" "0" "wrapped: no authsucc (the reset is the account phase's)"
+assert_eq "$(active "$w" | grep -E '^account' | awk '{print $2}' | tr '\n' ' ')" "required include " "wrapped: account pam_faillock comes before account include password-auth"
+assert_eq "$(active "$p")" "$(printf 'auth     include  password-auth\naccount  include  password-auth')" "plain: exactly the two include lines"
+# the #46 class of bug: a bracketed control on include/substack is invalid PAM, and substack is
+# not used at all any more
+for f in "$ROOT"/distro/fedora/pam/*; do
+  n=$(basename "$f")
+  assert_eq "$(active "$f" | grep -cE '^[[:space:]]*-?[a-z]+[[:space:]]+\[[^]]*\][[:space:]]+(include|substack)\b' || true)" "0" "$n: no bracketed control on include/substack"
+  assert_eq "$(active "$f" | grep -c 'substack' || true)" "0" "$n: no substack line"
+done
 
 # --- --tally: the per-boot tmpfiles.d entry for /run/faillock/<user> (issue #29) --------------
 tf=$d/tmpfiles; mkdir -p "$tf"
