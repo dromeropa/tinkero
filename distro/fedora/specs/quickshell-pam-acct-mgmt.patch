@@ -1,0 +1,39 @@
+Tinkero: call pam_acct_mgmt after a successful pam_authenticate (issue #46).
+
+PamSubprocess::exec() ran only the auth phase, so pam_faillock's account-phase reset never ran
+for the lock screen and earlier failures stayed on the tally after a correct unlock. An
+expired password (PAM_NEW_AUTHTOK_REQD) still unlocks; any other account failure refuses.
+Drop this patch once upstream Quickshell calls pam_acct_mgmt.
+
+diff --git a/src/services/pam/subprocess.cpp b/src/services/pam/subprocess.cpp
+index dc36228..59b579b 100644
+--- a/src/services/pam/subprocess.cpp
++++ b/src/services/pam/subprocess.cpp
+@@ -105,7 +105,26 @@ PamIpcExitCode PamSubprocess::exec(const char* configDir, const char* config, co
+ 	switch (result) {
+ 	case PAM_SUCCESS:
+ 		logIf(this->log) << "Authenticated successfully." << std::endl;
+-		code = PamIpcExitCode::Success;
++		// Tinkero: run the account phase too, the sequence PAM documents after
++		// pam_authenticate. pam_faillock clears its tally there, and the host's account
++		// policy (expiry, pam_access) applies to an unlock as it does to a login.
++		result = pam_acct_mgmt(handle, 0);
++		switch (result) {
++		case PAM_SUCCESS:
++			code = PamIpcExitCode::Success;
++			break;
++		case PAM_NEW_AUTHTOK_REQD:
++			logIf(true) << "Account check: password expired (code " << result
++			            << "); unlocking anyway, the lock screen cannot change it." << std::endl;
++			code = PamIpcExitCode::Success;
++			break;
++		default:
++			logIf(true) << "Account check failed after successful authentication: \""
++			            << pam_strerror(handle, result) << "\" (code " << result << "); refusing."
++			            << std::endl;
++			code = PamIpcExitCode::PamError;
++			break;
++		}
+ 		break;
+ 	case PAM_AUTH_ERR:
+ 		logIf(this->log) << "Failed to authenticate." << std::endl;

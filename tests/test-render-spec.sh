@@ -6,6 +6,7 @@ omarchy_tag=v4.0.4
 omarchy_commit=c668141e9c42b13c80c9ca4ea108e11708c5e8a5
 hyprland=0.56.2
 quickshell=0.3.0^20.git28771c7
+quickshell_release=2
 tinkero_rev=3
 L
 reset_lock() {
@@ -14,6 +15,7 @@ omarchy_tag=v4.0.4
 omarchy_commit=c668141e9c42b13c80c9ca4ea108e11708c5e8a5
 hyprland=0.56.2
 quickshell=0.3.0^20.git28771c7
+quickshell_release=2
 tinkero_rev=3
 L
 }
@@ -22,7 +24,7 @@ r >/dev/null; s=$(cat "$d/out.spec")
 assert_contains "$s" "Version:        4.0.4" "version is the tag without v"
 assert_contains "$s" "Release:        3%{?dist}" "release is tinkero_rev"
 assert_contains "$s" "Requires:       (hyprland >= 0.56.2 with hyprland < 0.57)" "hyprland range is derived from the lock"
-assert_contains "$s" "Requires:       quickshell = 0.3.0^20.git28771c7" "quickshell pin is verbatim"
+assert_contains "$s" "Requires:       (quickshell = 0.3.0^20.git28771c7 with quickshell >= 0.3.0^20.git28771c7-2)" "quickshell pin is verbatim and needs Tinkero's patched release"
 assert_contains "$s" "tinkero-nerd-fonts" "the Nerd font from the COPR is a hard requirement"
 assert_contains "$s" "ppd-service" "power profiles through the virtual provide, not power-profiles-daemon"
 if [[ $s != *power-profiles-daemon* ]]; then ok "power-profiles-daemon is not required by name"; else not_ok "power-profiles-daemon is not required by name"; fi
@@ -47,6 +49,12 @@ sed -i 's/^quickshell=.*/quickshell=0.3|x/' "$d/lock"
 out=$(r 2>&1) && rc=0 || rc=$?
 assert_eq "$rc" 1 "a quickshell value with unsupported characters is rejected"
 assert_contains "$out" "quickshell has characters that cannot appear in an RPM version" "by the validator, not by sed"
+
+reset_lock
+sed -i 's/^quickshell_release=.*/quickshell_release=2a/' "$d/lock"
+out=$(r 2>&1) && rc=0 || rc=$?
+assert_eq "$rc" 1 "a non-integer quickshell_release is rejected"
+assert_contains "$out" "quickshell_release must be an integer" "by the validator"
 
 reset_lock
 sed -i 's/^hyprland=.*/hyprland=0.09.1/' "$d/lock"

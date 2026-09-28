@@ -33,5 +33,12 @@ fi
 assert_file "$ROOT/tinkero.spec.in" "tinkero.spec.in present at the root"
 assert_file "$D/srpm.sh" "srpm.sh present"; assert_file "$D/macros.hyprland" "hyprland macros present"
 assert_file "$D/herdr-libvt-only.patch" "herdr patch present"
+assert_file "$D/quickshell-pam-acct-mgmt.patch" "quickshell patch present"
+assert_contains "$(cat "$D/quickshell.spec")" "Patch0:             quickshell-pam-acct-mgmt.patch" "quickshell.spec applies the pam_acct_mgmt patch"
+lock=$ROOT/upstream.lock
+qs_rel=$(grep -m1 -E '^Release:' "$D/quickshell.spec" | awk '{print $2}' | sed 's/%.*//')
+assert_eq "$qs_rel" "$(grep -E '^quickshell_release=' "$lock" | cut -d= -f2)" "quickshell.spec Release matches the lock's quickshell_release"
+qs_commit=$(grep -m1 -E '^%global commit ' "$D/quickshell.spec" | awk '{print $3}')
+assert_eq "$qs_commit" "$(grep -E '^quickshell_commit=' "$lock" | cut -d= -f2)" "quickshell.spec commit matches the lock's quickshell_commit"
 if grep -q "omedora-self" "$D/srpm.sh"; then not_ok "srpm.sh still has the self-source mode"; else ok "srpm.sh has no self-source mode"; fi
 finish

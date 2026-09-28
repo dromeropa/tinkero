@@ -32,6 +32,10 @@ jobs:
           distro/fedora/replacements/* distro/fedora/lib/pkg.sh
           distro/fedora/specs/srpm.sh build/tinkero-copr bin/tinkero-* distro/fedora/bin/*
       - name: Unit tests
+        # TINKERO_PAM_REAL=1: tests/test_pam_real.py must run (the job is root in a container);
+        # a missing prerequisite fails the job instead of skipping it.
+        env:
+          TINKERO_PAM_REAL: "1"
         run: ./dev check
       - name: Gates on the real upstream tree
         run: ./dev gates
@@ -54,6 +58,14 @@ jobs:
           mkdir -p "$PWD/.cache/srpm-ttfx"
           make -f .copr/Makefile srpm spec=distro/fedora/specs/ttfx.spec outdir="$PWD/.cache/srpm-ttfx"
           ls -l .cache/srpm-ttfx/*.src.rpm
+      - name: The Quickshell patch applies to the pinned tarball (issue #46)
+        run: |
+          mkdir -p "$PWD/.cache/srpm-quickshell" "$PWD/.cache/rpmbuild-quickshell"
+          make -f .copr/Makefile srpm spec=distro/fedora/specs/quickshell.spec outdir="$PWD/.cache/srpm-quickshell"
+          rpm -i --define "_topdir $PWD/.cache/rpmbuild-quickshell" .cache/srpm-quickshell/*.src.rpm
+          rpmbuild -bp --nodeps --define "_topdir $PWD/.cache/rpmbuild-quickshell" .cache/rpmbuild-quickshell/SPECS/quickshell.spec
+          f=$(find .cache/rpmbuild-quickshell/BUILD -type f -path '*/src/services/pam/subprocess.cpp' -print -quit)
+          [ -n "$f" ] && grep -q 'pam_acct_mgmt' "$f"
       - name: SRPM builds the way COPR builds it
         run: |
           mkdir -p "$PWD/.cache/srpm"

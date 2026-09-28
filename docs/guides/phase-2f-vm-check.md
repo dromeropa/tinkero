@@ -2,7 +2,16 @@
 
 Companion to plan 2F (`docs/superpowers/plans/2026-09-24-phase-2f-session-integration.md`, Task 9) and its design (`docs/superpowers/specs/2026-09-24-phase-2f-session-design.md`, section 7). It re-runs Phase 0's GNOME cycle against the real `tinkero` package from the COPR, with the session's own dconf database, and checks what 2F wired: the session units, the power key, the lock screen's PAM variants, removal. Budget: half a day, plus an hour if the VM has to be built from the ISO. Nothing here touches your real machine beyond running a VM.
 
-**Status: written 2026-09-24; first run 2026-09-26 (#27, did not pass); corrected from that run (#36) for the re-run (#37).** Record every command that had to change in the issue, as Phase 0 and #27 did; those corrections are part of the result.
+**Status: written 2026-09-24; first run 2026-09-26 (#27, did not pass); corrected from that run (#36) for the re-run (#37). The second run (2026-09-28, #37) stopped in section 3 at #46 (no password unlocked the lock); section 3's lock check was rewritten for #46's fix.** Record every command that had to change in the issue, as Phase 0 and #27 did; those corrections are part of the result.
+
+### Before you start
+
+The guide and `install.sh` are fetched from `master`, and the packages come from the COPR, so the #46 fix must be in all three before the VM is worth booting:
+
+- [ ] PR #47 (#46) is merged into `master`
+- [ ] after that merge, the COPR has built `quickshell` (release 2) and then `tinkero`, both succeeded: on the host, `copr-cli list-builds dromero/tinkero | head` (or the COPR web page) shows both, newest first, with state `succeeded`; note the two build ids for section 7
+
+Record the two build ids and the `master` commit you test (`git ls-remote https://github.com/dromeropa/tinkero master`).
 
 ## 1. The VM
 
@@ -101,7 +110,7 @@ chmod +x ~/vmcheck/snap.sh ~/vmcheck/insession.sh
 tail -n 1 ~/vmcheck/snap.sh ~/vmcheck/insession.sh    # "# end of snap.sh", "# end of insession.sh"
 ```
 
-If `tail` does not print both end markers, the guide on `master` predates #36's corrections: fetch it from the branch or tag that carries them instead of `master`.
+If `tail` does not print both end markers, the guide on `master` predates #36's corrections: fetch it from the branch or tag that carries them instead of `master`. Also check that it carries #46's lock check: `grep -c 'first try' ~/vmcheck/guide.md` prints a number above `0`; if it prints `0`, PR #47 is not merged yet (see "Before you start").
 
 This is `snap.sh`, what the commands above extract:
 
@@ -154,6 +163,9 @@ bash <(curl -fsSL https://raw.githubusercontent.com/dromeropa/tinkero/master/ins
 - [ ] `install.sh` finishes with "Log out and choose Tinkero" and `install.txt` shows `tinkero-provision: dconf: seeded the session's settings from GNOME's` and `tinkero-provision: provisioned for <release>`, not `not complete` (#28); `install.txt` shows `wrote wrapped` inside dnf's scriptlet output (`%posttrans`), then `current: wrapped` from `install.sh`'s own `sudo tinkero-pam-sync`, then `wrote tally <your user>` from `sudo tinkero-pam-sync --tally` (#29)
 - [ ] `diff ~/vmcheck/snap-0-baseline.txt ~/vmcheck/snap-0b-installed.txt` is clean (see "Reading a diff"): installing and provisioning changed nothing GNOME sees (the guarded `~/.bashrc` line is filtered out by the snapshot, and since #28 no blank line comes with it)
 - [ ] `rpm -qf /etc/pam.d/omarchy-lock-password` prints `tinkero-4.0.4-1.fc44.noarch`
+- [ ] `rpm -q quickshell` prints `quickshell-0.3.0^20.git28771c7-2.fc44.x86_64`: Tinkero's build with the account-phase patch (#46). A `-1` means the COPR rebuild is missing; stop here, the lock would unlock but never clear its tally
+- [ ] `rpm -q --requires tinkero | grep quickshell` prints `(quickshell = 0.3.0^20.git28771c7 with quickshell >= 0.3.0^20.git28771c7-2)`
+- [ ] `grep -c substack /etc/pam.d/omarchy-lock-password` prints `0` and `grep -v '^#' /etc/pam.d/omarchy-lock-password` shows `auth include password-auth` between `preauth` and `authfail` (the #46 file, not #43's)
 - [ ] `tinkero-pam-sync --check; echo $?` prints `current: wrapped` and `0`; `tinkero-pam-sync --variant` prints `wrapped`
 - [ ] `ls -Z /etc/pam.d/omarchy-lock-password` shows type `etc_t` (the SELinux user is whoever created it, `unconfined_u` or `system_u`; only the type matters), and `sudo restorecon -nv /etc/pam.d/omarchy-lock-password` prints nothing
 - [ ] `tail -n 1 /etc/tmpfiles.d/tinkero-lockout-$USER.conf` prints `f /run/faillock/<your user> 0660 <your user> root -` (#29: systemd recreates the lock's tally file at every boot)
@@ -204,16 +216,34 @@ The results go into the issue later, from GNOME (section 4's first login), where
 
 ### The lock screen
 
+This is #46's "How to verify", once per variant: a correct password unlocks on the first try, and two wrong ones then the right one leave exactly 2 failures that then clear to empty. Tinkero's `quickshell` (release 2) runs PAM's account phase after a correct password, and that phase's `pam_faillock` clears the tally (spec 4.8).
+
 The second terminal is a text console. The viewer does not pass `Ctrl+Alt+F3` to the guest, so switch from the host: `virsh send-key tinkero-2f KEY_LEFTCTRL KEY_LEFTALT KEY_F3` goes to tty3 (log in there as your user), and `virsh send-key tinkero-2f KEY_LEFTCTRL KEY_LEFTALT KEY_F2` comes back, where `F2` is the session's `XDG_VTNR` from `3-insession.txt` (2 in #27; use its number if it differs). "From the TTY" below means this.
 
-`Super+Ctrl+L`, type a wrong password twice, and leave the lock up.
+**Escape hatch.** If the lock ever refuses the right password, do not keep typing: every attempt is recorded. From the TTY, `sudo faillock --user "$USER" | tee -a ~/vmcheck/3-lock.txt` and `journalctl --user -b | grep -iE 'pam|quickshell' | tail -n 30 >> ~/vmcheck/3-lock.txt`, then `sudo faillock --user "$USER" --reset`. If the lock still refuses, `pkill -9 Hyprland` from the TTY ends the session and GDM comes back (its own PAM stack is not affected). Record it in the issue and stop there.
 
-- [ ] the lock appears and refuses both wrong passwords
-- [ ] from the TTY, `sudo faillock --user "$USER" | tee ~/vmcheck/3-lock.txt` shows 2 failures, both from `omarchy-lock-password` (#29, first defect: none were recorded after a boot)
-- [ ] back in the session, the right password unlocks; then from the TTY, `sudo faillock --user "$USER" | tee -a ~/vmcheck/3-lock.txt` shows no failures (#29, second defect: the unlock never reset the tally; the `wrapped` variant now resets with `pam_faillock authsucc` in the auth phase)
-- [ ] `sudo ausearch -m AVC -ts recent` prints `<no matches>`
+**Round 1, `wrapped`: the right password first.** `Super+Ctrl+L`, then type the right password.
 
-Then switch the host to `with-faillock` and let the sync follow it. From the TTY, clear the tally first: `with-faillock` puts the host's own `pam_faillock` into `system-auth` and `password-auth` with its default `deny=3`, so a failure still on the tally plus the next check's wrong password, or a sudo typo, can lock both the lock screen and `sudo` out.
+- [ ] the right password unlocks on the first try (#46: before the fix, no password did)
+
+**Round 2, `wrapped`: two wrong, then the right one.** `Super+Ctrl+L`, type a wrong password twice, and leave the lock up.
+
+- [ ] the lock refuses both wrong passwords, and the on-screen counter reads `(1)` after the first and `(2)` after the second (#46 saw 2 per attempt; that came from the broken file's error path)
+- [ ] from the TTY, `sudo faillock --user "$USER" | tee ~/vmcheck/3-lock.txt` shows exactly 2 failures, both from `omarchy-lock-password` (#29, first defect: none were recorded after a boot)
+- [ ] back in the session, the right password unlocks; then from the TTY, `sudo faillock --user "$USER" | tee -a ~/vmcheck/3-lock.txt` shows no failures (#29, second defect, fixed by #46: the account phase's `pam_faillock` reset the tally)
+
+**Round 3, `wrapped`, optional: the lockout still holds.** It takes three minutes and proves nothing weakened authentication. `Super+Ctrl+L`, type a wrong password ten times, then the right one.
+
+- [ ] the right password is refused while locked, and from the TTY `sudo faillock --user "$USER"` shows 10 failures
+- [ ] two minutes after the tenth wrong password (`unlock_time=120`), the right password unlocks, and `sudo faillock --user "$USER"` then shows no failures
+
+**Checks after the `wrapped` rounds.** From the TTY:
+
+- [ ] `journalctl --user -b | grep -i "module is unknown"` prints nothing (#46's failure)
+- [ ] `journalctl --user -b | grep -i "account check"` prints nothing: the patched Quickshell logs a line only when the account phase refuses or finds the password expired
+- [ ] `sudo ausearch -m AVC -ts boot` prints `<no matches>` (the account phase now runs `unix_chkpwd` to check expiry, a new path under SELinux)
+
+**Switch the host to `with-faillock`** and let the sync follow it. From the TTY, clear the tally first: `with-faillock` puts the host's own `pam_faillock` into `system-auth` and `password-auth` with its default `deny=3`, so a failure still on the tally plus the next round's two wrong passwords, or a sudo typo, can lock both the lock screen and `sudo` out.
 
 ```bash
 sudo faillock --user "$USER" --reset
@@ -221,11 +251,26 @@ sudo authselect enable-feature with-faillock
 tinkero-pam-sync --check; echo $?     # "wrapped installed, plain needed", 1
 sudo tinkero-pam-sync                 # wrote plain
 tinkero-pam-sync --check; echo $?     # "current: plain", 0
+grep -v '^#' /etc/pam.d/omarchy-lock-password    # the two include lines, nothing else
 ```
 
-- [ ] the three outputs are as commented
-- [ ] lock again, one wrong password, then `sudo faillock --user "$USER" | tee -a ~/vmcheck/3-lock.txt` from the TTY shows exactly 1 failure (not 2: the `plain` variant does not double count); the right password unlocks, and `sudo faillock --user "$USER"` then shows no failures (the `plain` variant's `authsucc`, #29)
+- [ ] the outputs are as commented
+
+**Round 4, `plain`: the right password first.** `Super+Ctrl+L`, then type the right password.
+
+- [ ] the right password unlocks on the first try
+
+**Round 5, `plain`: two wrong, then the right one.** `Super+Ctrl+L`, type a wrong password twice (not three times: the host's `deny=3` would lock you out for 10 minutes), and leave the lock up.
+
+- [ ] from the TTY, `sudo faillock --user "$USER" | tee -a ~/vmcheck/3-lock.txt` shows exactly 2 failures, not 4: the `plain` variant does not double count
+- [ ] back in the session, the right password unlocks, and `sudo faillock --user "$USER" | tee -a ~/vmcheck/3-lock.txt` then shows no failures (`password-auth`'s own account-phase `pam_faillock`, run by the patched Quickshell, #46)
+- [ ] `sudo ausearch -m AVC -ts boot` still prints `<no matches>`
+
+**Back to the stock host:**
+
 - [ ] `sudo authselect disable-feature with-faillock && sudo tinkero-pam-sync` prints `wrote wrapped`
+
+Fingerprint unlock is not checked (the VM has no reader); the account phase applies to it too (spec 4.8).
 
 ## 4. The GNOME invariant, three ways
 
@@ -277,4 +322,4 @@ loginctl disable-linger "$USER"
 
 ## 7. Recording
 
-Comment on the Task 9 issue from GNOME with every checkbox's result, `3-insession.txt` and `3-lock.txt`, the four snapshot diffs with their user-db diffs, and `rpm -q tinkero hyprland quickshell uwsm` from before removal. Copy `~/vmcheck/` off the guest if a failure needs a closer look.
+Comment on the run's issue (#37 for this re-run) from GNOME with the `master` commit and the two COPR build ids from "Before you start", every checkbox's result, `3-insession.txt` and `3-lock.txt`, the four snapshot diffs with their user-db diffs, and `rpm -q tinkero hyprland quickshell uwsm` from before removal. Copy `~/vmcheck/` off the guest if a failure needs a closer look.
