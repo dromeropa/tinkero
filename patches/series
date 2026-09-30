@@ -10,3 +10,4 @@
 0010-menu-package-guards-rpm.patch
 0011-omarchy-apply-lock-fingerprint-only.patch
 0012-browser-family-gate.patch
+0013-launch-webapp-browser-fallback.patch

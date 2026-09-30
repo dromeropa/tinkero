@@ -28,6 +28,9 @@ Requires:       polkit gnome-keyring pipewire wireplumber pipewire-pulseaudio pa
 Requires:       ppd-service bluez bluez-tools NetworkManager udiskie socat inotify-tools jq gum git-core fcitx5 diffutils fastfetch
 Requires:       foot xdg-terminal-exec tmux herdr mise
 Requires:       grim slurp wl-clipboard wtype tensaku hyprland-preview-share-picker ttfx
+# xdg-utils: omarchy-launch-browser resolves the default browser with xdg-settings and
+# omarchy-launch-webapp falls back to xdg-open (issue #51); Workstation does not pull it in.
+Requires:       xdg-utils
 
 %description
 Tinkero is the desktop around the Hyprland compositor: the Quickshell shell,

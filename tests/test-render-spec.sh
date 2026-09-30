@@ -25,6 +25,7 @@ assert_contains "$s" "Version:        4.0.4" "version is the tag without v"
 assert_contains "$s" "Release:        3%{?dist}" "release is tinkero_rev"
 assert_contains "$s" "Requires:       (hyprland >= 0.56.2 with hyprland < 0.57)" "hyprland range is derived from the lock"
 assert_contains "$s" "Requires:       (quickshell = 0.3.0^20.git28771c7 with quickshell >= 0.3.0^20.git28771c7-2)" "quickshell pin is verbatim and needs Tinkero's patched release"
+assert_contains "$s" "Requires:       xdg-utils" "xdg-utils is required: omarchy-launch-webapp falls back to xdg-open (issue #51)"
 assert_contains "$s" "tinkero-nerd-fonts" "the Nerd font from the COPR is a hard requirement"
 assert_contains "$s" "ppd-service" "power profiles through the virtual provide, not power-profiles-daemon"
 if [[ $s != *power-profiles-daemon* ]]; then ok "power-profiles-daemon is not required by name"; else not_ok "power-profiles-daemon is not required by name"; fi
