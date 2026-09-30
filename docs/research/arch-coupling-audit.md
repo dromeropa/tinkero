@@ -279,7 +279,7 @@ Added 2026-09-17. The original method (§1) did not look at the tree's top-level
 
 | Files | Verdict | Note |
 |---|---|---|
-| `sudoers.d/omarchy-dns`, `omarchy-theme-browser`, `omarchy-tzupdate` (`%wheel NOPASSWD` for three commands), `omarchy-passwd-tries` | drop | Tinkero adds no sudoers entries. The three commands still work and ask for a password |
+| `sudoers.d/omarchy-dns`, `omarchy-theme-browser`, `omarchy-tzupdate` (`%wheel NOPASSWD` for three commands), `omarchy-passwd-tries` | drop | Tinkero adds no sudoers entries. `omarchy-dns` and `omarchy-tzupdate` still work and ask for a password every time. `omarchy-theme-browser` names `omarchy-theme-set-browser-policy`, called from every `omarchy-theme-set`; patch 0012 (issue #52) gates that call on whether a Chromium-family browser is installed, so on a Firefox-only host it neither prompts nor writes, and only a host with one installed still asks once per theme change |
 | `security/faillock.conf` (`deny = 10`) | drop | replaces a file owned by Fedora's `pam`; the lock screen's own lockout is handled in its PAM file (spec §4.8) |
 | `nsswitch.conf` | drop | replaces a file authselect owns |
 | `sysctl.d/*` (2), `systemd/system.conf.d/*` (2), `systemd/user.conf.d/*`, `systemd/oomd.conf.d/*`, `systemd/resolved.conf.d/*` (2), `systemd/system/*.d/*` (4), `tmpfiles.d/*` (2), `sysusers.d/*`, `modprobe.d/*`, `NetworkManager/conf.d/*`, `gnupg/dirmngr.conf`, `cups/*` (2), `docker/daemon.json` | drop | system tuning and services; host policy |

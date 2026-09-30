@@ -1,0 +1,61 @@
+Gate omarchy-theme-set-browser's browser-policy write on Chromium-family presence.
+
+Every theme change calls omarchy-theme-set-browser, which calls
+omarchy-theme-set-browser-policy unconditionally; that helper's require_root always
+asks for a password before it even checks whether any managed-policy directory
+exists, so a host with no Chromium-family browser still gets a polkit prompt that
+protects nothing (issue #52). Skip the call (and so the prompt) unless a
+Chromium-family browser is actually on PATH. The detection list is a new sourced
+helper, install/helpers/browser-family.sh, so issue #51 (omarchy-launch-webapp) can
+reuse the exact same list.
+
+--- a/bin/omarchy-theme-set-browser
++++ b/bin/omarchy-theme-set-browser
+@@ -4,6 +4,7 @@
+ # omarchy:hidden=true
+ 
+ source "$OMARCHY_PATH/install/helpers/browser-policy.sh"
++source "$OMARCHY_PATH/install/helpers/browser-family.sh"
+ 
+ CHROMIUM_THEME=$HOME/.local/state/omarchy/current/theme/chromium.theme
+ THEME_HEX_COLOR=$BROWSER_POLICY_DEFAULT_COLOR
+@@ -23,7 +24,12 @@
+ }
+ 
+ failed=0
+-omarchy-theme-set-browser-policy "${THEME_HEX_COLOR#\#}" || failed=1
++# Only write (and ask root for) the managed-policy files when a Chromium-family browser
++# is actually installed; otherwise the policy write protects nothing and the prompt only
++# trains users to enter their password into dialogs (issue #52).
++if browser_family_chromium_present; then
++  omarchy-theme-set-browser-policy "${THEME_HEX_COLOR#\#}" || failed=1
++fi
+ 
+ refresh_running_browser chromium chromium
+ refresh_running_browser chrome google-chrome-stable || refresh_running_browser chrome google-chrome
+--- /dev/null
++++ b/install/helpers/browser-family.sh
+@@ -0,0 +1,23 @@
++# Chromium-family browser detection, shared by anything that must behave differently
++# depending on whether a Chromium-engine browser is installed (issues #51, #52). Probed
++# by executable name rather than by package or desktop file, since Chrome, Chromium,
++# Brave, Vivaldi and Edge all land a plain binary on PATH however they were installed.
++BROWSER_FAMILY_CHROMIUM_CMDS=(
++  chromium
++  chromium-browser
++  google-chrome
++  google-chrome-stable
++  brave
++  brave-browser
++  vivaldi
++  microsoft-edge
++)
++
++# True when any Chromium-family browser executable is on PATH.
++browser_family_chromium_present() {
++  local cmd
++  for cmd in "${BROWSER_FAMILY_CHROMIUM_CMDS[@]}"; do
++    command -v "$cmd" &>/dev/null && return 0
++  done
++  return 1
++}
