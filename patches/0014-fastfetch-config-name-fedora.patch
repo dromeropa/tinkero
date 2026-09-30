@@ -1,0 +1,22 @@
+Name the host distro on the About screen's OS line.
+
+The branding substitution (branding/strings.tsv) turns the OS row into "Tinkero
+$version, built on Omarchy" but that replaces the line instead of adding to
+it, so the host distro is never named. Add fastfetch's own "os" module, which
+reads /etc/os-release and needs no Tinkero-specific text, right below the
+substituted row.
+
+--- a/etc/fastfetch/config.jsonc
++++ b/etc/fastfetch/config.jsonc
+@@ -74,6 +74,11 @@
+       "text": "version=$(omarchy-version) && echo \"Omarchy $version\""
+     },
+     {
++      "type": "os",
++      "key": "│ ├",
++      "keyColor": "blue"
++    },
++    {
+       "type": "command",
+       "key": "│ ├󰘬",
+       "keyColor": "blue",
