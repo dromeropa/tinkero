@@ -1,0 +1,100 @@
+Make omarchy-launch-webapp fall back instead of running "--app=URL" as a program.
+
+Upstream resolves the xdg default browser, keeps it only when its desktop-file name
+looks Chrome-like, and otherwise substitutes chromium.desktop. On a host with no
+Chromium-family browser that desktop file does not exist, the Exec= lookup prints
+nothing, and the launch line becomes `uwsm-app -- --app=URL`: the flag is run as a
+program and every Learn menu row that uses the launcher fails (issue #51).
+
+Detection now goes: the xdg default browser when its Exec= binary is Chromium-family
+(the user's choice keeps the borderless --app window); else the first installed name
+from the shared family list; else xdg-open, a plain tab in the default browser. The
+list and its loop stay in install/helpers/browser-family.sh (issue #52), which gains
+browser_family_chromium_is and browser_family_chromium_first; the old
+browser_family_chromium_present now delegates to the latter. With neither a browser
+nor xdg-open present the launcher notifies and exits 1 rather than executing nothing.
+
+diff --git a/bin/omarchy-launch-webapp b/bin/omarchy-launch-webapp
+index 6ee0f84..a28a991 100755
+--- a/bin/omarchy-launch-webapp
++++ b/bin/omarchy-launch-webapp
+@@ -3,11 +3,38 @@
+ # omarchy:summary=Launch a URL as a web app in the default supported browser
+ # omarchy:args=<url>
+ 
+-browser=$(xdg-settings get default-web-browser)
++source "$OMARCHY_PATH/install/helpers/browser-family.sh"
+ 
+-case $browser in
+-google-chrome* | brave* | microsoft-edge* | opera* | vivaldi* | helium*) ;;
+-*) browser="chromium.desktop" ;;
+-esac
++if [[ -z ${1:-} ]]; then
++  echo "Usage: omarchy-launch-webapp <url> [browser-flags...]" >&2
++  exit 1
++fi
++url=$1
+ 
+-exec setsid uwsm-app -- $(sed -n 's/^Exec=\([^ ]*\).*/\1/p' {~/.local,~/.nix-profile,/usr}/share/applications/$browser 2>/dev/null | head -1) --app="$1" "${@:2}"
++# 1. The xdg default browser, when it is a Chromium-family binary: the user's own choice
++#    gets the borderless --app window.
++browser=$(xdg-settings get default-web-browser 2>/dev/null)
++browser_exec=""
++if [[ -n $browser ]]; then
++  browser_exec=$(sed -n 's/^Exec=\([^ ]*\).*/\1/p' {~/.local,~/.nix-profile,/usr}/share/applications/"$browser" 2>/dev/null | head -1)
++fi
++if [[ -n $browser_exec ]] && browser_family_chromium_is "$browser_exec"; then
++  exec setsid uwsm-app -- "$browser_exec" --app="$url" "${@:2}"
++fi
++
++# 2. Otherwise the first Chromium-family browser on PATH, in the helper's priority order
++#    (the --app flag is a Chromium-engine feature, so any of them gives the same window).
++if browser_exec=$(browser_family_chromium_first); then
++  exec setsid uwsm-app -- "$browser_exec" --app="$url" "${@:2}"
++fi
++
++# 3. None installed: a normal tab in whatever browser xdg-open finds. Degraded (no app
++#    window, and the Chromium flags after the URL are dropped) but functional, instead of
++#    upstream's empty command that ran "--app=URL" as a program (issue #51).
++if command -v xdg-open &>/dev/null; then
++  exec setsid uwsm-app -- xdg-open "$url"
++fi
++
++omarchy-notification-send -u critical "No web browser found" "Install a browser to open $url" 2>/dev/null
++echo "omarchy-launch-webapp: no web browser and no xdg-open found to open $url" >&2
++exit 1
+diff --git a/install/helpers/browser-family.sh b/install/helpers/browser-family.sh
+index 5bc9cff..b380ee0 100644
+--- a/install/helpers/browser-family.sh
++++ b/install/helpers/browser-family.sh
+@@ -13,11 +13,27 @@ BROWSER_FAMILY_CHROMIUM_CMDS=(
+   microsoft-edge
+ )
+ 
+-# True when any Chromium-family browser executable is on PATH.
+-browser_family_chromium_present() {
++# True when CMD (a bare name, or a path as read from a desktop file's Exec=) is one of the
++# Chromium-family executables.
++browser_family_chromium_is() {
++  local name=${1##*/} cmd
++  for cmd in "${BROWSER_FAMILY_CHROMIUM_CMDS[@]}"; do
++    [[ $name == "$cmd" ]] && return 0
++  done
++  return 1
++}
++
++# Print the first Chromium-family browser executable on PATH, in the list's priority order;
++# false, printing nothing, when there is none.
++browser_family_chromium_first() {
+   local cmd
+   for cmd in "${BROWSER_FAMILY_CHROMIUM_CMDS[@]}"; do
+-    command -v "$cmd" &>/dev/null && return 0
++    command -v "$cmd" 2>/dev/null && return 0
+   done
+   return 1
+ }
++
++# True when any Chromium-family browser executable is on PATH.
++browser_family_chromium_present() {
++  browser_family_chromium_first >/dev/null
++}
