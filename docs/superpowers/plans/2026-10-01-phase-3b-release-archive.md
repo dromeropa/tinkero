@@ -12,13 +12,13 @@
 
 ## Global Constraints
 
-- Base: `master` at `95bb8d4` plus the commit that added the Phase 3 design; every count in this plan was measured on 2026-10-01. The COPR's repository answered `list`'s own query with 75 rows, 36 of them once `-debuginfo` and `-debugsource` are dropped, from 26 source packages (the 26 lines of `distro/fedora/specs/build-order.txt`), 244 MiB. The new test file's tallies (`1..66`, `1..142`, `1..179`) were measured in a prototype of this plan.
+- Base: `master` at `95bb8d4` plus the commit that added the Phase 3 design; every count in this plan was measured on 2026-10-01. The COPR's repository answered `list`'s own query with 75 rows, 36 of them once `-debuginfo` and `-debugsource` are dropped, from 26 source packages (the 26 lines of `distro/fedora/specs/build-order.txt`), 244 MiB. The new test file's tallies (`1..70`, `1..150`, `1..188`) were measured in a prototype of this plan.
 - Phase 3's plans land serially (3A, 3B, 3C, 3D): where a step shows a diff of a file another Phase 3 plan also edits (`.github/workflows/ci.yml`, `dev`, the roadmap, the master spec, `CLAUDE.md`, `README.md`), apply the change to the file as it is then, and read a tally as "N more than before".
 - Plan 3A lands first and takes `tinkero_rev` to 3, so the first release is `v4.0.4-3`. The tests do not depend on that: they run against a private root with its own lock at `tinkero_rev=2`, the COPR's state on 2026-10-01, and the one assertion that reads the repository's own lock computes its expectation from it.
 - Nothing packaged changes: no payload file, `tinkero.spec.in` and `tinkero_rev` are untouched (design D22). `build/tinkero-release` is a packager's tool like `build/tinkero-copr`.
 - Data over code: the set is `distro/fedora/specs/build-order.txt` and what the COPR's repository serves, the pins are `upstream.lock`. `build/tinkero-release` carries no package list of its own.
 - Gate allowlists under `ci/allow/` only shrink. This plan adds no entry and touches no gate.
-- A token that comes from the network (a row of the repository's listing, the `smoke` input) is used only after it matched a fixed pattern, and one that fails its pattern is named by line number and never echoed (the rule of design D3, applied to the build tool: a package name is spliced into a dnf command line).
+- A token that comes from the network (a row of the repository's listing, the `smoke` input) is used only after it matched a fixed pattern, and one that fails its pattern is named by line number and never echoed (the rule of design D3, applied to the build tool: a package name is spliced into a dnf command line). The patterns are matched in the C locale: `build/tinkero-release` sets `LC_ALL=C` for itself, because under a collating UTF-8 locale bash's `[0-9]` and `[a-z]` admit the digits and letters of other scripts.
 - Bash scripts start with `#!/bin/bash` and `set -euo pipefail`; a header comment gives usage and the script prints it with `sed -n 'A,Bp' "$0"`; ShellCheck clean with `-x -e SC1090,SC1091`; no `A && B || C` one-liners (SC2015); `# shellcheck disable=SC2016` above a line that carries a literal `$` on purpose. The lock is parsed with `lock_get` (`build/lib.sh`), never sourced.
 - Tests: `tests/test-release.sh` sources `tests/lib.sh` and asserts on messages, not only on exit codes. No test uses the network or runs a real `dnf`, `rpmspec`, `createrepo_c`, `gh`, `rpm` or `curl`: each is a stub on `PATH`, written by the test into its temporary directory. `tar`, `sha256sum`, `awk`, `sed` and `sort` are the real ones. The seams are `TINKERO_ROOT`, `TINKERO_LOCK`, `TINKERO_COPR_PROJECT` and `TINKERO_RELEASE_REPO`. CI runs the suite as root in a container; nothing here has privilege logic, so nothing needs `TINKERO_EUID`.
 - Test safety: a test deletes only its own `mktmp` directory, by the house idiom's last line (`rm -rf "$d"; finish`), and nothing else; no test exports `HOME` or reassigns a variable that a later `rm` expands; a command under test that needs a home directory gets `HOME="$d/home"` on its own command line; a script that deletes deletes only a path it created itself and guards the variable (`${var:?}`). `build/tinkero-release` deletes nothing at all: it has no cleanup trap and no scratch directory, and no assertion depends on a deletion having happened.
@@ -34,13 +34,13 @@ To be filed as two issues, with the other Phase 3 plans' issues superseding plac
 
 | Task | Size | Area | WHAT | WHERE | HOW TO VERIFY |
 |---|---|---|---|---|---|
-| 1 `build/tinkero-release`: `tag`, `list`, `verify` | medium | build | the release tag from the lock; the COPR's newest binary packages as a five-column list; the check of that list against the build order, the specs and the lock's pins, every mismatch one `FAIL:` line | `build/tinkero-release`, `tests/test-release.sh` | `bash tests/test-release.sh` at `1..66`; ShellCheck clean |
-| 2 `fetch`, `pack`, `install-sh`, `notes` | medium | build | download exactly the listed packages; the tarball that is a dnf repository, `RPMS.txt`, `SHA256SUMS`; the pinned `install.sh`; the release's description | `build/tinkero-release`, `tests/test-release.sh` | `bash tests/test-release.sh` at `1..142` |
-| 3 The `release` workflow | small | ci | `release.yml` (dispatch only, `contents: write`, inputs `smoke` and `dry_run`); the tool in CI's ShellCheck list; CI asks every spec what `verify` asks | `.github/workflows/release.yml`, `.github/workflows/ci.yml`, `tests/test-release.sh` | `bash tests/test-release.sh` at `1..179`; CI green, its spec step printing 25 `name version-release` lines |
-| 4 Docs | small | docs | the release guide; README's install line; master spec 4.6, 4.11, 4.12, 8, 11, 12 and the status line; the roadmap row and queue; the workflow guide; `CLAUDE.md` | `docs/guides/release.md`, `docs/**`, `README.md`, `CLAUDE.md` | `./dev check` green; no em dash added; every quoted string replaced once |
-| 5 The first release and the rollback drill (post-merge) | medium | ci | a `dry_run` dispatch, the release `v4.0.4-3`, the drill on a VM, the README sentence | none in the code PR (a record on the issue, one small docs PR) | the release exists with four assets on the dispatched commit; the record of every expected line; closed by hand |
+| 1 `build/tinkero-release`: `tag`, `list`, `verify` | medium | build | the release tag from the lock; the COPR's newest binary packages as a five-column list; the check of that list against the build order, the specs and the lock's pins, every mismatch one `FAIL:` line | `build/tinkero-release`, `tests/test-release.sh` | `bash tests/test-release.sh` at `1..70`; ShellCheck clean |
+| 2 `fetch`, `pack`, `install-sh`, `notes` | medium | build | download exactly the listed packages; the tarball that is a dnf repository, `RPMS.txt`, `SHA256SUMS`; the pinned `install.sh`; the release's description | `build/tinkero-release`, `tests/test-release.sh` | `bash tests/test-release.sh` at `1..150` |
+| 3 The `release` workflow | small | ci | `release.yml` (dispatch only, `contents: write`, inputs `smoke` and `dry_run`); the tool in CI's ShellCheck list; CI asks every spec what `verify` asks | `.github/workflows/release.yml`, `.github/workflows/ci.yml`, `tests/test-release.sh` | `bash tests/test-release.sh` at `1..188`; CI green, its spec step printing 25 `name version-release` lines |
+| 4 Docs | small | docs | the release guide; master spec 4.6, 4.11, 4.12, 8, 11, 12 and the status line; the roadmap row and queue; the workflow guide; `CLAUDE.md`. The README's install line is Task 5's (design 3.4: once the first release exists) | `docs/guides/release.md`, `docs/**`, `CLAUDE.md` | `./dev check` green; no em dash added; every quoted string replaced once |
+| 5 The first release and the rollback drill (post-merge) | medium | ci | a `dry_run` dispatch, the release `v4.0.4-3`, the drill on a VM, the README's install line | none in the code PR (a record on the issue, one small docs PR: `README.md`, one roadmap line) | the release exists with four assets on the dispatched commit; the record of every expected line; closed by hand |
 
-After Tasks 1 to 4, `./dev check` runs one more test file, `tests/test-release.sh`, at `1..179`. No existing test file changes; their tallies are whatever they were before this plan (in CI at `95bb8d4`: test-assemble `1..70`, test-branding-render `1..34`, test-branding `1..14`, test-check-rpm `1..16`, test-copr `1..21`, test-fastfetch-fedora `1..3`, test-fetch `1..9`, test-gates `1..94`, test-install `1..34`, test-launch-webapp `1..41`, test-lock `1..4`, test-menu-guards `1..8`, test-pam-sync `1..75`, test-provision `1..189`, test-render-spec `1..25`, test-replacements `1..54`, test-session-end `1..35`, test-specs `1..88`, test-theme-set-browser `1..15`, test-update `1..6`, Python `Ran 45 tests`; plan 3A moves some of these before this plan lands).
+After Tasks 1 to 4, `./dev check` runs one more test file, `tests/test-release.sh`, at `1..188`. No existing test file changes; their tallies are whatever they were before this plan (in CI at `95bb8d4`: test-assemble `1..70`, test-branding-render `1..34`, test-branding `1..14`, test-check-rpm `1..16`, test-copr `1..21`, test-fastfetch-fedora `1..3`, test-fetch `1..9`, test-gates `1..94`, test-install `1..34`, test-launch-webapp `1..41`, test-lock `1..4`, test-menu-guards `1..8`, test-pam-sync `1..75`, test-provision `1..189`, test-render-spec `1..25`, test-replacements `1..54`, test-session-end `1..35`, test-specs `1..88`, test-theme-set-browser `1..15`, test-update `1..6`, Python `Ran 45 tests`; plan 3A moves some of these before this plan lands).
 
 ## File Structure
 
@@ -51,7 +51,8 @@ After Tasks 1 to 4, `./dev check` runs one more test file, `tests/test-release.s
 | `.github/workflows/release.yml` | the dispatched release: refusals, `list`, `verify`, `fetch`, `ci/check-rpm`, `./dev gates-at`, `pack`, `install-sh`, `notes`, then the artifact (dry run) or `gh release create` (design 3.3, D10, D23) |
 | `.github/workflows/ci.yml` | ShellCheck on the new tool; the spec step also runs the `rpmspec` query `verify` depends on, for every spec |
 | `docs/guides/release.md` | the operator's procedure: when, the order, the dry run, the release, what stops one, the assets, the rollback and its drill |
-| `README.md`, `CLAUDE.md`, `docs/guides/workflow.md`, the master spec, the roadmap | say what the code now does |
+| `CLAUDE.md`, `docs/guides/workflow.md`, the master spec, the roadmap | say what the code now does (Task 4) |
+| `README.md` | the install line becomes the release URL once the first release exists (Task 5's docs PR) |
 
 Interfaces later plans rely on:
 
@@ -354,11 +355,28 @@ assert_contains "$out" "line 1 is not name<TAB>version<TAB>release<TAB>arch<TAB>
 { cat "$d/list"; printf -- '--installroot=/x\t1\t1.fc44\tx86_64\tx-1-1.fc44\n'; } > "$d/list-opt"
 run verify "$d/list-opt"
 assert_eq "$rc" 1 "verify: a name that would read as an option is refused"
+assert_contains "$out" "line 37 is not name<TAB>version<TAB>release<TAB>arch<TAB>source" "verify: by the list check, before any comparison"
 { cat "$d/list"; sed -n '1p' "$d/list"; } > "$d/list-dup"
 run verify "$d/list-dup"
 assert_contains "$out" "line 37 lists aquamarine.x86_64 a second time" "verify: a package listed twice is refused"
 run verify "$d/nope"
 assert_eq "$rc" 1 "verify: a missing LIST is a failure"; assert_contains "$out" "no such list" "verify: and says so"
+
+# Patterns are matched in the C locale whatever the caller's is: under a collating UTF-8 locale
+# bash's [0-9] admits the digits of other scripts. These cases run under such a locale when one
+# is installed and under the caller's own when none is (CI's container); either way the refusal
+# is all that is printed.
+loc=$(locale -a 2>/dev/null | grep -m1 -E '^[a-z]{2}_[A-Z]{2}\.(utf8|UTF-8)$' || true)
+locenv=(); if [[ -n $loc ]]; then locenv=(LC_ALL="$loc"); fi
+five=$(printf '\xd9\xa5')      # U+0665, a digit that is not ASCII
+run_loc() { : > "$LOG"; out=$(env "${locenv[@]}" "$R" "$@" 2>&1) && rc=0 || rc=$?; }
+sed "s/^omarchy_tag=.*/omarchy_tag=v4.0.$five/" "$r/upstream.lock" > "$d/lock-digit"
+TINKERO_LOCK=$d/lock-digit run_loc tag
+assert_eq "$rc" 1 "tag: a digit of another script in the lock's tag is refused, whatever the caller's locale"
+assert_contains "$out" "omarchy_tag must be vMAJOR.MINOR.PATCH" "tag: and says why"
+{ cat "$d/list"; printf 'odd\t1.%s\t1.fc44\tx86_64\todd-1.%s-1.fc44\n' "$five" "$five"; } > "$d/list-digit"
+run_loc verify "$d/list-digit"
+assert_eq "$out" "error: $d/list-digit: line 37 is not name<TAB>version<TAB>release<TAB>arch<TAB>source" "verify: a row with such a digit is refused by line number, not echoed, and nothing else is printed"
 
 # usage
 run; assert_eq "$rc" 2 "no subcommand: usage, exit 2"
@@ -373,7 +391,7 @@ rm -rf "$d"; finish
 - [ ] **Step 2: Run it to see it fail**
 
 Run: `bash tests/test-release.sh`
-Expected: `1..66`, exit 1, 60 `not ok` (there is no `build/tinkero-release` yet). The six that pass without the tool are the two fixture checks (1, 2) and four absence checks (12, 19, 31, 41).
+Expected: `1..70`, exit 1, 64 `not ok` (there is no `build/tinkero-release` yet). The six that pass without the tool are the two fixture checks (1, 2) and four absence checks (12, 19, 31, 41).
 
 - [ ] **Step 3: `build/tinkero-release`**
 
@@ -399,6 +417,10 @@ The query is the design's (3.2), with one thing the design's text cannot show: d
 #   TINKERO_LOCK          the lock           (default: $TINKERO_ROOT/upstream.lock)
 # Needs dnf 5 and rpmspec. Never packaged.
 set -euo pipefail
+# Every pattern below is matched in the C locale: under a collating UTF-8 locale bash's [0-9]
+# and [a-z] admit the digits and letters of other scripts, and these patterns guard what
+# reaches a command line, a tag and the release's page.
+export LC_ALL=C
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 root=${TINKERO_ROOT:-$(dirname "$here")}
 # shellcheck source=build/lib.sh
@@ -536,9 +558,11 @@ esac
 
 `chmod +x build/tinkero-release`.
 
+`export LC_ALL=C` is there for the patterns, not for the messages. Measured while planning, under `en_AU.utf8`: bash's `[[ v4.0.X =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]` matches when X is U+0665, a digit of another script, and does not under `C`; gawk's and `grep -E`'s bracket ranges, and bash's glob ranges, do not match it under either. So the lock's values and the `smoke` input (Task 2), which bash matches, are the ones the export protects; `check_list`, which is awk, refuses such a row in any locale. The test runs its locale cases (the lock's tag and a list row here, the `smoke` URL in Task 2) under a collating UTF-8 locale when `locale -a` lists one and under the caller's own locale when none is installed, as in CI's container, where the cases still pass and prove only the refusal.
+
 - [ ] **Step 4: Run the tests and ShellCheck**
 
-Run: `bash tests/test-release.sh` Expected: `1..66`, no `not ok`.
+Run: `bash tests/test-release.sh` Expected: `1..70`, no `not ok`.
 Run: `shellcheck -x -e SC1090,SC1091 build/tinkero-release tests/test-release.sh` Expected: no output.
 Run: `build/tinkero-release tag` Expected: `v4.0.4-3` (the repository's lock after plan 3A; `v4.0.4-2` before it).
 Run: `build/tinkero-release; echo $?` Expected: the usage text (seventeen lines, from `tinkero-release: the release archive` to `Needs dnf 5 and rpmspec. Never packaged.`) on stderr, then `2`.
@@ -546,7 +570,7 @@ Run: `./dev check` Expected: green; `tests/test-release.sh` is the one new line 
 
 - [ ] **Step 5: First contact with the real repository (where the session has network and dnf 5)**
 
-Run: `build/tinkero-release list > .cache/release-list.tsv; wc -l < .cache/release-list.tsv; cut -f5 .cache/release-list.tsv | sort -u | wc -l`
+Run: `mkdir -p .cache; build/tinkero-release list > .cache/release-list.tsv; wc -l < .cache/release-list.tsv; cut -f5 .cache/release-list.tsv | sort -u | wc -l`
 Expected: `36` and `26`, the figures of 2026-10-01 (they move when the set does). Not measured at planning time through the tool (the planning session was not allowed to run dnf; the same query, run by hand on 2026-10-01, printed the 75 rows the fixture holds); the implementer measures it. A session without network skips this step and says so on the issue: Task 5 is then the first contact.
 Run (needs `rpmspec`, from `rpm-build` and `rpmdevtools`): `build/tinkero-release verify .cache/release-list.tsv; echo $?`
 Expected, when plan 3A has merged and its COPR build has not happened yet: the single line `FAIL: tinkero: the COPR has 4.0.4-2.fc44, the lock says 4.0.4-3.fc44`, then `1`. Once `tinkero` 4.0.4-3 is built: `PASS: 36 packages from 26 sources match the specs and the lock at v4.0.4-3`, then `0`. Not measured at planning time (no `rpmspec` on the planning machine); the implementer measures it, and Task 3 puts the same `rpmspec` query into CI.
@@ -558,7 +582,7 @@ git add build/tinkero-release tests/test-release.sh
 git commit -m "build: tinkero-release tag, list and verify (plan 3B; the release's set, checked against the specs and the lock)"
 ```
 
-**Verification for the issue:** `bash tests/test-release.sh` at `1..66` with no `not ok`; ShellCheck clean; `build/tinkero-release tag` prints the lock's tag; Step 5's output when the session could run it.
+**Verification for the issue:** `bash tests/test-release.sh` at `1..70` with no `not ok`; ShellCheck clean; `build/tinkero-release tag` prints the lock's tag; Step 5's output when the session could run it.
 
 ---
 
@@ -574,7 +598,7 @@ git commit -m "build: tinkero-release tag, list and verify (plan 3B; the release
   - `build/tinkero-release fetch LIST DEST`: one `dnf download --repofrompath=tinkero-release,<repo URL> --repo=tinkero-release --destdir=DEST` of every listed package as `name-version-release.arch`; then DEST must hold `name-version-release.arch.rpm` for every line and nothing else. Prints `fetched <n> packages into DEST`. Exit 1 naming each missing file and each stray one.
   - `build/tinkero-release pack DEST OUT`: `createrepo_c DEST`; writes `OUT/tinkero-<version>-<rev>.fc<N>-rpms.tar` (one top-level directory of the same name without `.tar`, holding the RPMs and `repodata/`), `OUT/RPMS.txt` (first line `Tinkero <tag> for Fedora <N>: <n> packages, <m> MiB`, then name, version-release and arch per package) and the tarball's line in `OUT/SHA256SUMS`. Prints the tarball's path. Exit 1 when DEST lacks `tinkero-<version>-<rev>.fc<N>.noarch.rpm`, holds anything that is not an RPM, or `createrepo_c` fails.
   - `build/tinkero-release install-sh OUT`: writes `OUT/install.sh` (mode 0755): the repository's `install.sh` with `TINKERO_REF=${TINKERO_REF:-master}` rewritten to `TINKERO_REF=${TINKERO_REF:-<tag>}` and `TINKERO_FEDORA=<N>` rewritten to the lock's `fedora`; adds its line to `OUT/SHA256SUMS`. Prints the path. Exit 1, writing nothing, unless each of the two lines is in the script exactly once and the result passes `bash -n`.
-  - `build/tinkero-release notes OUT SMOKE_URL`: writes `OUT/NOTES.md` from the tag, the lock's Fedora release, SMOKE_URL and `OUT/RPMS.txt`. Prints the path. Exit 1 unless SMOKE_URL matches `^https://github\.com/dromeropa/tinkero/[A-Za-z0-9/#?=&_.%-]+$` and `OUT/RPMS.txt` exists. `NOTES.md` is not an asset.
+  - `build/tinkero-release notes OUT SMOKE_URL`: writes `OUT/NOTES.md` from the tag, the lock's Fedora release, SMOKE_URL and `OUT/RPMS.txt`. Prints the path. Exit 1 unless SMOKE_URL matches `^https://github\.com/dromeropa/tinkero/[A-Za-z0-9/#?=&_.%-]+$`, has no `.` or `..` path segment (a URL that a browser would resolve outside the repository is not a record in it), and `OUT/RPMS.txt` exists. `NOTES.md` is not an asset.
   - Task 3's workflow calls the four in this order and uploads `OUT`'s tarball, `install.sh`, `SHA256SUMS` and `RPMS.txt`.
 
 Two things here are not in the design's table of subcommands (3.2); both are recorded under "## Deviations" by this task's PR. `notes` is a subcommand because the release's description (the tag, the smoke URL, the package table, the way back: design 3.3) and the check of the `smoke` input are more than a line of YAML, and the YAML is to stay thin. `install-sh` also writes its line into `OUT/SHA256SUMS`, because design 3.4 has `SHA256SUMS` cover the tarball and `install.sh` while 3.2 has `pack` write it before `install.sh` exists: each of the two subcommands owns its own line, in either order, any number of times.
@@ -649,7 +673,11 @@ assert_eq "$out" "$d/out/install.sh" "install-sh: prints the path"
 # shellcheck disable=SC2016  # the literal line of install.sh
 assert_eq "$(grep -c '^TINKERO_REF=' "$d/out/install.sh") $(grep -cxF 'TINKERO_REF=${TINKERO_REF:-v4.0.4-2}' "$d/out/install.sh")" "1 1" "install-sh: TINKERO_REF defaults to the release tag"
 assert_eq "$(grep -cx 'TINKERO_FEDORA=44' "$d/out/install.sh")" 1 "install-sh: TINKERO_FEDORA is the lock's fedora"
-assert_eq "$(diff "$ROOT/install.sh" "$d/out/install.sh" | grep -c '^[<>]')" 2 "install-sh: one line differs from the repository's install.sh, the rest is byte for byte"
+# with the repository's own Fedora release in the lock (the fixture's is the COPR's of 2026-10-01),
+# the rewrite changes the TINKERO_REF line and nothing else, whatever release the repository is on
+sed "s/^fedora=.*/fedora=$(sed -n 's/^fedora=//p' "$ROOT/upstream.lock")/" "$r/upstream.lock" > "$d/lock-own"
+TINKERO_LOCK=$d/lock-own "$R" install-sh "$d/out-own" >/dev/null
+assert_eq "$(diff "$ROOT/install.sh" "$d/out-own/install.sh" | grep -c '^[<>]')" 2 "install-sh: one line differs from the repository's install.sh, the rest is byte for byte"
 assert_contains "$(bash "$d/out/install.sh" --help)" "bash install.sh [--yes]" "install-sh: the result runs"
 assert_eq "$(cd "$d/out" && sha256sum -c SHA256SUMS 2>&1 | paste -sd'|')" "install.sh: OK|tinkero-4.0.4-2.fc44-rpms.tar: OK" "install-sh: SHA256SUMS now covers both files"
 run install-sh "$d/out"; run pack "$d/rpms" "$d/out"
@@ -694,6 +722,10 @@ assert_eq "$(cd "$d/out" && sha256sum SHA256SUMS RPMS.txt install.sh ./*.tar)" "
 run notes "$d/out" "https://example.com/dromeropa/tinkero/issues/60"
 assert_eq "$rc" 1 "notes: a smoke URL outside the repository is refused"
 assert_contains "$out" "must be a URL under https://github.com/dromeropa/tinkero/" "notes: and says what is wanted"
+run notes "$d/out" "https://github.com/dromeropa/tinkero/../../other/repo/issues/60"
+assert_eq "$rc" 1 "notes: a URL that climbs out of the repository with /../ is refused"
+run notes "$d/out" "https://github.com/dromeropa/tinkero/./issues/60"
+assert_eq "$rc" 1 "notes: a /./ segment is refused too"
 run notes "$d/out" "https://github.com/dromeropa/tinkero-fork/issues/60"
 assert_eq "$rc" 1 "notes: a repository whose name only starts the same is refused"
 run notes "$d/out" 'https://github.com/dromeropa/tinkero/issues/60) [x](https://evil.example'
@@ -702,10 +734,13 @@ if grep -qF 'evil.example' <<<"$out"; then not_ok "notes: the refused text is no
 run notes "$d/out-45" "https://github.com/dromeropa/tinkero/issues/60"
 assert_eq "$rc" 1 "notes: an OUT that pack has not filled is refused"; assert_contains "$out" "run pack first" "notes: and says so"
 run notes "$d/out"; assert_eq "$rc" 2 "notes without SMOKE_URL: exit 2"
+run_loc notes "$d/out" "https://github.com/dromeropa/tinkero/issues/6$five"
+assert_eq "$rc" 1 "notes: a smoke URL with a digit of another script is refused, whatever the caller's locale"
+assert_eq "$out" "error: notes: the smoke record must be a URL under https://github.com/dromeropa/tinkero/ (the issue or comment recording the VM smoke run)" "notes: not echoed, and nothing else is printed"
 ```
 
 Run: `bash tests/test-release.sh`
-Expected: `1..142`, exit 1, 64 `not ok`, the first of them `not ok 67 - fetch: exit 0`; cases 1 to 66 stay green. (Twelve of the new cases pass before the code exists: the four subcommands answer with the usage text and exit 2, which satisfies the "exit 2" and "nothing was written" assertions.)
+Expected: `1..150`, exit 1, 68 `not ok`, the first of them `not ok 71 - fetch: exit 0`; cases 1 to 70 stay green. (Twelve of the new cases pass before the code exists: the four subcommands answer with the usage text and exit 2, which satisfies the "exit 2" and "nothing was written" assertions.)
 
 - [ ] **Step 2: The four subcommands**
 
@@ -745,9 +780,9 @@ In `build/tinkero-release`:
 -# Needs dnf 5 and rpmspec. Never packaged.
 +# Needs dnf 5, rpmspec, createrepo_c, tar and sha256sum. Never packaged.
  set -euo pipefail
- here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
- root=${TINKERO_ROOT:-$(dirname "$here")}
-@@ -24,15 +31,17 @@
+ # Every pattern below is matched in the C locale: under a collating UTF-8 locale bash's [0-9]
+ # and [a-z] admit the digits and letters of other scripts, and these patterns guard what
+@@ -28,15 +35,17 @@
  lock=${TINKERO_LOCK:-$root/upstream.lock}
  project=${TINKERO_COPR_PROJECT:-dromero/tinkero}
  specs=$root/distro/fedora/specs
@@ -767,7 +802,7 @@ In `build/tinkero-release`:
    *) bad_usage ;;
  esac
  
-@@ -45,6 +54,7 @@
+@@ -49,6 +58,7 @@
  release_tag=$tag-$rev                # the git tag and the release's name: v4.0.4-3
  vr=${tag#v}-$rev.fc$fedora           # the tinkero RPM's version-release: 4.0.4-3.fc44
  repo=${TINKERO_RELEASE_REPO:-https://download.copr.fedorainfracloud.org/results/$project/fedora-$fedora-x86_64/}
@@ -775,7 +810,7 @@ In `build/tinkero-release`:
  
  # check_list WHAT [FILE]: every line of FILE (default: standard input) is name, version,
  # release, arch, source, tab-separated, each field from the alphabet RPM allows, no package
-@@ -145,8 +155,113 @@
+@@ -149,8 +159,116 @@
    return $rc
  }
  
@@ -862,10 +897,13 @@ In `build/tinkero-release`:
 +}
 +
 +cmd_notes() {
-+  local out=$1 smoke=$2 url='^https://github\.com/dromeropa/tinkero/[A-Za-z0-9/#?=&_.%-]+$'
++  local out=$1 smoke=$2 url='^https://github\.com/dromeropa/tinkero/[A-Za-z0-9/#?=&_.%-]+$' dots='/\.\.?([/#?]|$)'
 +  # The one value that comes from outside: it is written into Markdown, so it must be a plain
-+  # URL of this repository, and when it is not, it is not echoed either.
-+  [[ $smoke =~ $url ]] || die "notes: the smoke record must be a URL under $site/ (the issue or comment recording the VM smoke run)"
++  # URL of this repository, with no . or .. segment that would lead out of it, and when it is
++  # not, it is not echoed either.
++  if [[ ! $smoke =~ $url || $smoke =~ $dots ]]; then
++    die "notes: the smoke record must be a URL under $site/ (the issue or comment recording the VM smoke run)"
++  fi
 +  [[ -f $out/RPMS.txt ]] || die "notes: no $out/RPMS.txt; run pack first"
 +  # shellcheck disable=SC2016  # the backticks are Markdown
 +  {
@@ -898,12 +936,12 @@ In `build/tinkero-release`:
 
 - [ ] **Step 3: Run the tests and ShellCheck**
 
-Run: `bash tests/test-release.sh` Expected: `1..142`, no `not ok`.
+Run: `bash tests/test-release.sh` Expected: `1..150`, no `not ok`.
 Run: `shellcheck -x -e SC1090,SC1091 build/tinkero-release tests/test-release.sh` Expected: no output.
 Run: `build/tinkero-release --help | wc -l` Expected: `24`.
 Run: `build/tinkero-release install-sh .cache/release-try && diff install.sh .cache/release-try/install.sh`
 Expected: `.cache/release-try/install.sh`, then a diff of exactly one line, `TINKERO_REF=${TINKERO_REF:-master}` becoming `TINKERO_REF=${TINKERO_REF:-v4.0.4-3}` (the repository's own `install.sh` and lock, after plan 3A; `.cache/` is ignored by git, and the directory is left where it is).
-Run: `./dev check` Expected: green, `tests/test-release.sh` at `1..142`. Not measured at planning time (the planning session ran under a no-delete rule and did not execute tests that delete files); the implementer measures it.
+Run: `./dev check` Expected: green, `tests/test-release.sh` at `1..150`. Not measured at planning time (the planning session ran under a no-delete rule and did not execute tests that delete files); the implementer measures it.
 
 - [ ] **Step 4: Commit**
 
@@ -912,7 +950,7 @@ git add build/tinkero-release tests/test-release.sh
 git commit -m "build: tinkero-release fetch, pack, install-sh and notes (plan 3B; the four assets and the release's description)"
 ```
 
-**Verification for the issue:** `bash tests/test-release.sh` at `1..142` with no `not ok`; ShellCheck clean; Step 3's one-line diff of the repository's own `install.sh`.
+**Verification for the issue:** `bash tests/test-release.sh` at `1..150` with no `not ok`; ShellCheck clean; Step 3's one-line diff of the repository's own `install.sh`.
 
 ---
 
@@ -925,7 +963,7 @@ git commit -m "build: tinkero-release fetch, pack, install-sh and notes (plan 3B
 
 **Interfaces:**
 - Consumes: Tasks 1 and 2's seven subcommands; `ci/check-rpm RPM DIR` and `./dev gates-at DIR` (plan 2F, Task 5); the `fedora:44` container and the "inputs through `env:`" idiom of `copr-build.yml`.
-- Produces: the workflow `release`, `workflow_dispatch` only, `permissions: contents: write`. Inputs: `smoke` (required; the URL of the issue or comment recording the VM smoke run for this build) and `dry_run` (boolean, default false). It refuses any ref but `refs/heads/master`, a `smoke` that does not start with `https://github.com/dromeropa/tinkero/`, a tag that already has a release, and a tag that exists without one. On a dry run it uploads `.cache/release/out` as the artifact `release-dry-run` (kept 7 days) and creates nothing; otherwise it runs `gh release create <tag> --target "$GITHUB_SHA" --title "Tinkero <tag>" --notes-file NOTES.md` with the tarball, `install.sh`, `SHA256SUMS` and `RPMS.txt`. Task 5 dispatches it: `gh workflow run release --ref master -f smoke=<URL> [-f dry_run=true]`.
+- Produces: the workflow `release`, `workflow_dispatch` only, `permissions: contents: write`. Inputs: `smoke` (required; the URL of the issue or comment recording the VM smoke run for this build) and `dry_run` (boolean, default false). It refuses any ref but `refs/heads/master`, a `smoke` that does not start with `https://github.com/dromeropa/tinkero/`, a tag that already has a release, and a tag that exists without one. On a dry run it uploads `.cache/release/out` as the artifact `release-dry-run` (kept 7 days; an upload that finds no file fails the run) and creates nothing; otherwise it runs `gh release create <tag> --target "$GITHUB_SHA" --title "Tinkero <tag>" --notes-file NOTES.md` with the tarball, `install.sh`, `SHA256SUMS` and `RPMS.txt`. Task 5 dispatches it: `gh workflow run release --ref master -f smoke=<URL> [-f dry_run=true]`.
 
 The workflow cannot run before it is on `master` (workflow guide, adaptation 1), so this task's proof is hermetic: the test extracts each step's `run:` block from the YAML by the step's name and runs it with `bash --noprofile --norc -eo pipefail`, which is how the runner runs it, against the stubs. What is left to shell in the YAML and is not in `build/tinkero-release` is the first step's four refusals (they need `gh` and the dispatch's ref) and one `gh release create`; both are executed by the test. Task 5 is the proof on GitHub.
 
@@ -998,7 +1036,9 @@ run_step "The set the COPR serves, checked against this commit"
 assert_eq "$rc" 0 "workflow: list and verify pass"; assert_contains "$out" "PASS: 36 packages from 26 sources" "workflow: verify's line is in the log"
 run_step "Download"
 assert_eq "$rc" 0 "workflow: fetch passes"
-assert_eq "$(cd "$d/wf/rpms" && echo tinkero-[0-9]*.noarch.rpm)" "tinkero-4.0.4-2.fc44.noarch.rpm" "workflow: the glob the check-rpm step uses names the tinkero RPM alone, not tinkero-nerd-fonts"
+# shellcheck disable=SC2016  # $W is the step's own text
+glob=$(step "The COPR's tinkero RPM passes what CI checks on its own build" | sed -n 's|^ci/check-rpm "\$W"/rpms/\([^ ]*\) .*|\1|p')
+assert_eq "$(cd "$d/wf/rpms" && compgen -G "$glob")" "tinkero-4.0.4-2.fc44.noarch.rpm" "workflow: the glob the check-rpm step gives names the tinkero RPM alone, not tinkero-nerd-fonts"
 run_step "Pack"
 assert_eq "$rc" 0 "workflow: pack, install-sh, notes and the checksum check pass"
 assert_contains "$out" "install.sh: OK" "workflow: sha256sum -c ran over the assets"
@@ -1022,10 +1062,11 @@ assert_eq "$(grep -oE 'build/tinkero-release [a-z-]+|ci/check-rpm|\./dev gates-a
 assert_eq "$(grep -A1 -xF '      - name: Release' "$Y" | tail -n1)" '        if: ${{ !inputs.dry_run }}' "workflow: a dry run creates no release"
 # shellcheck disable=SC2016
 assert_eq "$(grep -A1 -xF '      - name: Dry run, the assets as a workflow artifact' "$Y" | tail -n1)" '        if: ${{ inputs.dry_run }}' "workflow: a dry run uploads the assets instead"
+assert_eq "$(awk '/^      - name: Dry run, the assets as a workflow artifact$/ { s = 1; next } s && /^      - / { s = 0 } s' "$Y" | grep -c '^          if-no-files-found: error$')" 1 "workflow: an upload that finds no file fails the dry run"
 ```
 
 Run: `bash tests/test-release.sh`
-Expected: `1..179`, exit 1, 28 `not ok`, all of them among cases 143 to 179 (there is no `release.yml`); cases 1 to 142 stay green. (Nine of the new cases pass without the file because an empty step script exits 0; the six "has a run block that parses" cases are what keeps an empty or renamed step from passing.)
+Expected: `1..188`, exit 1, 29 `not ok`, all of them among cases 151 to 188 (there is no `release.yml`); cases 1 to 150 stay green. (Nine of the new cases pass without the file because an empty step script exits 0; the six "has a run block that parses" cases are what keeps an empty or renamed step from passing.)
 
 - [ ] **Step 2: `.github/workflows/release.yml`**
 
@@ -1080,7 +1121,7 @@ jobs:
           releases=$(gh api --paginate "repos/$GH_REPO/releases" --jq '.[].tag_name')
           refs=$(gh api --paginate "repos/$GH_REPO/git/matching-refs/tags/$tag" --jq '.[].ref')
           if grep -qxF "$tag" <<<"$releases"; then echo "release: $tag is already released" >&2; exit 1; fi
-          if grep -qxF "refs/tags/$tag" <<<"$refs"; then echo "release: the tag $tag exists without a release; the workflow creates its own tag, so delete that one first" >&2; exit 1; fi
+          if grep -qxF "refs/tags/$tag" <<<"$refs"; then echo "release: the tag $tag exists without a release; the workflow creates its own tag, and removing that one is the operator's act (docs/guides/release.md, section 5)" >&2; exit 1; fi
           echo "releasing $tag from $GITHUB_SHA"
       - name: The set the COPR serves, checked against this commit
         run: |
@@ -1107,6 +1148,7 @@ jobs:
         with:
           name: release-dry-run
           path: .cache/release/out
+          if-no-files-found: error
           retention-days: 7
       - name: Release
         if: ${{ !inputs.dry_run }}
@@ -1121,7 +1163,9 @@ Notes for the reader of the YAML:
 - `inputs.smoke` is the only free text. It reaches the scripts as `$SMOKE`, quoted, never as a `${{ }}` expression inside a `run:` block; the test fails if any expression appears outside `if:` and the three `env:` lines.
 - `GH_REPO` lets `gh` work without a git remote; `GH_TOKEN` is the job's own token, which `contents: write` lets create the release and its tag. No secret is used: the COPR's repository is public.
 - The Tools step installs what the steps call: `gh`; `rpm-build` and `rpmdevtools` for `rpmspec` (as `ci`); `createrepo_c`; `cpio` for `ci/check-rpm`; `diffutils` and `findutils` for the gates. dnf 5 with `repoquery` and `download` is in the image. If plan 3A's `ci/check-rpm` or a gate has gained a tool by the time this lands, add it here too.
-- `tinkero-[0-9]*.noarch.rpm`: the download directory also holds `tinkero-nerd-fonts-*.noarch.rpm`.
+- `tinkero-[0-9]*.noarch.rpm`: the download directory also holds `tinkero-nerd-fonts-*.noarch.rpm`. The test takes this glob from the YAML's own text and expands it against the downloaded set.
+- `if-no-files-found: error`: the action's default only warns, and a dry run with no artifact would be green. The action also leaves out hidden files by default; the path given here starts inside `.cache`, and whether that counts cannot be measured before the workflow is on `master`. If Task 5's dry run fails at this step with nothing found, the fix is `include-hidden-files: true`.
+- The message for a tag without a release does not tell the reader to delete it: removing a remote tag is the operator's act (the guide, section 5).
 - The artifact's `path` is written out (`.cache/release/out`, the value of `W` plus `/out`): `with:` is not shell, and `$W` would not expand there.
 
 - [ ] **Step 3: CI**
@@ -1154,9 +1198,9 @@ In `.github/workflows/ci.yml`, the tool joins the ShellCheck list, and the step 
 
 - [ ] **Step 4: Run the tests, ShellCheck, and read the workflow**
 
-Run: `bash tests/test-release.sh` Expected: `1..179`, no `not ok`.
+Run: `bash tests/test-release.sh` Expected: `1..188`, no `not ok`.
 Run: `shellcheck -x -e SC1090,SC1091 build/tinkero-release tests/test-release.sh` Expected: no output.
-Run: `./dev check` Expected: green, `tests/test-release.sh` at `1..179`, every other tally as before this plan. Not measured at planning time (the planning session ran under a no-delete rule and did not execute tests that delete files); the implementer measures it.
+Run: `./dev check` Expected: green, `tests/test-release.sh` at `1..188`, every other tally as before this plan. Not measured at planning time (the planning session ran under a no-delete rule and did not execute tests that delete files); the implementer measures it.
 On the pushed branch, CI's step "Package specs parse and lint" ends with 25 lines, one per spec in glob order, each `<name> <version>-<release>`, beginning `aquamarine 0.14.0-1.fc44`, `glaze 7.8.2-1.fc44`, `gpu-screen-recorder 5.14.1-1.fc44`, `herdr 0.8.0^13.git0766aa5-1.fc44` and ending `xdg-desktop-portal-hyprland 1.4.1-1.fc44`: the names and versions of the COPR's source packages on 2026-10-01, with no epoch. Not measured at planning time (no `rpmspec` on the planning machine; derived from each spec's `Version:` and `Release:` lines); the implementer reads it in the CI log. A spec that fails there needs a macro package: add it to the Tools step of both `ci.yml` and `release.yml`, and say so in the Deviations line.
 
 Then read `release.yml` once more against design 3.3, line by line, since nothing can run it yet:
@@ -1173,7 +1217,7 @@ git add .github/workflows/release.yml .github/workflows/ci.yml tests/test-releas
 git commit -m "ci: the release workflow (dispatch only, creates its own tag); ShellCheck and the spec query for tinkero-release (plan 3B)"
 ```
 
-**Verification for the issue:** `bash tests/test-release.sh` at `1..179` with no `not ok`; CI green on the branch, its spec step printing the 25 lines; the read of Step 4. The workflow's first run is Task 5.
+**Verification for the issue:** `bash tests/test-release.sh` at `1..188` with no `not ok`; CI green on the branch, its spec step printing the 25 lines; the read of Step 4. The workflow's first run is Task 5.
 
 ---
 
@@ -1181,13 +1225,15 @@ git commit -m "ci: the release workflow (dispatch only, creates its own tag); Sh
 
 **Files:**
 - Create: `docs/guides/release.md`
-- Modify: `docs/superpowers/specs/2026-09-17-tinkero-design.md` (the status line, 4.6, 4.11, 4.12, section 8 item 5, the decision log's "COPR retention" row, section 12), `docs/superpowers/plans/2026-09-17-phase-2-roadmap.md` (the 3B row, a "What executing 3B added to the queue" section), `docs/guides/workflow.md` ("Where the build is", "Rules for agent sessions"), `README.md` (the Install section), `CLAUDE.md` (one sentence)
+- Modify: `docs/superpowers/specs/2026-09-17-tinkero-design.md` (the status line, 4.6, 4.11, 4.12, section 8 item 5, the decision log's "COPR retention" row, section 12), `docs/superpowers/plans/2026-09-17-phase-2-roadmap.md` (the 3B row, a "What executing 3B added to the queue" section), `docs/guides/workflow.md` ("Where the build is", "Rules for agent sessions"), `CLAUDE.md` (one sentence)
 
 **Interfaces:**
 - Consumes: every earlier task's facts (the subcommands, the messages, the asset names).
 - Produces: the guide Task 5 follows and plan 3C's bump checklist points at; a master spec that says what the code now does.
 
-Every edit below is an exact replacement: find the quoted text, which was in the file exactly once on 2026-10-01 (checked with `grep -cF`), and replace it with the block that follows. Plan 3A lands before this plan and edits some of the same documents: where a quoted string is no longer there word for word, apply the change to the sentence as it then reads and say so in the Deviations line. `2026-10-XX` is the date the branch is pushed.
+`README.md` is not edited here. Design 3.4 moves its install line to the release URL "once the first release exists", and until then that URL answers 404: the change is in Task 5's `docs:` PR.
+
+Every edit below is an exact replacement: find the quoted text, which was in the file exactly once on 2026-10-01 (checked with `grep -cF`), and replace it with the block that follows. Plan 3A lands before this plan and edits some of the same documents; every quote below was checked against plan 3A's Docs task as drafted, and each is still in its file exactly once after 3A's edits. Where a quoted string is nevertheless no longer there word for word, apply the change to the sentence as it then reads and say so in the Deviations line. `2026-10-XX` is the date the branch is pushed.
 
 - [ ] **Step 1: The release guide**
 
@@ -1217,9 +1263,11 @@ The tool is `build/tinkero-release`; the workflow is `.github/workflows/release.
 
       gh workflow run copr-build --ref master -f packages=tinkero -f command=build
 
-- [ ] **Nothing since.** No commit that changes a package was merged after that build. The tag lands on the commit the workflow is dispatched at, and the checks compare versions, not content:
+- [ ] **Nothing since.** No commit that changes a package was merged after that build. The tag lands on the commit the workflow is dispatched at, and the checks compare versions, not content. Take the run that built `tinkero`, which is not always the newest run (a later build of another package would hide the commits merged before it):
 
-      built=$(gh run list --workflow copr-build --status success --limit 1 --json headSha --jq '.[0].headSha')
+      gh run list --workflow copr-build --status success --limit 10 --json databaseId,headSha,createdAt
+      gh run view <id> --log | grep -c '==> building tinkero in'      # 1 for the run that built it
+      built=<that run's headSha>
       git fetch origin && git log --oneline "$built"..origin/master
 
   Docs, tests, CI and `build/` tooling in that list are fine. A change to the payload, a patch, a replacement or a spec without a `tinkero_rev` or `Release:` bump is not: bump, build again, start over.
@@ -1230,6 +1278,7 @@ The tool is `build/tinkero-release`; the workflow is `.github/workflows/release.
 
 On a Fedora machine with the checkout, no token needed (the COPR's repository is public; `verify` needs `rpmspec`, from `rpm-build` and `rpmdevtools`):
 
+    mkdir -p .cache
     build/tinkero-release tag
     build/tinkero-release list > .cache/release-list.tsv
     build/tinkero-release verify .cache/release-list.tsv
@@ -1242,6 +1291,8 @@ On GitHub, the whole workflow without the last step:
     run=$(gh run list --workflow release --limit 1 --json databaseId --jq '.[0].databaseId')
     gh run watch "$run"
     gh run download "$run" -n release-dry-run -D .cache/release-dry-run
+
+`gh run list` straight after `gh workflow run` can still show the run before, or none: wait until the new run is listed (its `createdAt` is now) before taking its id.
 
 Read, in `.cache/release-dry-run`:
 
@@ -1267,7 +1318,7 @@ The workflow, in order: refuses (section 5); `list` and `verify`; `fetch`; `ci/c
 | `SHA256SUMS` | the checksums of the two files above |
 | `RPMS.txt` | the package list: name, version-release, architecture |
 
-`https://github.com/dromeropa/tinkero/releases/latest/download/install.sh` is the README's install line: it always serves the newest release's installer.
+`https://github.com/dromeropa/tinkero/releases/latest/download/install.sh` always serves the newest release's installer. It is the README's install line from the first release on.
 
 ## 5. What stops a release
 
@@ -1278,7 +1329,7 @@ The workflow's first step refuses, before anything is downloaded:
 | `release: dispatch from master, not from <ref>` | a release is cut from `master` only |
 | `release: smoke must be a URL under https://github.com/dromeropa/tinkero/` | the smoke record must be an issue or a comment of this repository |
 | `release: <tag> is already released` | a release is cut once; bump `tinkero_rev` for the next |
-| `release: the tag <tag> exists without a release` | somebody pushed the tag by hand; delete it (`git push origin :refs/tags/<tag>`) and dispatch again |
+| `release: the tag <tag> exists without a release` | somebody pushed the tag by hand. Removing a remote tag is the operator's act, never an agent session's: a session that meets this message stops and reports it; Diego removes the tag (`git push origin :refs/tags/<tag>`), and the workflow is dispatched again |
 
 `verify` prints every mismatch between the COPR and the commit, then stops the run:
 
@@ -1361,16 +1412,16 @@ with
 pinned to the lock's `fedora` key by a test and rewritten at release time, together with `TINKERO_REF`, by `build/tinkero-release install-sh`, which fails unless each of the two lines is in the script exactly once and the result parses (Phase 3 design, 3.2).
 ````
 
-**4.** 4.11, the rollback paragraph: the archive's form (D9 to D12). If plan 3A reworded the part about `tinkero-status`, keep its wording for that clause and replace the rest. Replace
+**4.** 4.11, the rollback paragraph: the archive's form (D9 to D12). The quote stops at the comma: the clause that follows it ("so `tinkero-status` ... can print a `dnf downgrade` command that points at those files, and a rollback works even after COPR has pruned the build") is plan 3A's to amend and stays as 3A left it, so the paragraph says what `--rollback` prints once. Replace
 
 ````text
-The old RPMs come from the **release archive**, not from the COPR: the release process (Phase 3's workflow) downloads the RPM set of every tagged release from the COPR and attaches it to the matching GitHub release, so `tinkero-status` can print a `dnf downgrade` command that points at those files, and a rollback works even after COPR has pruned the build.
+The old RPMs come from the **release archive**, not from the COPR: the release process (Phase 3's workflow) downloads the RPM set of every tagged release from the COPR and attaches it to the matching GitHub release,
 ````
 
 with
 
 ````text
-The old RPMs come from the **release archive**, not from the COPR. A release is one `tinkero` package version with the newest build of every other package of the set; its git tag is `<omarchy_tag>-<tinkero_rev>` (`v4.0.4-3`), created by the manually dispatched `release` workflow and never pushed by hand (Phase 3 design, D9 and D10). `build/tinkero-release` reads the set from the COPR's published repository with dnf (the binary packages, the newest build of each, no sources and no debuginfo: D12), checks it against the specs and the lock at the released commit, and attaches it to the GitHub release as one tarball that is a dnf repository, `tinkero-<version>-<rev>.fc<N>-rpms.tar` (D11), beside the pinned `install.sh`, `SHA256SUMS` and `RPMS.txt`. `tinkero-status --rollback` prints the `dnf downgrade` command with `--repofrompath` pointed at the extracted tarball, so the dependencies of the three packages come with them, and a rollback works even after COPR has pruned the build. The procedure, the assets and the rollback drill are in `docs/guides/release.md`.
+The old RPMs come from the **release archive**, not from the COPR. A release is one `tinkero` package version with the newest build of every other package of the set; its git tag is `<omarchy_tag>-<tinkero_rev>` (`v4.0.4-3`), created by the manually dispatched `release` workflow and never pushed by hand (Phase 3 design, D9 and D10; the procedure is `docs/guides/release.md`). `build/tinkero-release` reads the set from the COPR's published repository with dnf (the binary packages, the newest build of each, no sources and no debuginfo: D12), checks it against the specs and the lock at the released commit, and attaches it to the GitHub release as one tarball that is a dnf repository, `tinkero-<version>-<rev>.fc<N>-rpms.tar` (D11), beside the pinned `install.sh`, `SHA256SUMS` and `RPMS.txt`,
 ````
 
 **5.** 4.12, the `hyprland` bullet (the lock check moves from CI to the release, D24). Replace
@@ -1477,10 +1528,10 @@ with
 **done** 2026-10-XX: `2026-10-01-phase-3b-release-archive.md`; the first release (`v4.0.4-3`) and the rollback drill are its post-merge issue
 ````
 
-**2.** A new section, directly above the heading quoted here (below any "What executing 3A added to the queue" section plan 3A put there). Replace
+**2.** A new section, immediately above the heading quoted here. That is the place for every "## What executing 3X added to the queue" section of Phase 3, so that they read in order below "## What planning Phase 3 added to the queue": planning, 3A, 3B, 3C, 3D. Plan 3A's section is already there, directly above this heading; this one goes between it and the heading. Replace
 
 ````text
-## What planning Phase 3 added to the queue (2026-10-01)
+## What the first real assembly found (inputs to 2B and 2C)
 ````
 
 with
@@ -1488,7 +1539,7 @@ with
 ````text
 ## What executing 3B added to the queue (2026-10-XX)
 
-- **Post-merge (this plan's own issue):** the first release, `v4.0.4-3` (Task 5): a `dry_run` dispatch, the real dispatch with its `smoke` record, the drill on the one release that exists. It is `blocked by` the code issue and by 3A's post-merge issue (the COPR build of `tinkero` 4.0.4-3).
+- **Post-merge (this plan's own issue):** the first release, `v4.0.4-3` (Task 5): a `dry_run` dispatch, the real dispatch with its `smoke` record, the drill on the one release that exists, and the README's install line, which moves to the release URL only then (design 3.4). It is `blocked by` the code issue and by 3A's post-merge issue (the COPR build of `tinkero` 4.0.4-3).
 - **3C, the weekly workflow:** the lock check is `build/tinkero-release list > LIST` then `build/tinkero-release verify LIST`: exit 0 and one `PASS:` line, or exit 1 and one `FAIL:` line per mismatch. The job needs `rpm-build` and `rpmdevtools` (for `rpmspec`) beside dnf. `verify` also fails on a spec that was merged and not yet built, so a weekly run between a spec bump's merge and its COPR build is red, and that is the signal.
 - **3C, the bump checklist:** its last stage is `docs/guides/release.md`, section 2 (built, nothing since, smoke, dry run, release). A package dropped from `build-order.txt` must also be deleted from the COPR project, or `verify` refuses the release.
 - **`tinkero-status --rollback` (3A):** the asset it names is `tinkero-<version>-<rev>.fc<N>-rpms.tar`, and the tarball extracts to one directory of that name without `.tar`. Task 5's drill records the command that worked; a difference from the printed text is a follow-up issue.
@@ -1496,10 +1547,10 @@ with
 - **Fedora 45:** the tarball's name carries `.fc<N>`, so two sets can sit on one release, but `build/tinkero-release` packs one set per lock and `releases/latest/download/install.sh` serves one Fedora release. Part of the Fedora 45 issue.
 - **Not built, by decision:** source RPMs and debuginfo in the archive (design D11); a check that `master` has no payload change since the COPR build (the guide's "Nothing since" step makes the operator look; `verify` compares versions, not content); replacing or deleting a release (a mistake is fixed forward with the next `tinkero_rev`).
 
-## What planning Phase 3 added to the queue (2026-10-01)
+## What the first real assembly found (inputs to 2B and 2C)
 ````
 
-- [ ] **Step 4: The workflow guide, the README, `CLAUDE.md`**
+- [ ] **Step 4: The workflow guide and `CLAUDE.md`**
 
 In `docs/guides/workflow.md`:
 
@@ -1533,30 +1584,14 @@ with
   only with a `smoke` URL whose record you have read (`docs/guides/release.md`).
 ````
 
-In `README.md`:
-
-**1.** The Install section's command (Phase 3 design, 3.4). Replace
+Then, in the same section, take 3B out of the sentence plan 3A left in the Phase 3 bullet. When that bullet ends with the first line below (3A's wording), change it to the second; when the line is not there, there is nothing to change:
 
 ````text
-    bash <(curl -fsSL https://raw.githubusercontent.com/dromeropa/tinkero/master/install.sh)
+  issues of 3B, 3C and 3D await approval.
 ````
 
-with
-
 ````text
-    bash <(curl -fsSL https://github.com/dromeropa/tinkero/releases/latest/download/install.sh)
-````
-
-**2.** The Install section's last paragraph. Its last two sentences are the ones about the time before the first release; Task 5 removes them once `v4.0.4-3` exists. Replace
-
-````text
-Until the first release is tagged, the URL above installs from `master`. Releases attach a pinned `install.sh`.
-````
-
-with
-
-````text
-That URL serves the `install.sh` of the newest [release](https://github.com/dromeropa/tinkero/releases), pinned to its tag and to the Fedora release it was built for. Each release also carries its RPM set as one tarball that is a dnf repository: `tinkero-status --rollback` prints how to go back to the release before the one installed, even after the COPR has pruned the older builds. Until the first release exists the URL answers 404 and nothing runs. Until then, install from `master`: `bash <(curl -fsSL https://raw.githubusercontent.com/dromeropa/tinkero/master/install.sh)`.
+  issues of 3C and 3D await approval.
 ````
 
 In `CLAUDE.md`:
@@ -1577,28 +1612,28 @@ publishes to the user's COPR and is triggered only when an issue says so, and so
 - [ ] **Step 5: Verify and commit**
 
 Run: `./dev check` Expected: green (no test reads these documents). Not measured at planning time (the planning session ran under a no-delete rule and did not execute tests that delete files); the implementer measures it.
-Run: `git diff -U0 -- docs README.md CLAUDE.md | grep '^+' | grep -c "$(printf '\xe2\x80\x94')"` Expected: `0` (no em dash added; the `printf` spells the character so that this plan does not contain one).
+Run: `git add docs CLAUDE.md`, then `git diff --cached -U0 -- docs CLAUDE.md | grep '^+' | grep -c "$(printf '\xe2\x80\x94')"` Expected: `0` (no em dash added; staged first, because an unstaged diff does not show the new guide, and the `printf` spells the character so that this plan does not contain one).
 Run: `grep -c 'tinkero-release' docs/superpowers/specs/2026-09-17-tinkero-design.md` Expected: `5` (4.6, 4.11, 4.12, section 8 and section 12, one line each; read as "5 more than before" if plan 3A's edits already named the tool).
-Run: `grep -c 'releases/latest/download/install.sh' README.md docs/guides/release.md docs/superpowers/specs/2026-09-17-tinkero-design.md` Expected: `1` for each of the three files.
+Run: `grep -c 'releases/latest/download/install.sh' docs/guides/release.md docs/superpowers/specs/2026-09-17-tinkero-design.md README.md` Expected: `1`, `1` and `0` (the README keeps the `master` URL until Task 5).
+Run: `grep -c '^## What executing 3[AB] added to the queue' docs/superpowers/plans/2026-09-17-phase-2-roadmap.md; grep -n '^## What' docs/superpowers/plans/2026-09-17-phase-2-roadmap.md | sed -n '1,4p'` Expected: `2`, then the headings in the order planning Phase 3, executing 3A, executing 3B, the first real assembly.
 
 ```bash
-git add docs README.md CLAUDE.md
-git commit -m "docs: 3B done, the release archive; the release guide, spec amendments (D9 to D12, D24), roadmap queue, README install line"
+git commit -m "docs: 3B done, the release archive; the release guide, spec amendments (D9 to D12, D24), roadmap queue"
 ```
 
-**Verification for the issue:** the four commands, CI green, and the reviewer reads each edit against the Phase 3 design's decisions D9 to D12, D23 and D24. The `2026-10-XX` placeholders become the date the branch is pushed; the merge date is the operator's.
+**Verification for the issue:** the five commands, CI green, and the reviewer reads each edit against the Phase 3 design's decisions D9 to D12, D23 and D24. The `2026-10-XX` placeholders become the date the branch is pushed; the merge date is the operator's.
 
 ---
 
 ### Task 5: The first release and the rollback drill (post-merge, closed by hand)
 
-**Files:** none in the code PR. This task's deliverables are the release `v4.0.4-3`, a record on its issue, and one small `docs:` PR (the README's sentence, one roadmap line).
+**Files:** none in the code PR. This task's deliverables are the release `v4.0.4-3`, a record on its issue, and one small `docs:` PR (`README.md`'s install line, one roadmap line).
 
 **Interfaces:**
 - Consumes: Tasks 1 to 4 on `master`; the COPR build of `tinkero` 4.0.4-3, which is plan 3A's post-merge issue; a smoke record for that build, which is plan 3D's first run or a manual pass of `docs/guides/phase-2f-vm-check.md` on 4.0.4-3 (design D23). The #37 check was made on an earlier build and cannot be cited. A Fedora 44 VM for the drill, never a machine somebody works on.
 - Produces: the first GitHub release, tag `v4.0.4-3`, with four assets; the proof that the workflow, real `dnf download`, real `rpmspec` and real `createrepo_c` do what the stubs assumed; the half of the rollback drill one release allows; the issue for the other half.
 
-Dispatch this issue only after the code PR has merged and plan 3A's post-merge issue is closed. `release` creates a tag and a public release, and this issue is the one that says to dispatch it. A failure at any step is a new issue against the task that owns the cause; its fix lands through the loop, and this issue stays open and resumes at the step that failed.
+Dispatch this issue only after the code PR has merged and plan 3A's post-merge issue is closed. `release` creates a tag and a public release, and this issue is the one that says to dispatch it. A failure at any step is a new issue against the task that owns the cause; its fix lands through the loop, and this issue stays open and resumes at the step that failed. One refusal is never worked around by the session: if the workflow says the tag exists without a release, the session stops and reports it, because removing a remote tag is the operator's act (the guide, section 5).
 
 **Decided for the drill:** only one release exists when this task runs, so there is nothing to downgrade to. This task runs the archive path against that one release (Step 4: the tarball is a repository dnf accepts, a `dnf reinstall` from it passes `gpgcheck`, and dnf's answer to the printed downgrade command is recorded), and files the real downgrade between two releases as its own issue, blocked until a second release exists. This task does not wait for it.
 
@@ -1607,11 +1642,11 @@ Dispatch this issue only after the code PR has merged and plan 3A's post-merge i
 On a Fedora 44 machine with the checkout at `master`, `dnf` 5, `rpm-build` and `rpmdevtools`:
 
 Run: `build/tinkero-release tag` Expected: `v4.0.4-3`.
-Run: `build/tinkero-release list > .cache/release-list.tsv && build/tinkero-release verify .cache/release-list.tsv`
+Run: `mkdir -p .cache && build/tinkero-release list > .cache/release-list.tsv && build/tinkero-release verify .cache/release-list.tsv`
 Expected: `PASS: 36 packages from 26 sources match the specs and the lock at v4.0.4-3` (the counts of 2026-10-01; they move with the set). `FAIL: tinkero: the COPR has 4.0.4-2.fc44, the lock says 4.0.4-3.fc44` means plan 3A's build has not happened: stop, this issue is blocked by it. Not measured at planning time (no dnf run and no `rpmspec` in the planning session); if the code issue's session skipped Task 1's Step 5, this is the tool's first contact with real dnf and real `rpmspec`: record anything that differs.
 Run: `grep -c "$(printf 'xdg-desktop-portal-hyprland\t1.4.1\t')" .cache/release-list.tsv` Expected: `1` (the package with an epoch is listed without it).
 
-Then the guide's section 2: the "Nothing since" commands, and the smoke record. Open the record and read it: it must name `tinkero` 4.0.4-3 and a pass. Its URL is `SMOKE` below.
+Then the guide's section 2: the "Nothing since" commands, taken from the `copr-build` run that built `tinkero` 4.0.4-3 (not simply the newest run), and the smoke record. Open the record and read it: it must name `tinkero` 4.0.4-3 and a pass. Its URL is `SMOKE` below.
 
 - [ ] **Step 2: The dry run**
 
@@ -1622,7 +1657,9 @@ gh run watch "$run"
 gh run download "$run" -n release-dry-run -D .cache/release-dry-run
 ```
 
-Expected: the run is green and the step "Release" is skipped. In the log: `releasing v4.0.4-3 from <the commit>`; `verify`'s `PASS:` line; `fetched 36 packages into .cache/release/rpms`; `PASS: rpm tinkero-4.0.4-3.fc44.noarch.rpm ...` from `ci/check-rpm`, then the gates' `PASS:` lines as CI prints them; `install.sh: OK` and `tinkero-4.0.4-3.fc44-rpms.tar: OK`. This is the first real `dnf download` (36 files, among them `xdg-desktop-portal-hyprland-1.4.1-1.fc44.x86_64.rpm`, asked for without its epoch), the first real `createrepo_c` and the first `gh` call of the tool chain: none was measured at planning time.
+`gh run list` straight after `gh workflow run` can still show the run before, or none: wait until the new run is listed before taking its id (the same holds in Step 3).
+
+Expected: the run is green and the step "Release" is skipped. In the log: `releasing v4.0.4-3 from <the commit>`; `verify`'s `PASS:` line; `fetched 36 packages into .cache/release/rpms`; `PASS: rpm tinkero-4.0.4-3.fc44.noarch.rpm ...` from `ci/check-rpm`, then the gates' `PASS:` lines as CI prints them; `install.sh: OK` and `tinkero-4.0.4-3.fc44-rpms.tar: OK`. This is the first real `dnf download` (36 files, among them `xdg-desktop-portal-hyprland-1.4.1-1.fc44.x86_64.rpm`, asked for without its epoch), the first real `createrepo_c` and the first `gh` call of the tool chain: none was measured at planning time. If the step "Dry run, the assets as a workflow artifact" fails because it found no file, the action has treated the path under `.cache` as hidden: the fix is `include-hidden-files: true` on that step, in a PR against the code issue's task, and the dry run is repeated.
 
 In `.cache/release-dry-run`, the guide's section 3 checklist, with these values:
 
@@ -1667,15 +1704,37 @@ On a clean Fedora 44 Workstation VM (a clone of the 2F check's checkpoint, or pl
 5. dnf's answer to the command `tinkero-status --rollback` prints, changing nothing: `sudo dnf downgrade --assumeno --repofrompath=tinkero-rollback,"$HOME/tinkero-4.0.4-3.fc44-rpms" tinkero hyprland quickshell`. Record the output verbatim. With one release the archive holds nothing older; what matters is how dnf 5 treats a package that has no older build (a skip, or an error for the whole command) and whether it offers the COPR's leftover `tinkero` 4.0.4-2 while that is still there: the printed text names three packages, and after most releases only one of them has an older build.
 6. `tinkero-status --rollback; echo $?`. Expected: it says there is no release before `v4.0.4-3`, then `0` (design 2.5).
 
-- [ ] **Step 5: The README's sentence and the roadmap line**
+- [ ] **Step 5: The README's install line and the roadmap line**
 
-In a small PR that refers to this issue (`docs:` only, `Refs #N`, since the issue is closed by hand): in `README.md`'s Install section remove these two sentences, which Task 4 put there for the time before the first release:
+Now that `v4.0.4-3` exists and Step 3 has shown that the release URL serves its `install.sh`, the README's install line becomes that URL (design 3.4). In a small PR that refers to this issue (`docs:` only, `Refs #N`, since the issue is closed by hand), two exact replacements in `README.md`, each quoted string being in the file exactly once on 2026-10-01:
+
+**1.** The Install section's command (Phase 3 design, 3.4: "once the first release exists"). Replace
 
 ````text
- Until the first release exists the URL answers 404 and nothing runs. Until then, install from `master`: `bash <(curl -fsSL https://raw.githubusercontent.com/dromeropa/tinkero/master/install.sh)`.
+    bash <(curl -fsSL https://raw.githubusercontent.com/dromeropa/tinkero/master/install.sh)
 ````
 
-and, under the roadmap's "What executing 3B added to the queue", add one line with the date, the release's URL and the drill's verdict.
+with
+
+````text
+    bash <(curl -fsSL https://github.com/dromeropa/tinkero/releases/latest/download/install.sh)
+````
+
+**2.** The Install section's last paragraph. Replace
+
+````text
+Until the first release is tagged, the URL above installs from `master`. Releases attach a pinned `install.sh`.
+````
+
+with
+
+````text
+That URL serves the `install.sh` of the newest [release](https://github.com/dromeropa/tinkero/releases), pinned to its tag and to the Fedora release it was built for. Each release also carries its RPM set as one tarball that is a dnf repository: `tinkero-status --rollback` prints how to go back to the release before the one installed, even after the COPR has pruned the older builds.
+````
+
+In the same PR, under the roadmap's "What executing 3B added to the queue", add one line with the date, the release's URL and the drill's verdict.
+
+Run: `grep -c 'releases/latest/download/install.sh' README.md; grep -c 'raw.githubusercontent.com' README.md` Expected: `1` and `0`.
 
 - [ ] **Step 6: Record, follow up, close**
 
@@ -1692,10 +1751,19 @@ Close this issue by hand.
 
 ## Deviations
 
-Filled by the PR that implements Tasks 1 to 4 (and by Task 5's issue for its own), per task, when anything deviated from this plan. Two deviations from the Phase 3 design are built into the plan itself and are to be entered here by Task 2's PR as written:
+Filled by the PR that implements Tasks 1 to 4 (and by Task 5's issue for its own), per task, when anything deviated from this plan.
 
-- Task 2: `build/tinkero-release notes OUT SMOKE_URL` is a seventh subcommand, not in design 3.2's table: the release's description and the check of the `smoke` input live in the tested tool, not in the workflow's YAML (design 3.3: "every decision is in `build/tinkero-release`").
-- Task 2: `install-sh` also writes its line into `OUT/SHA256SUMS`: design 3.4 has the file cover the tarball and `install.sh`, and 3.2 has `pack` write it before `install.sh` exists.
+Built into the plan itself, for the operator to accept or veto at approval, are six deviations from the Phase 3 design and one addition to the brief. Each is kept as written unless the approval says otherwise:
+
+- Task 1, `verify` checks more than design 3.2 lists: it also fails on a source the COPR serves that `build-order.txt` does not list, and when a list holds packages from two builds of one source it compares each build with the spec. Reason: the design's second check cannot be made for a source with no spec, and failing closed keeps a package the set dropped, or a subpackage left over from an older build, out of the archive. Cost: a dropped package must be deleted from the COPR before the next release, and plan 3C's weekly run is red until it is.
+- Task 2, `build/tinkero-release notes OUT SMOKE_URL` is a seventh subcommand, not in design 3.2's table. Reason: the release's description and the check of the `smoke` input are more than a line of YAML, and design 3.3 keeps every decision in the tested tool.
+- Task 2, `install-sh` also writes its line into `OUT/SHA256SUMS`. Reason: design 3.4 has the file cover the tarball and `install.sh`, while 3.2 has `pack` write it before `install.sh` exists.
+- Task 3, the workflow refuses two things design 3.3 does not list: a tag that exists without a release, and a `smoke` input with the wrong prefix at the first step (the full pattern is checked again by `notes`). Reason: `gh release create --target` does not move an existing tag, so a hand-pushed tag would put the release on a commit nobody verified (D10); and a mistyped URL should not cost a 244 MiB download.
+- Task 3, CI gains one line the design does not mention: the spec step runs `rpmspec -q --srpm` on every spec. Reason: it is the query `verify` depends on, and the PR is the only place it can be measured before the first release.
+- Task 5, the rollback drill runs on the one release that exists: the archive path against that release (a repository query, a real `dnf reinstall` from it, `dnf downgrade --assumeno` recorded verbatim), with the downgrade between two releases filed as its own blocked issue. Reason: design 3.4's drill needs two releases to move between, and the first release should not wait for the second.
+- Task 4, an addition nobody asked for: `CLAUDE.md` and the workflow guide's "Rules for agent sessions" say that `release` is dispatched only when an issue says so. Reason: the workflow creates a public tag that is never replaced (D10), plan 3C's checklist ends in "the release" and an agent session will read it, and the `copr-build` rule is the precedent.
+
+The README's install line is not among them: it changes in Task 5, once the first release exists, as design 3.4 says.
 
 ## What this plan deliberately leaves out
 
@@ -1704,7 +1772,7 @@ Filled by the PR that implements Tasks 1 to 4 (and by Task 5's issue for its own
 - The real downgrade between two releases: its own issue, filed by Task 5, blocked until a second release exists.
 - Source RPMs and debuginfo in the archive (design D11); loose RPMs as assets beside the tarball.
 - A staging COPR, and any check that `master` has no payload change since the COPR build: `verify` compares versions, the guide's "Nothing since" step makes the operator look, and spec 4.12's rule stays a review point (roadmap, "Not built, by decision").
-- Replacing, editing or deleting a release. The workflow refuses an existing tag; a mistake is fixed forward with the next `tinkero_rev`.
+- Replacing, editing or deleting a release, and deleting a tag. The workflow refuses an existing tag; a mistake is fixed forward with the next `tinkero_rev`; removing a hand-pushed tag is the operator's act.
 - A second Fedora release: one set per lock, one `install.sh` behind `releases/latest`. Part of the Fedora 45 issue.
 - Signing the tarball or the checksums. The RPMs inside carry the COPR's signatures; `SHA256SUMS` guards the download, not the origin.
 - `--refresh` or any cache option on the dnf calls: the workflow's container starts with no cache, and the guide says what to do on a developer's machine.
@@ -1716,17 +1784,20 @@ Prototyped in a sandboxed copy of the repository (read-only file system outside 
 
 Measured there:
 
-- `tests/test-release.sh`: Task 1 `1..66` (60 `not ok` before the tool existed), Task 2 `1..142` (64 `not ok` against Task 1's tool), Task 3 `1..179` (28 `not ok` without `release.yml`); green after each task. `shellcheck -x -e SC1090,SC1091` and `bash -n` clean on `build/tinkero-release` and `tests/test-release.sh` after each task.
+- `tests/test-release.sh`: Task 1 `1..70` (64 `not ok` before the tool existed), Task 2 `1..150` (68 `not ok` against Task 1's tool), Task 3 `1..188` (29 `not ok` without `release.yml`); green after each task. `shellcheck -x -e SC1090,SC1091` and `bash -n` clean on `build/tinkero-release` and `tests/test-release.sh` after each task.
 - The fixture: `rows` in the test expands to output byte-identical (`cmp`) to what `list`'s own query printed against the COPR on 2026-10-01 (75 rows); `list` reduces it to 36 lines from 26 sources.
 - The whole chain by hand against the stubs: `list`, `verify`, `fetch`, `pack`, `install-sh`, `notes`; the tarball's members (one top-level directory, 36 RPMs, `repodata/`), `RPMS.txt`, a two-line `SHA256SUMS` that `sha256sum -c` accepts, a one-line diff of `install.sh`, `NOTES.md`. `install-sh` was also run against the prototype's own root: one changed line.
 - The workflow's shell: each step's `run:` block extracted from the YAML and run under `bash --noprofile --norc -eo pipefail` with the stubs (refusals, list and verify, fetch, pack, release).
-- Ten mutations of the tool and the workflow (the duplicate check, the upper bound of the Hyprland range, the stray-tag refusal, `--latest-limit=1`, the split from the right, the debug filter, the smoke pattern, the checksum merge, `bash -n`, and "exactly once" relaxed to "at least once"): nine failed at least one case as written; the tenth showed that two `TINKERO_REF` lines were not tested, and that case was added.
-- The Docs task: every quoted string was in its file exactly once (`grep -cF`), and the replacements were applied to the prototype's copies by a script that asserts it; no em dash added.
+- Mutations of the tool and the workflow, each run against the test: the duplicate check, the upper bound of the Hyprland range, the stray-tag refusal, `--latest-limit=1`, the split from the right, the debug filter, the smoke pattern, the checksum merge, `bash -n`, the workflow's glob, the `.`/`..` segment check, `if-no-files-found`, the list check in `verify`, and the `LC_ALL=C` export each failed at least one case. "Exactly once" relaxed to "at least once" failed none at first, which showed that two `TINKERO_REF` lines were not tested; that case was added.
+- The locale: under `en_AU.utf8`, bash's `[[ =~ ]]` with `[0-9]` matches U+0665 and under `C` it does not; gawk 5.3.2's and `grep -E`'s ranges and bash's glob ranges do not match it in either. Without the export, the tag and `smoke` cases fail under that locale and the list-row case still passes (awk is immune). With a `locale` that lists no UTF-8 locale and the caller in the POSIX locale, which is CI's situation, the whole file is green at `1..188` with no `setlocale` warning; there the locale cases prove the refusal only.
+- The Docs task: every quoted string was in its file exactly once (`grep -cF`), and the replacements were applied to the prototype's copies by a script that asserts it; no em dash added. The quotes were also read against plan 3A's Docs task as drafted: each is still there once after 3A's edits.
 
 Not measured at planning time, and why:
 
 - `./dev check` and every pre-existing test file: the planning session ran under a no-delete rule and executed only the new test file. The plan changes no existing test.
 - Real `dnf repoquery` and `dnf download` (the session was not allowed to run dnf): `list`'s row count through the tool, and that `dnf download` accepts a `name-version-release.arch` spec for a package with an epoch. The query itself was run by hand by the planning orchestrator (design, section 11). Task 1's Step 5 and Task 5 measure them.
 - Real `rpmspec -q --srpm` on the 25 specs (not installed): the 25 expected lines of Task 3 are derived from the specs' `Version:` and `Release:` lines. CI on the code PR measures it.
-- Real `createrepo_c`, the size of the real tarball, `gh` and the workflow on GitHub (not installed, not allowed, not on `master`): Task 5.
+- Real `createrepo_c`, the size of the real tarball, `gh`, `actions/upload-artifact` (whether a path under `.cache` counts as hidden) and the workflow on GitHub (not installed, not allowed, not on `master`): Task 5.
 - The rollback itself (design 3.4): Task 5 for one release, the follow-up issue for two.
+
+**Review.** An independent review of this plan against the design, the briefs and the prototype found 0 Critical, 2 Important and 10 Minor, all applied: (1) the README's install line moves from Task 4 to Task 5's `docs:` PR, as design 3.4 orders it, with no interim sentences; (2) the 4.11 quote stops before the clause plan 3A amends, every "What executing 3X added to the queue" section goes immediately above "What the first real assembly found", and Task 4 takes 3B out of 3A's "await approval" sentence; (3) "## Deviations" lists all six built-in deviations and the addition, with reasons; (4) the test takes the check-rpm glob from the YAML's own text; (5) the option-like row in `verify` is asserted on its message; (6) the artifact step has `if-no-files-found: error`, with the hidden-files fix named in Task 5; (7) `mkdir -p .cache` before the three redirections; (8) the em dash check runs on the staged diff, so it sees the new guide; (9) `notes` refuses `.` and `..` path segments, with tests; (10) the guide takes "Nothing since" from the run that built `tinkero` and says to wait for a new run to be listed; (11) the `install.sh` diff case uses the repository's own Fedora release, so it survives the Fedora 45 bump; (12) removing a hand-pushed tag is the operator's act in the message, the guide and Task 5. A finding from plan 3A's review that applies here was applied too: the tool sets `LC_ALL=C`, with locale cases in the test.
