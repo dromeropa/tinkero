@@ -17,27 +17,27 @@
 - Data over code: what `bump-report` compares is `build/bump-watch.tsv`, one row per section, read by one loop; the bump issue's body is the marked part of `docs/guides/bump-checklist.md`, read as data. This plan adds no entry to any allowlist under `ci/allow/` (they only shrink) and nothing to the package's payload, so `tinkero_rev` does not move (design D22).
 - Scripts start with `#!/bin/bash` and `set -euo pipefail`; a header comment gives usage, printed with `sed -n 'A,Bp' "$0"`; ShellCheck clean with `-x -e SC1090,SC1091`; no `A && B || C` one-liners (SC2015); `# shellcheck disable=SC2016` above a line whose single quotes hold a literal `$` or backtick on purpose. The lock is parsed with `lock_get` (`build/lib.sh`), never sourced. New scripts join the ShellCheck step of `.github/workflows/ci.yml`.
 - Test files are `tests/test-<area>.sh`, source `tests/lib.sh`, use its helpers and assert on messages, not only on exit codes. Tests never use the network and never run a real `gh`, `dnf`, `curl` or package manager: `gh` and `dnf` are stubs the test writes into its temporary directory and puts first on `PATH`; `jq`, `tar`, `sed`, `awk`, `sort` are the real ones. The seams are environment variables with the real default: `TINKERO_ROOT`, `TINKERO_BUMP_WATCH`, `TINKERO_LOCK`, `TINKERO_BUMP_GUIDE`, `GITHUB_REPOSITORY`, `TINKERO_UPSTREAM_REPO`, `TINKERO_COPR_PROJECT`, `TINKERO_RELEASE_REPO`, `TINKERO_WATCH_DRY_RUN`.
-- Test safety (a lesson of the incident that interrupted Phase 3's first planning session): a test deletes only its own `mktmp` directory, by the house idiom's last line (`rm -rf "$d"; finish`), and nothing else; no test exports `HOME` or reassigns a variable that a later `rm` expands; no test writes outside its `mktmp` directory (a case that would write elsewhere if the code under test were wrong runs from inside that directory); a script that deletes removes only a path it created itself and guards the variable (`bump-report`'s `trap 'rm -rf "${work:?}"' EXIT`, where `work` is its own `mktemp -d`). The guide this plan writes contains no deleting command at all, and a test pins that.
-- Nothing fetched reaches output, an issue or a `gh` argument unvalidated (design D3, D15): the upstream tag must match `^v[0-9]+\.[0-9]+\.[0-9]+$`, a Qt version `^[0-9]+\.[0-9]+(\.[0-9]+)*$`, a private API minor is extracted by `Qt_[0-9]+\.[0-9]+_PRIVATE_API`; anything else is never printed, not even in the error. Release notes and issue text are never read into a variable that is written anywhere.
+- Test safety (a lesson of the incident that interrupted Phase 3's first planning session): a test deletes only its own `mktmp` directory, by the house idiom's last line (`rm -rf "$d"; finish`), and nothing else; no test exports `HOME` or reassigns a variable that a later `rm` expands; no test writes outside its `mktmp` directory (a case that would write elsewhere if the code under test were wrong runs from inside that directory); `tests/test-bump-guide.sh` makes one throwaway git repository inside its own `mktmp` directory, with `HOME` set on the command line of the one command that needs it; a script that deletes removes only a path it created itself and guards the variable (`bump-report`'s `trap 'rm -rf "${work:?}"' EXIT`, where `work` is its own `mktemp -d`). The guide this plan writes contains no deleting command at all, and a test pins that.
+- Nothing fetched reaches output, an issue or a `gh` argument unvalidated (design D3, D15): the upstream tag must match `^v[0-9]+\.[0-9]+\.[0-9]+$`, a Qt version `^[0-9]+\.[0-9]+(\.[0-9]+)*$`, a private API minor is extracted by `Qt_[0-9]+\.[0-9]+_PRIVATE_API`; anything else is never printed, not even in the error. Both watches start with `export LC_ALL=C` (design D3): bash's `[0-9]` is a collation range, and under `en_US.UTF-8` a tag such as `v4.0.5` written with a fullwidth digit passes it (measured), so the pattern means ASCII digits only in the C locale. A test runs the bad tag under a UTF-8 locale when `locale -a` lists one and prints an explicit skip line otherwise. Release notes and issue text are never read into a variable that is written anywhere.
 - Neither watch applies or names the `approved` label. `copr-build` is never triggered by this plan's code issue, and the weekly workflow holds no secret.
 - No em dashes in Tinkero's own prose. Attribution trailers on every commit per the session's rules. Land through a PR against the approved issue; never push `master`.
 - Each task's PR includes its Deviations line in this plan's "## Deviations" section when anything deviated.
 
 ## Issue map
 
-To be filed as three issues that, with the issues of plans 3A, 3B and 3D, supersede placeholder #11 (closed with a comment naming them once all are filed). Tasks 1 to 5 are one orchestrated issue, built serially on one branch because they share `.github/workflows/ci.yml`'s ShellCheck line, `tests/test-watch.sh` (Tasks 3 and 4), `ci/lib-watch.sh` (Tasks 3 and 4) and the guide (written in Task 2, read by Task 3's script and test, extended in Task 5), and land as one PR; that issue is `blocked by` plan 3B's code issue, because the weekly workflow calls `build/tinkero-release`. Task 6 is a post-merge issue `blocked by` the first and closed by hand: a workflow can only be proven by running it from `master` (workflow guide, adaptation 1, applied to a workflow). Task 7 is the first real bump: one `size:large` issue filed with the others, `blocked by` the code issues of plans 3A to 3D and by upstream publishing a release after `v4.0.4`, with no code in this plan (design D21). The `approved` label is Diego's.
+To be filed as three issues that, with the issues of plans 3A, 3B and 3D, supersede placeholder #11 (closed with a comment naming them once all are filed). Tasks 1 to 5 are one orchestrated issue, built serially on one branch because they share `.github/workflows/ci.yml`'s ShellCheck line, `tests/test-watch.sh` (Tasks 3 and 4), `ci/lib-watch.sh` (Tasks 3 and 4) and the guide (written in Task 2, read by Task 3's script and test, extended in Task 5), and land as one PR; that issue is `blocked by` plan 3B's code issue, because the weekly workflow calls `build/tinkero-release`. Task 6 is a post-merge issue `blocked by` the first and closed by hand: a workflow can only be proven by running it from `master` (workflow guide, adaptation 1, applied to a workflow), and it completes Task 7's issue body from the guide now on `master`. Task 7 is the first real bump: one `size:large` issue filed with the others, at planning time, with a header only (its text is in Task 7, complete and self-contained), `blocked by` the code issues of plans 3A to 3D and by upstream publishing a release after `v4.0.4`, with no code in this plan (design D21; design 4.3). The guide does not exist on `master` when the issue is filed, so its checklist is added to the issue's body as a step of Task 6, after this plan has landed. The `approved` label is Diego's.
 
 | Task | Size | Area | WHAT | WHERE | HOW TO VERIFY |
 |---|---|---|---|---|---|
 | 1 `build/bump-report` and the watch list | medium | build | the report tool with its six kinds, tarball or tree arguments, sorted output; the nine-row watch list | `build/bump-report`, `build/bump-watch.tsv`, `tests/test-bump-report.sh`, `.github/workflows/ci.yml` | `bash tests/test-bump-report.sh` at `1..52`; on the pinned tarball given twice: nine sections, all `(0)`, exit 0 |
-| 2 The bump checklist guide | small | docs | the procedure in seven stages, its two markers, the known items; the audit's section 10 becomes a pointer; workflow adaptation 2 names the guide | `docs/guides/bump-checklist.md`, `tests/test-bump-guide.sh`, `docs/research/arch-coupling-audit.md`, `docs/guides/workflow.md` | `bash tests/test-bump-guide.sh` at `1..14` |
-| 3 `ci/watch-upstream` | small | ci | the upstream watch: pattern on the tag, the three outcomes, the issue body from the guide, a dry run | `ci/watch-upstream`, `ci/lib-watch.sh`, `tests/test-watch.sh`, `.github/workflows/ci.yml` | `bash tests/test-watch.sh` at `1..73` |
-| 4 `ci/watch-qt` and the Quickshell release floor | small | ci | the Qt watch; `tests/test-specs.sh` requires `Release:` to be at least the lock's `quickshell_release` | `ci/watch-qt`, `tests/test-watch.sh`, `tests/test-specs.sh`, `.github/workflows/ci.yml` | `bash tests/test-watch.sh` at `1..125`; `bash tests/test-specs.sh` at its tally before this task, no `not ok` |
-| 5 The `weekly` workflow and docs | small | ci | `weekly.yml`; tests pinning every workflow's container to the lock and weekly's tools to CI's; the guide's section on the watches; master spec, roadmap, workflow guide, `CLAUDE.md` | `.github/workflows/weekly.yml`, `tests/test-workflows.sh`, `docs/**`, `CLAUDE.md` | `bash tests/test-workflows.sh` at `1..21`; `./dev check` green; no em dash added |
-| 6 The first weekly run (post-merge) | small | ci | dispatch `weekly` once from `master`; record both jobs and what the two watches printed | none (a record on the issue) | both jobs green; each watch's one line recorded; closed by hand |
-| 7 The first real bump | large | build | follow `docs/guides/bump-checklist.md` end to end to the next upstream release after `v4.0.4` (Milestone D) | whatever the checklist touches | design 4.3's definition of done, recorded on the issue; closed by hand |
+| 2 The bump checklist guide | small | docs | the procedure in seven stages, its two markers, the known items; the audit's section 10 becomes a pointer; workflow adaptation 2 names the guide | `docs/guides/bump-checklist.md`, `tests/test-bump-guide.sh`, `docs/research/arch-coupling-audit.md`, `docs/guides/workflow.md` | `bash tests/test-bump-guide.sh` at `1..19` |
+| 3 `ci/watch-upstream` | small | ci | the upstream watch: pattern on the tag, the three outcomes, the issue body from the guide, a dry run | `ci/watch-upstream`, `ci/lib-watch.sh`, `tests/test-watch.sh`, `.github/workflows/ci.yml` | `bash tests/test-watch.sh` at `1..84` |
+| 4 `ci/watch-qt` and the Quickshell release floor | small | ci | the Qt watch; `tests/test-specs.sh` requires `Release:` to be at least the lock's `quickshell_release` | `ci/watch-qt`, `tests/test-watch.sh`, `tests/test-specs.sh`, `.github/workflows/ci.yml` | `bash tests/test-watch.sh` at `1..139`; `bash tests/test-specs.sh` at its tally before this task, no `not ok` |
+| 5 The `weekly` workflow and docs | small | ci | `weekly.yml`; tests pinning every workflow's container to the lock and weekly's tools to CI's; the guide's section on the watches; master spec, roadmap, workflow guide, `CLAUDE.md` | `.github/workflows/weekly.yml`, `tests/test-workflows.sh`, `docs/**`, `CLAUDE.md` | `bash tests/test-workflows.sh` at `1..23`; `./dev check` green; no em dash added |
+| 6 The first weekly run (post-merge) | small | ci | dispatch `weekly` once from `master`; record both jobs and what the two watches printed; add the guide's checklist to the first real bump's issue | none (a record on the issue) | both jobs green; each watch's one line recorded; Task 7's issue body completed from the guide; closed by hand |
+| 7 The first real bump | large | build | follow `docs/guides/bump-checklist.md` end to end to the next upstream release after `v4.0.4` (Milestone D); filed at planning time with a header, blocked | whatever the checklist touches | design 4.3's definition of done, recorded on the issue; closed by hand |
 
-After Tasks 1 to 5, `./dev check` runs four more test files than before: test-bump-report `1..52`, test-bump-guide `1..14`, test-watch `1..125`, test-workflows `1..21`. `tests/test-specs.sh` keeps its tally (`1..88` at `95bb8d4`; one assertion is replaced by one). Every other file is unchanged by this plan: at `95bb8d4`, test-assemble `1..70`, test-branding-render `1..34`, test-branding `1..14`, test-check-rpm `1..16`, test-copr `1..21`, test-fastfetch-fedora `1..3`, test-fetch `1..9`, test-gates `1..94`, test-install `1..34`, test-launch-webapp `1..41`, test-lock `1..4`, test-menu-guards `1..8`, test-pam-sync `1..75`, test-provision `1..189`, test-render-spec `1..25`, test-replacements `1..54`, test-session-end `1..35`, test-theme-set-browser `1..15`, test-update `1..6`, Python `Ran 45 tests`, plus whatever plans 3A and 3B added.
+After Tasks 1 to 5, `./dev check` runs four more test files than before: test-bump-report `1..52`, test-bump-guide `1..19`, test-watch `1..139`, test-workflows `1..23`. `tests/test-specs.sh` keeps its tally (`1..88` at `95bb8d4`; one assertion is replaced by one). Every other file is unchanged by this plan: at `95bb8d4`, test-assemble `1..70`, test-branding-render `1..34`, test-branding `1..14`, test-check-rpm `1..16`, test-copr `1..21`, test-fastfetch-fedora `1..3`, test-fetch `1..9`, test-gates `1..94`, test-install `1..34`, test-launch-webapp `1..41`, test-lock `1..4`, test-menu-guards `1..8`, test-pam-sync `1..75`, test-provision `1..189`, test-render-spec `1..25`, test-replacements `1..54`, test-session-end `1..35`, test-theme-set-browser `1..15`, test-update `1..6`, Python `Ran 45 tests`, plus whatever plans 3A and 3B added.
 
 ## File Structure
 
@@ -47,11 +47,11 @@ After Tasks 1 to 5, `./dev check` runs four more test files than before: test-bu
 | `build/bump-watch.tsv` | the watch list: `section<TAB>kind<TAB>argument`, nine rows at first (design 4.1's table) |
 | `tests/test-bump-report.sh` | every kind on two fixture trees built with `tests/fixtures/make-tree.sh`, tarball and tree arguments, determinism, exit codes |
 | `docs/guides/bump-checklist.md` | the bump procedure in execution order; the part between `<!-- bump-checklist:start -->` and `<!-- bump-checklist:end -->` is the bump issue's body; the known items for the first bump; the watches and the sixty-day note (design 4.2, 5) |
-| `tests/test-bump-guide.sh` | static checks on the guide: the markers, the seven stages, the size, that every path and `./dev` subcommand it names exists, that it deletes nothing |
+| `tests/test-bump-guide.sh` | checks on the guide: the markers, the seven stages, the size, that every path and `./dev` subcommand it names exists, that it deletes nothing, and that its scratch loop (run verbatim in a throwaway repository) applies a git-format patch instead of letting git skip it |
 | `ci/lib-watch.sh` | sourced by both watches: `say`, `die`, `gh_write` (the dry run), `open_issues LABEL` |
 | `ci/watch-upstream` | the upstream watch (design 5, D15) |
 | `ci/watch-qt` | the Qt watch (design 5, D14) |
-| `tests/test-watch.sh` | both watches against a stub `gh` and a stub `dnf` |
+| `tests/test-watch.sh` | both watches against a stub `gh` and a stub `dnf`, including failed writes and a bad tag under a UTF-8 locale |
 | `tests/test-specs.sh` | the Quickshell `Release:` assertion becomes "at least the lock's `quickshell_release`" |
 | `.github/workflows/weekly.yml` | `schedule` (Mondays) and `workflow_dispatch`; job `gates` (`contents: read`), job `watch` (`issues: write`) |
 | `tests/test-workflows.sh` | every workflow's `container:` is the lock's `fedora`; weekly's tools, commands, permissions and expressions |
@@ -65,7 +65,7 @@ Input classes and failure modes the design implies and no requirement names; eac
 
 1. **A watch-list row that looks at nothing.** Upstream moves `install/user` or renames the menu file; from the next bump on the section is empty and reads as "nothing changed". `bump-report` warns on stderr, naming the row and the path that is in neither tree, and still prints the whole report; a file name with a space, a symlink whose target moved and a symlink that leaves the tree (listed, never read through) are handled, not skipped; Task 1.
 2. **An argument that is not the tree.** The directory one level above the unpacked tree, a file that is not a tarball, a path that does not exist: exit 2 with a message and no report, never nine reassuring empty sections; a tarball and a tree may be mixed and print the same bytes; Task 1.
-3. **A tag or release text that is not what it claims.** A pre-release tag, a tag carrying shell syntax or a second line, `null`, an empty answer: the watch exits 1, and the text appears nowhere, not in its output, not in a `gh` argument, and nothing is executed. Upstream's release notes never reach the issue body, the output or the log; the checklist text is copied literally (a `$tag` or a backtick in it is not expanded); Task 3.
+3. **A tag or release text that is not what it claims.** A pre-release tag, a tag carrying shell syntax or a second line, `null`, an empty answer: the watch exits 1, and the text appears nowhere, not in its output, not in a `gh` argument, and nothing is executed. Upstream's release notes never reach the issue body, the output or the log; the checklist text is copied literally (a `$tag` or a backtick in it is not expanded); a tag whose digits are not ASCII is refused under any locale, because the scripts pin the C locale; a `gh issue create` or `gh issue comment` that fails ends the run with exit 1 and is never reported as done; Task 3.
 4. **An issue that is not the watch's.** An issue a stranger opens under a watched title would silence a watch, or collect its comments, forever: only open issues carrying `area:build` (or `area:specs`) count, and only a collaborator can label. A comment naming `v4.0.50`, `v4.0.5-beta1` or `v4.0.5.1` does not name `v4.0.5`; a second run comments nothing; a failed issue listing opens nothing; Tasks 3 and 4.
 5. **An answer from dnf that is not a version, and a guide that lost its markers.** An error line, a version with trailing text, an empty answer, a Quickshell that requires no private API or two different minors: exit 1, no issue, nothing echoed. A guide with no marker, two start markers, the end before the start or no checkbox fails `watch-upstream` on every run, before `gh` is called, and fails `tests/test-bump-guide.sh` in CI; Tasks 2, 3 and 4.
 
@@ -646,10 +646,35 @@ done
 deleting=$(grep -nE '(^|[^a-z])(rm|rmdir|unlink|shred) +-|rm +"|git +(clean|reset)|find .*-delete' "$G" | head -n1 || true)
 assert_eq "$deleting" "" "the guide contains no deleting command"
 if grep -q $'\xe2\x80\x94' "$G"; then not_ok "no em dash in the guide"; else ok "no em dash in the guide"; fi
+
+# stage 3's scratch loop gives build/assemble's verdict. The guide's own block is run, verbatim,
+# in a throwaway repository whose scratch tree lies inside it (as in a checkout): a patch with a
+# `diff --git` header must be applied, not skipped by git and reported as applying.
+if command -v git >/dev/null; then
+  d=$(mktmp); r=$d/repo; mkdir -p "$r/build" "$r/patches" "$d/home" "$d/up/omarchy-9.9.9"
+  printf 'old a\n' > "$d/up/omarchy-9.9.9/a.txt"; printf 'old b\n' > "$d/up/omarchy-9.9.9/b.txt"
+  tar -czf "$d/new.tar.gz" -C "$d/up" omarchy-9.9.9
+  printf '#!/bin/bash\necho "%s"\n' "$d/new.tar.gz" > "$r/build/fetch-upstream"; chmod +x "$r/build/fetch-upstream"
+  printf -- '--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-old a\n+new a\n' > "$r/patches/0001-traditional.patch"
+  printf 'diff --git a/b.txt b/b.txt\n--- a/b.txt\n+++ b/b.txt\n@@ -1 +1 @@\n-old b\n+new b\n' > "$r/patches/0002-git-format.patch"
+  printf -- '--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-never there\n+x\n' > "$r/patches/0003-stale.patch"
+  printf '# a comment\n0001-traditional.patch\n\n0002-git-format.patch\n0003-stale.patch\n' > "$r/patches/series"
+  HOME="$d/home" git -C "$r" init -q . 2>/dev/null
+  loop=$(awk '/^```bash$/ {buf = ""; inb = 1; next} /^```$/ {if (inb && buf ~ /while read -r p/) {printf "%s", buf; exit} inb = 0; next} inb {buf = buf $0 "\n"}' "$G")
+  if [[ -n $loop ]]; then ok "the scratch loop is in the guide"; else not_ok "the scratch loop is in the guide"; fi
+  out=$(cd "$r" && HOME="$d/home" tag=v9.9.9 bash -c "$loop" 2>&1) || true
+  assert_contains "$out" "applies: 0001-traditional.patch" "the loop: a traditional patch applies"
+  assert_contains "$out" "applies: 0002-git-format.patch" "the loop: a git-format patch applies (git does not skip it)"
+  assert_contains "$out" "REBASE:  0003-stale.patch" "the loop: a patch that no longer applies is a REBASE"
+  assert_eq "$(cat "$r/.cache/bump/v9.9.9-patched/b.txt" 2>/dev/null)" "new b" "the loop: the git-format patch's edit is really in the scratch tree"
+  rm -rf "$d"
+else
+  ok "the scratch loop applies a git-format patch # skip git is not installed"
+fi
 finish
 ```
 
-Run: `bash tests/test-bump-guide.sh` Expected: `1..14` with 8 `not ok` (1 to 8: there is no guide), and `grep` complaining on stderr that the file is missing.
+Run: `bash tests/test-bump-guide.sh` Expected: `1..19` with 13 `not ok` (1 to 8 and 15 to 19: there is no guide, so no markers and no scratch loop to run), and `grep` complaining on stderr that the file is missing. Cases 15 to 19 run the guide's stage 3 scratch loop, verbatim, in a throwaway git repository inside the test's own temporary directory (a stub `build/fetch-upstream`, a tarball made by `tar`, a traditional patch, a git-format patch and a stale patch); without `git` on the machine they are one `ok ... # skip` line and the tally is `1..15`.
 
 - [ ] **Step 2: The guide**
 
@@ -671,6 +696,8 @@ The procedure for a tag bump, in the order it is executed (Phase 3 design, secti
 <!-- bump-checklist:start -->
 ### 1. Lock
 
+Three rules hold for every stage. Nothing in this procedure deletes anything: scratch files go under `.cache/bump/` and stay there, and `./dev clean` is never run during a bump (it removes the checkout's whole `.cache` directory, with both upstream tarballs and the two trees compared here). Upstream's release notes, commit messages and issue text are never pasted into this issue, its PR or a commit. An allowlist under `ci/allow/` only shrinks.
+
 Before the lock is edited, keep the tree it pins (afterwards `build/fetch-upstream` names the new tarball):
 
 ```bash
@@ -684,12 +711,16 @@ mkdir -p ".cache/bump/$old_tag" && tar -xzf "$old" -C ".cache/bump/$old_tag" --s
 
 ```bash
 commit=$(gh api "repos/omacom/omarchy/commits/$tag" --jq .sha)
-[[ $commit =~ ^[0-9a-f]{40}$ ]] || echo "not a commit id: stop"
-sed -i -e "s/^omarchy_tag=.*/omarchy_tag=$tag/" -e "s/^omarchy_commit=.*/omarchy_commit=$commit/" \
-       -e '/^omarchy_sha256=/d' -e 's/^tinkero_rev=.*/tinkero_rev=1/' upstream.lock
-new=$(./dev lock)                           # downloads the new tarball and records omarchy_sha256
-mkdir -p ".cache/bump/$tag" && tar -xzf "$new" -C ".cache/bump/$tag" --strip-components=1
-git diff upstream.lock
+# the lock is edited only when both values are exactly a release tag and a commit id (ASCII, C locale)
+if LC_ALL=C bash -c '[[ $1 =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ && $2 =~ ^[0-9a-f]{40}$ ]]' _ "$tag" "$commit"; then
+  sed -i -e "s/^omarchy_tag=.*/omarchy_tag=$tag/" -e "s/^omarchy_commit=.*/omarchy_commit=$commit/" \
+         -e '/^omarchy_sha256=/d' -e 's/^tinkero_rev=.*/tinkero_rev=1/' upstream.lock
+  new=$(./dev lock)                         # downloads the new tarball and records omarchy_sha256
+  mkdir -p ".cache/bump/$tag" && tar -xzf "$new" -C ".cache/bump/$tag" --strip-components=1
+  git diff upstream.lock
+else
+  echo "not a release tag and a commit id: stop here, the lock is untouched"
+fi
 ```
 
 - [ ] `./dev lock` printed `recorded omarchy_sha256=...`, and the diff shows `omarchy_tag`, `omarchy_commit`, `omarchy_sha256` and `tinkero_rev=1` changed and nothing else. The Hyprland and Quickshell keys wait for stage 5.
@@ -697,10 +728,11 @@ git diff upstream.lock
 ### 2. Report
 
 ```bash
-build/bump-report ".cache/bump/$old_tag" ".cache/bump/$tag" | tee ".cache/bump/report-$tag.txt"
+build/bump-report ".cache/bump/$old_tag" ".cache/bump/$tag" > ".cache/bump/report-$tag.txt"; echo "exit status $?"
+cat ".cache/bump/report-$tag.txt"
 ```
 
-- [ ] It exits 0 and prints nine sections of `A`, `D` and `M` lines (added, removed, changed). A `warning:` line on stderr means a row of `build/bump-watch.tsv` names a path neither tree has: find where upstream moved it and fix the row in this PR.
+- [ ] The exit status is 0 and the report has nine sections of `A`, `D` and `M` lines (added, removed, changed). A `warning:` line on stderr means a row of `build/bump-watch.tsv` names a path neither tree has: find where upstream moved it and fix the row in this PR.
 
 One file's change is `diff -u ".cache/bump/$old_tag/<path>" ".cache/bump/$tag/<path>"`. Each section asks for a decision:
 
@@ -726,24 +758,28 @@ done
 diff -rq ".cache/bump/$old_tag/etc" ".cache/bump/$tag/etc"
 ```
 
-- [ ] **The audit's three patterns** (its section 1) over `bin` and `etc`: every `>` line is a file that newly matches. It gets a verdict row in the audit's section 4 (or 12 for `etc`): drop, patch, replace, hide or keep.
+- [ ] **The audit's three patterns** (its section 1), here over `bin` and `etc` only: every `>` line is a file that newly matches. It gets a verdict row in the audit's section 4 (or 12 for `etc`): drop, patch, replace, hide or keep. The audit ran its first pattern over `shell/`, `default/`, `config/` and `install/user/` as well; for those the check is the arch-leak gate of stage 3, on the assembled payload.
 - [ ] **`etc/`.** The build installs two of its files (`etc/fastfetch/config.jsonc`, which patch 0014 and a row of `branding/strings.tsv` edit, and `etc/mise/conf.d/omarchy.toml`) and drops the rest. A new file gets a row in the audit's section 12; check that nothing kept depends on it.
 - [ ] **The whole diff, once**: `diff -ruN ".cache/bump/$old_tag" ".cache/bump/$tag" | less`. The sections above say where to read in full; this pass is for what no row watches (the shell's QML, `default/hypr`, the themes).
 
 ### 3. Assemble until the gates pass
 
-`./dev gates` assembles the payload from the new tarball and runs the gates. The build stops at its first failure: fix it, run again, until seven `PASS` lines print. In the order `build/assemble` works:
+`./dev gates` assembles the payload from the new tarball and runs the gates. It needs `python3-fonttools` and ImageMagick on the machine (`sudo dnf install python3-fonttools ImageMagick`), or the build stops at its branding step. The build stops at its first failure: fix it, run again, until seven `PASS` lines print. In the order `build/assemble` works:
 
 - [ ] **`build/drop.list`.** `drop.list: '<line>' matches nothing in the tree` means upstream renamed or removed a dropped path: fix the line. New Arch machinery, which the gates below name, gets a line here and a row in the audit.
-- [ ] **The patches, in `patches/series` order, 0011 included.** The build says `patch failed: <name>` for the first one. To see all of them at once, apply the series to a scratch copy of the new tree (a second attempt takes a new directory name; nothing is deleted):
+- [ ] **The patches, in `patches/series` order, 0011 included.** The build says `patch failed: <name>` for the first one. To see all of them at once, apply the series to a scratch copy of the new tree (a second attempt takes a new directory name; nothing is deleted). `./dev gates` stays the truth; this loop is its preview:
 
 ```bash
-scratch=".cache/bump/$tag-patched"; mkdir -p "$scratch" && tar -xzf "$new" -C "$scratch" --strip-components=1
+root=$(pwd -P); new=$(build/fetch-upstream)      # the new tarball's path again, in case this is a new shell
+scratch="$root/.cache/bump/$tag-patched"; mkdir -p "$scratch" && tar -xzf "$new" -C "$scratch" --strip-components=1
 while read -r p; do
   case $p in ''|'#'*) continue ;; esac
-  if ( cd "$scratch" && git apply -p1 "$OLDPWD/patches/$p" ); then echo "applies: $p"; else echo "REBASE:  $p"; fi
+  if out=$(cd "$scratch" && GIT_CEILING_DIRECTORIES="$root/.cache/bump" git apply -v -p1 "$root/patches/$p" 2>&1) \
+     && ! grep -q '^Skipped patch' <<<"$out"; then echo "applies: $p"; else echo "REBASE:  $p"; printf '%s\n' "$out"; fi
 done < patches/series
 ```
+
+  The ceiling keeps git from taking the scratch tree for a subdirectory of this checkout: without it a patch that has a `diff --git` header (0013 has) is skipped with exit 0, and would read as applying. A `Skipped patch` line counts as a failure for the same reason.
 
   For each `REBASE`, edit the file in the scratch tree until it says what the patch means (the audit's section 9 and master spec 4.3 say what each is for), regenerate its hunks with `diff -u --label "a/<path>" --label "b/<path>" ".cache/bump/$tag/<path>" "$scratch/<path>"`, and keep the patch's description lines above its first `---`. `quickshell-pam-acct-mgmt.patch` is not in this series: stage 5.
 - [ ] **The replacements.** `replacement '<name>' has no upstream file`: the report's replaced scripts section decided it.
@@ -779,11 +815,11 @@ grep -c $'^seed\t' ".cache/bump/plan-$tag.txt"; grep -c $'^conflict\t' ".cache/b
 
 ### 5. The package set
 
-- [ ] **The pins.** Set `hyprland`, `quickshell` and `quickshell_commit` in `upstream.lock` to what upstream built this tag against (its packaging repository, `https://github.com/omacom/omarchy-pkgs`, as it was at the tag's date). `hyprland` is the lower bound of the package's requirement and, through its minor version, the upper bound; `quickshell` is the full snapshot version, verbatim.
+- [ ] **The pins.** Upstream's tree states no requirement on either package; the signals are in its packaging repository, `https://github.com/omacom/omarchy-pkgs`, read at its commit nearest the tag's date. `quickshell_commit` is the one commit `pkgbuilds/quickshell-git/` pins. `quickshell` is not a string upstream supplies: it is Tinkero's own snapshot version for that commit, the `Version:` of `distro/fedora/specs/quickshell.spec` (base version, commit count, short commit: `0.3.0^20.git28771c7` today). `hyprland` is a decision, not a reading: upstream builds no x86_64 Hyprland of its own, so `pkgver` in `pkgbuilds/hyprland/PKGBUILD` at the same commit is only a heuristic, and the value to set is the lowest Hyprland the new tree was seen to work with. It becomes the floor of the package's requirement and, through its minor version, the ceiling. No Tinkero session has read either file yet: the first real bump records on its issue what they contained, and corrects this step.
 - [ ] **Quickshell.** A new snapshot is `%global commit`, `Version:` and `Release: 1` in `distro/fedora/specs/quickshell.spec`, the new sha256 in `quickshell.spec.sources`, and `quickshell_release=1` in the lock (the floor: the lowest release of this snapshot that carries Tinkero's patch). Rebase `quickshell-pam-acct-mgmt.patch` onto the new snapshot; CI's step "The Quickshell patch applies to the pinned tarball" proves it. Once upstream's `src/services/pam/subprocess.cpp` calls `pam_acct_mgmt` itself, drop the patch instead: the `Patch0:` line, the file, the two assertions of `tests/test-specs.sh` that name it, that CI step, and the paragraph of master spec 4.8. An unchanged snapshot needs nothing.
 - [ ] **Hyprland.** `Version:` in `distro/fedora/specs/hyprland.spec` lies inside `[hyprland, next minor)`. A new minor usually moves the whole stack: check `aquamarine`, `glaze` and each `hypr*` spec against what the new Hyprland requires.
 - [ ] **Every other spec** against its upstream, by `distro/fedora/specs/README.md` ("Bumping a package"). A spec whose content changes without a version change gets a `Release:` bump: a rebuild with an unchanged release never replaces the build users have (issue #48).
-- [ ] **`build-order.txt`.** A package the new tag needs and Fedora lacks gets a spec, a `.sources` file and a line of `distro/fedora/specs/build-order.txt` in dependency order. A new runtime requirement of the tree gets a `Requires:` or `Recommends:` in `tinkero.spec.in` and a row in master spec 6.
+- [ ] **`build-order.txt`.** A package the new tag needs and Fedora lacks gets a spec, a `.sources` file and a line of `distro/fedora/specs/build-order.txt` in dependency order. A package dropped from `build-order.txt` is also deleted from the COPR project, or the release tool's `verify` refuses the release. A new runtime requirement of the tree gets a `Requires:` or `Recommends:` in `tinkero.spec.in` and a row in master spec 6.
 - [ ] `./dev check` is green, and on the PR so are CI's spec lint and SRPM steps.
 
 ### 6. Docs
@@ -816,7 +852,9 @@ From the audit's section 10 (item 6) and the Phase 1 queue. The bump that settle
 - `voxtype` 1.0.1 builds from Omedora's fork source: check whether upstream's own release builds, and point `Source0` at it if it does.
 ````
 
-What of this was executed at planning time, against the pinned `v4.0.4` tree and an edited copy of it: stage 2's `build/bump-report`, the three-pattern loop and `diff -rq`; stage 3's scratch loop over `patches/series` (all fourteen print `applies:`), the `diff -u --label` form, `python3 menu/apply-overrides` alone (on `v4.0.4`: `333 rows in, 75 deleted by prefix, 1 deleted for a dropped command, 3 replaced, 1 added, 258 rows out`) and the `ue900` grep. Not executed, because they need the network, a tool this machine lacks, or a tool the planning session's no-delete rule barred: stage 1 (`gh api`, `./dev lock`), `./dev gates` and `./dev check`, the two wallpaper tools (ImageMagick), stage 4's plan against a real payload, stages 5 and 7. They are written from the code and are first executed in Task 7, which corrects the guide in its own PR (design 4.3).
+What of this was executed at planning time, against the pinned `v4.0.4` tree and an edited copy of it: stage 2's `build/bump-report`, the three-pattern loop and `diff -rq`; stage 3's scratch loop over `patches/series` (all fourteen print `applies:` against the pinned tree, measured again after the fix below, in a repository with the scratch tree inside it, the way a checkout has it), the `diff -u --label` form, `python3 menu/apply-overrides` alone (on `v4.0.4`: `333 rows in, 75 deleted by prefix, 1 deleted for a dropped command, 3 replaced, 1 added, 258 rows out`) and the `ue900` grep. Not executed, because they need the network, a tool this machine lacks, or a tool the planning session's no-delete rule barred: stage 1 (`gh api`, `./dev lock`), `./dev gates` and `./dev check`, the two wallpaper tools (ImageMagick), stage 4's plan against a real payload, stages 5 and 7. They are written from the code and are first executed in Task 7, which corrects the guide in its own PR (design 4.3).
+
+One finding of the plan's review, kept in the guide as a command and in the test as a case: `git apply` run below a repository's top level treats a git-format patch as relative to the repository root and skips every path outside the current directory, with exit 0 (patch 0013 is the one git-format patch of the fourteen; measured: `Skipped patch 'bin/omarchy-launch-webapp'.`, exit 0, the file unchanged). The scratch tree lies inside the checkout, so a loop that only looked at the exit status printed `applies:` for a patch that had not been applied, and left the scratch tree short of that patch's edits for the next patch that touches the same file. `build/assemble`'s own tree is under `mktemp -d`, outside any repository, and is not affected: its verdict is the truth. The loop therefore sets `GIT_CEILING_DIRECTORIES` to the scratch tree's parent, so that git does not take the checkout for the scratch tree's repository (measured: 0013 is then applied, with no `Skipped patch` line), and counts a `Skipped patch` line as a failure as well, so that the loop's verdict is `build/assemble`'s even where the ceiling does not hold. `tests/test-bump-guide.sh` runs the guide's block against a git-format patch and checks that its edit is in the scratch tree; removing the ceiling and the `Skipped patch` check from the guide fails the last of those cases (measured).
 
 - [ ] **Step 3: The audit points at the guide; the workflow guide names it**
 
@@ -893,7 +931,7 @@ The implementer fills `2026-10-XX` with the date the branch is pushed.
 
 - [ ] **Step 4: Verify**
 
-Run: `bash tests/test-bump-guide.sh` Expected: `1..14`, no `not ok` (the fifth and eighth lines carry counts: 42 checkboxes, 17641 bytes).
+Run: `bash tests/test-bump-guide.sh` Expected: `1..19`, no `not ok` (the fifth and eighth lines carry counts: 42 checkboxes, 20035 bytes).
 Run: `shellcheck -x -e SC1090,SC1091 tests/test-bump-guide.sh` Expected: no output.
 Run: `grep -c 'bump-checklist.md' docs/research/arch-coupling-audit.md docs/guides/workflow.md` Expected: `3` and `1`.
 Run: `git diff -U0 -- docs | grep '^+' | grep -c "$(printf '\342\200\224')"` Expected: `0` (no em dash added).
@@ -919,10 +957,10 @@ git commit -m "docs: the bump checklist as one guide in execution order; the aud
 
 **Interfaces:**
 - Consumes: `lock_get` (`build/lib.sh`) for `omarchy_tag`; Task 2's guide and its two marker lines; `gh` on `PATH` with `GH_TOKEN` set, called in exactly these forms: `gh api repos/<upstream>/releases/latest --jq .tag_name` (the real document carries `tag_name`, `published_at` and `body` among its keys; only `tag_name` is read), `gh issue list --repo <repo> --state open --label <label> --limit 500 --json number,title --jq '.[] | "\(.number)\t\(.title)"'`, `gh issue view <n> --repo <repo> --json comments --jq '.comments[].body'`, `gh issue comment <n> --repo <repo> --body <text>`, `gh issue create --repo <repo> --title <title> --label size:large --label area:build --body-file -`.
-- Produces: `ci/watch-upstream` (no arguments; `-h` for usage). Outcomes when upstream's newest release is newer than the pin (`sort -V`), among the open issues that carry `area:build`: one titled exactly `Bump upstream to <tag>`: nothing; otherwise the lowest-numbered one whose title starts with `Bump upstream to `: one comment naming the tag, unless a comment there already names it as a whole token; otherwise a new issue titled `Bump upstream to <tag>`, labels `size:large` and `area:build`, body: a fixed header (the tag and the pin are the only values filled in), a blank line, the guide's lines between its markers. Exit 0 nothing to do or done; 1 on any failure (`gh`, the lock, the guide, a tag that is not `^v[0-9]+\.[0-9]+\.[0-9]+$`, which is never printed); 2 on an argument. Environment: `GH_TOKEN`, `GITHUB_REPOSITORY` (default `dromeropa/tinkero`), `TINKERO_UPSTREAM_REPO` (default `omacom/omarchy`), `TINKERO_LOCK`, `TINKERO_BUMP_GUIDE`, `TINKERO_WATCH_DRY_RUN=1` (reads run; each writing `gh` command is printed as `dry run: <command>` followed by its body, each line prefixed with two spaces, a bar and a space, and nothing is written).
-- Produces: `ci/lib-watch.sh`, sourced, for Task 4 too: `say TEXT`, `die TEXT` (exit 1), `gh_write BODY CMD...`, `open_issues LABEL` (prints `number<TAB>title`, lowest number first; exits 1 through `die` when the listing fails). The caller sets `me` and `repo`.
+- Produces: `ci/watch-upstream` (no arguments; `-h` for usage). Outcomes when upstream's newest release is newer than the pin (`sort -V`), among the open issues that carry `area:build`: one titled exactly `Bump upstream to <tag>`: nothing; otherwise the lowest-numbered one whose title starts with `Bump upstream to `: one comment naming the tag, unless a comment there already names it as a whole token; otherwise a new issue titled `Bump upstream to <tag>`, labels `size:large` and `area:build`, body: a fixed header (the tag and the pin are the only values filled in), a blank line, the guide's lines between its markers. Exit 0 nothing to do or done; 1 on any failure: `gh api`, `gh issue list` or `gh issue view` failing, the lock, the guide, a tag that is not `^v[0-9]+\.[0-9]+\.[0-9]+$` (never printed), and a failed `gh issue create` or `gh issue comment` too, which ends the run with exit 1 whatever status `gh` itself returned (4 for an authentication failure, say) and before the script says it opened or commented; 2 on an argument. The script runs under `LC_ALL=C` (`export` near its top, with a comment naming design D3), so the tag pattern means ASCII digits wherever it is run. Environment: `GH_TOKEN`, `GITHUB_REPOSITORY` (default `dromeropa/tinkero`), `TINKERO_UPSTREAM_REPO` (default `omacom/omarchy`), `TINKERO_LOCK`, `TINKERO_BUMP_GUIDE`, `TINKERO_WATCH_DRY_RUN=1` (reads run; each writing `gh` command is printed as `dry run: <command>` followed by its body, each line prefixed with two spaces, a bar and a space, and nothing is written).
+- Produces: `ci/lib-watch.sh`, sourced, for Task 4 too: `say TEXT`, `die TEXT` (exit 1), `gh_write BODY CMD...` (the dry run; a failing command ends the script with exit 1 and `<gh issue create|comment> failed; nothing was written`), `open_issues LABEL` (prints `number<TAB>title`, lowest number first; exits 1 through `die` when the listing fails). The caller sets `me` and `repo`.
 
-Two things here go beyond the letter of design section 5 and are recorded as such. Only issues that carry the label count, because the repository is public and anyone can open an issue under any title, while only a collaborator can label one: without this a stranger's issue would silence the watch or collect its comments (Review Focus 4). And the guide's markers are checked on every run, before the network is touched, so a damaged guide fails the week it is damaged rather than the week a release appears.
+Two things here were additions at planning time and are listed in "## Deviations". Only issues that carry the label count, because the repository is public and anyone can open an issue under any title, while only a collaborator can label one: without this a stranger's issue would silence the watch or collect its comments (Review Focus 4); the design's section 5 has since adopted it. And the guide's markers are checked on every run, before the network is touched, so a damaged guide fails the week it is damaged rather than the week a release appears.
 
 - [ ] **Step 1: The failing test**
 
@@ -955,9 +993,14 @@ case "$1 ${2:-}" in
   "issue list")
     if [[ ${GH_FAIL:-} == list ]]; then echo "gh: HTTP 503" >&2; exit 1; fi
     jq --arg l "$label" --arg s "$state" '[.[] | select($s == "" or .state == $s) | select($l == "" or (.labels | index($l)))]' "$FIX/issues.json" | jq -r "$jqx" ;;
-  "issue view")    jq -r "$jqx" "$FIX/comments-$3.json" ;;
-  "issue comment") ;;
-  "issue create")  cat > "$FIX/created-body"; echo "https://github.com/dromeropa/tinkero/issues/99" ;;
+  "issue view")
+    if [[ ${GH_FAIL:-} == view ]]; then echo "gh: HTTP 503" >&2; exit 1; fi
+    jq -r "$jqx" "$FIX/comments-$3.json" ;;
+  "issue comment")
+    if [[ ${GH_FAIL:-} == writes ]]; then echo "gh: HTTP 403" >&2; exit 4; fi ;;
+  "issue create")
+    if [[ ${GH_FAIL:-} == writes ]]; then echo "gh: HTTP 403" >&2; exit 4; fi
+    cat > "$FIX/created-body"; echo "https://github.com/dromeropa/tinkero/issues/99" ;;
   *) echo "stub gh: unexpected call: $*" >&2; exit 64 ;;
 esac
 S
@@ -1064,6 +1107,19 @@ for bad in 'v4.0.5-beta1' 'v4.0.5; echo PWNED' '$(touch PWNED)' $'v4.0.5\nPWNED'
   fi
 done
 assert_contains "$out" "not vN.N.N (not shown on purpose); nothing was done" "the refusal says why without the tag"
+# the pattern means ASCII digits whatever the caller's locale: in a collating UTF-8 locale (an
+# English one, as on a developer's machine) an unpinned [0-9] also matches a fullwidth five (the
+# bytes below), which would reach the title
+utf8=$(locale -a 2>/dev/null | grep -iE '^en_[A-Z]{2}\.utf-?8$' | head -n1 || true)
+if [[ -n $utf8 ]]; then
+  latest $'v4.0.\xef\xbc\x95'; issues
+  LC_ALL=$utf8 run
+  assert_eq "$rc" 1 "a tag with a non-ASCII digit, run under a collating UTF-8 locale: exit 1"
+  assert_eq "$(grep -c '' "$LOG")" 1 "and it reaches no gh argument"
+else
+  ok "a tag with a non-ASCII digit, run under a collating UTF-8 locale: exit 1 # skip no such locale is installed"
+  ok "and it reaches no gh argument # skip no such locale is installed"
+fi
 
 # failures stop before anything is written
 latest v4.0.5; issues
@@ -1071,6 +1127,18 @@ GH_FAIL=api run
 assert_eq "$rc" 1 "gh api fails: exit 1"; assert_contains "$out" "could not read the newest release of omacom/omarchy" "gh api fails: says so"
 GH_FAIL=list run
 assert_eq "$rc" 1 "the issue list fails: exit 1"; assert_eq "$(writes)" 0 "the issue list fails: no issue is opened blind"
+# a write that fails is exit 1 whatever gh's own status was (the stub's is 4), and is not reported as done
+GH_FAIL=writes run
+assert_eq "$rc" 1 "gh issue create fails: exit 1"; assert_contains "$out" "gh issue create failed; nothing was written" "gh issue create fails: says so"
+if grep -q 'opened the bump issue' <<<"$out"; then not_ok "gh issue create fails: the issue is not reported as opened"; else ok "gh issue create fails: the issue is not reported as opened"; fi
+issues "$(issue 12 "$first_bump")"; comments 12
+GH_FAIL=writes run
+assert_eq "$rc" 1 "gh issue comment fails: exit 1"; assert_contains "$out" "gh issue comment failed; nothing was written" "gh issue comment fails: says so"
+if grep -q 'commented that' <<<"$out"; then not_ok "gh issue comment fails: the comment is not reported as made"; else ok "gh issue comment fails: the comment is not reported as made"; fi
+GH_FAIL=view run
+assert_eq "$rc" 1 "the comments cannot be read: exit 1"; assert_eq "$(writes)" 0 "the comments cannot be read: no comment is made blind"
+assert_contains "$out" "could not read the comments of issue #12" "the comments cannot be read: says so"
+issues
 printf 'fedora=44\n' > "$d/lock"; run
 assert_eq "$rc" 1 "a lock without omarchy_tag: exit 1"
 printf 'omarchy_tag=4.0.4\n' > "$d/lock"; run
@@ -1123,9 +1191,9 @@ if grep -q approved "$d/all.log"; then not_ok "no gh call ever names the approve
 rm -rf "$d"; finish
 ```
 
-The stub `gh` is the test's model of the four calls: it filters the issue fixture by the `--state` and `--label` it is given, and evaluates the script's own `--jq` expressions with the real `jq`, so a script that forgot a flag sees the issues that flag would have hidden. The six bad tags run from inside the test's temporary directory, so a script that executed one would write there and nowhere else.
+The stub `gh` is the test's model of the calls (`GH_FAIL=api`, `list`, `view` or `writes` makes the matching one fail, the last with status 4, as an authentication failure does): it filters the issue fixture by the `--state` and `--label` it is given, and evaluates the script's own `--jq` expressions with the real `jq`, so a script that forgot a flag sees the issues that flag would have hidden. The six bad tags run from inside the test's temporary directory, so a script that executed one would write there and nowhere else.
 
-Run: `bash tests/test-watch.sh` Expected: `1..73` with 58 `not ok`. The fifteen that pass (5, 14, 15, 18, 21, 24, 26, 46, 49, 52, 59, 62, 67, 68, 73) assert that something did not happen, which is true while the script does not exist.
+Run: `bash tests/test-watch.sh` Expected: `1..84` with 66 `not ok`. The eighteen that pass (5, 14, 15, 18, 21, 24, 26, 48, 51, 54, 56, 60, 63, 70, 73, 78, 79, 84) assert that something did not happen, or (78, 79) that a body that was never built has nothing in it, which is true while the script does not exist. The bad-tag case with a non-ASCII digit (43 and 44) runs under the first English UTF-8 locale that `locale -a` lists; on a machine with none it is two `ok ... # skip no such locale is installed` lines and the tally is the same. It fails if `export LC_ALL=C` is taken out of the script (measured), which is the point of it.
 
 - [ ] **Step 2: The shared library**
 
@@ -1142,16 +1210,17 @@ die() { echo "$me: $*" >&2; exit 1; }
 
 # gh_write BODY CMD...: run a command that changes something on GitHub, with BODY on its stdin
 # when BODY is not empty. With TINKERO_WATCH_DRY_RUN=1 the command and the body are printed
-# instead and nothing is changed.
+# instead and nothing is changed. A command that fails ends the script with exit 1, whatever
+# gh's own status was, before the caller can report the write as done.
 gh_write() {
   local body=$1; shift
   if [[ ${TINKERO_WATCH_DRY_RUN:-0} == 1 ]]; then
     printf 'dry run:'; printf ' %q' "$@"; echo
     if [[ -n $body ]]; then printf '  | %s\n' "${body//$'\n'/$'\n'  | }"; fi
   elif [[ -n $body ]]; then
-    "$@" <<<"$body"
+    "$@" <<<"$body" || die "$1 $2 $3 failed; nothing was written"
   else
-    "$@"
+    "$@" || die "$1 $2 $3 failed; nothing was written"
   fi
 }
 
@@ -1194,6 +1263,7 @@ Create `ci/watch-upstream` (mode 0755):
 # TINKERO_BUMP_GUIDE, and TINKERO_WATCH_DRY_RUN=1 to print the gh commands that would change
 # something instead of running them.
 set -euo pipefail
+export LC_ALL=C   # design D3: [0-9] must mean ASCII digits; in a collating locale it matches others
 me=watch-upstream
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 root=$(dirname "$here")
@@ -1278,7 +1348,7 @@ Notes for the implementer. `build/lib.sh` and `ci/lib-watch.sh` both define `die
 
 - [ ] **Step 4: Verify**
 
-Run: `bash tests/test-watch.sh` Expected: `1..73`, no `not ok`.
+Run: `bash tests/test-watch.sh` Expected: `1..84`, no `not ok`.
 Run: `shellcheck -x -e SC1090,SC1091 ci/watch-upstream ci/lib-watch.sh tests/test-watch.sh` Expected: no output.
 Run: `ci/watch-upstream -h | head -n 1` Expected: `watch-upstream: keep one bump issue open while upstream has a release newer than the pin`.
 
@@ -1300,7 +1370,7 @@ In `.github/workflows/ci.yml`, the ShellCheck line Task 1 added grows:
 
 The test needs `jq` and skips itself without it (`1..0 # skip jq is needed`), which in CI would be a silent hole. Run: `grep -c 'dnf -y install.* jq' .github/workflows/ci.yml` Expected: `1` (plan 3A added `jq` to the Tools step). If it prints `0`, add ` jq` to the end of that step's `dnf -y install` line in this commit.
 
-Run: `./dev check` Expected: green; `tests/test-watch.sh` at `1..73` is the one new file. Not measured at planning time (the planning session ran under a no-delete rule and did not execute tests that delete files); the implementer measures it.
+Run: `./dev check` Expected: green; `tests/test-watch.sh` at `1..84` is the one new file. Not measured at planning time (the planning session ran under a no-delete rule and did not execute tests that delete files); the implementer measures it.
 
 - [ ] **Step 5: Commit**
 
@@ -1321,13 +1391,13 @@ git commit -m "ci: watch-upstream keeps one bump issue open and writes only the 
 - Modify: `tests/test-watch.sh` (the Qt watch's cases), `tests/test-specs.sh` (one assertion), `.github/workflows/ci.yml` (the ShellCheck step)
 
 **Interfaces:**
-- Consumes: Task 3's `ci/lib-watch.sh` unchanged; `lock_get` for `fedora`; `dnf` on `PATH`, called in exactly two forms (design 2.2's two questions, asked of the repositories): `dnf -q repoquery --latest-limit=1 --queryformat '%{version}\n' qt6-qtbase` (dnf5 expands `\n` in a query format; on Fedora 44 today it prints `6.11.2`) and `dnf -q repoquery --repofrompath=tinkero-watch,<URL> --repo=tinkero-watch --latest-limit=1 --arch=x86_64 --requires quickshell` (the COPR's build today requires, among others, `libQt6Gui.so.6(Qt_6.11_PRIVATE_API)(64bit)`, and the same for Qml, Quick and WaylandClient).
-- Produces: `ci/watch-qt` (no arguments; `-h` for usage). When Fedora's Qt minor (the first two components of the newest version dnf prints) differs from the one minor named by the `Qt_<6.N>_PRIVATE_API` requirements, and no open issue carrying `area:specs` is titled exactly `Rebuild quickshell for Qt <6.M>` (`6.M` being Fedora's), it creates that issue with the labels `size:small` and `area:specs` and a fixed body in which only four numbers are filled in. Exit 0 the minors agree, or the issue exists, or it was opened; 1 when `dnf` or `gh` fails or an answer is not understood (never echoed); 2 on an argument. Environment: `GH_TOKEN`, `GITHUB_REPOSITORY`, `TINKERO_COPR_PROJECT` (default `dromero/tinkero`), `TINKERO_RELEASE_REPO` (default `https://download.copr.fedorainfracloud.org/results/<project>/fedora-<N>-x86_64/`, `N` the lock's `fedora`; both names are plan 3B's, design 3.2), `TINKERO_LOCK`, `TINKERO_WATCH_DRY_RUN=1`.
+- Consumes: Task 3's `ci/lib-watch.sh` unchanged (a failed `gh issue create` is exit 1 here too); `lock_get` for `fedora`; `dnf` on `PATH`, called in exactly two forms (design 2.2's two questions, asked of the repositories): `dnf -q repoquery --latest-limit=1 --queryformat '%{version}\n' qt6-qtbase` (dnf5 expands `\n` in a query format; on Fedora 44 today it prints `6.11.2`) and `dnf -q repoquery --repofrompath=tinkero-watch,<URL> --repo=tinkero-watch --latest-limit=1 --arch=x86_64 --requires quickshell` (the COPR's build today requires, among others, `libQt6Gui.so.6(Qt_6.11_PRIVATE_API)(64bit)`, and the same for Qml, Quick and WaylandClient).
+- Produces: `ci/watch-qt` (no arguments; `-h` for usage). When Fedora's Qt minor (the first two components of the newest version dnf prints) differs from the one minor named by the `Qt_<6.N>_PRIVATE_API` requirements, and no open issue carrying `area:specs` is titled exactly `Rebuild quickshell for Qt <6.M>` (`6.M` being Fedora's), it creates that issue with the labels `size:small` and `area:specs` and a fixed body in which only four numbers are filled in. Exit 0 the minors agree, or the issue exists, or it was opened; 1 when `dnf` or `gh` fails or an answer is not understood (never echoed); 2 on an argument. The script runs under `LC_ALL=C` like Task 3's. Environment: `GH_TOKEN`, `GITHUB_REPOSITORY`, `TINKERO_COPR_PROJECT` (default `dromero/tinkero`), `TINKERO_RELEASE_REPO` (default `https://download.copr.fedorainfracloud.org/results/<project>/fedora-<N>-x86_64/`, `N` the lock's `fedora`; both names are plan 3B's, design 3.2), `TINKERO_LOCK`, `TINKERO_WATCH_DRY_RUN=1`.
 - Produces: `tests/test-specs.sh` accepting a `Release:` in `distro/fedora/specs/quickshell.spec` at or above the lock's `quickshell_release`, which is what makes the issue's fix one line (design D14). Task 5 amends master spec 4.12's sentence with it. Plan 3B's `verify` already reads the key as a floor (design 3.2, rule 3).
 
 - [ ] **Step 1: The failing tests**
 
-In `tests/test-watch.sh`, insert this block immediately before the line that begins `# --- both watches: the label only Diego applies` (the stub `gh`, the `issues` helper, `$d/lock` and the `all.log` check after it are Task 3's and serve both watches):
+In `tests/test-watch.sh`, insert this block, followed by one blank line, immediately before the line that begins `# --- both watches: the label only Diego applies` (the stub `gh`, the `issues` helper, `$d/lock` and the `all.log` check after it are Task 3's and serve both watches):
 
 ```bash
 # --- ci/watch-qt --------------------------------------------------------------------------------
@@ -1428,6 +1498,9 @@ DNF_FAIL=requires runq
 assert_eq "$rc" 1 "dnf fails on the COPR: exit 1"; assert_eq "$(gh_calls)" 0 "and no issue is opened"
 GH_FAIL=list runq
 assert_eq "$rc" 1 "the issue list fails: exit 1"; assert_eq "$(grep -c '^gh issue create' "$LOG")" 0 "and no issue is opened blind"
+GH_FAIL=writes runq
+assert_eq "$rc" 1 "gh issue create fails: exit 1"; assert_contains "$out" "gh issue create failed; nothing was written" "and says so"
+if grep -q 'opened the rebuild issue' <<<"$out"; then not_ok "and the issue is not reported as opened"; else ok "and the issue is not reported as opened"; fi
 
 # the dry run, the seams, the arguments
 TINKERO_WATCH_DRY_RUN=1 runq
@@ -1447,7 +1520,7 @@ runq --rebuild; assert_eq "$rc" 2 "an argument: exit 2, usage"
 runq -h; assert_eq "$rc" 0 "-h: exit 0"; assert_contains "$out" "Exit status: 0 the minors agree" "-h prints the usage"
 ```
 
-Run: `bash tests/test-watch.sh` Expected: `1..125` with 40 `not ok`, all between 73 and 124. Cases 1 to 72 and 125 pass as before; the twelve new ones that pass (75, 87, 91, 95, 97, 99, 101, 104, 110, 112, 114, 121) assert that something did not happen.
+Run: `bash tests/test-watch.sh` Expected: `1..139` with 42 `not ok`, all between 84 and 138. Cases 1 to 83 and 139 pass as before; the thirteen new ones that pass (86, 98, 102, 106, 108, 110, 112, 115, 121, 123, 126, 128, 135) assert that something did not happen.
 
 - [ ] **Step 2: The script**
 
@@ -1481,6 +1554,7 @@ Create `ci/watch-qt` (mode 0755):
 # lock's fedora), TINKERO_LOCK, and TINKERO_WATCH_DRY_RUN=1 to print the gh command that would
 # open the issue instead of running it.
 set -euo pipefail
+export LC_ALL=C   # design D3: [0-9] must mean ASCII digits; in a collating locale it matches others
 me=watch-qt
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 root=$(dirname "$here")
@@ -1577,7 +1651,7 @@ The assertion's message is now `quickshell.spec Release is at least the lock's q
 
 - [ ] **Step 4: Verify**
 
-Run: `bash tests/test-watch.sh` Expected: `1..125`, no `not ok`.
+Run: `bash tests/test-watch.sh` Expected: `1..139`, no `not ok`.
 Run: `bash tests/test-specs.sh` Expected: the tally it had before this task (`1..88` at `95bb8d4`), no `not ok`, with the line `ok <n> - quickshell.spec Release is at least the lock's quickshell_release` (`Release: 2`, floor 2 today). Not measured at planning time (the planning session ran under a no-delete rule and did not execute pre-existing test files); the implementer measures it. The new if-statement was run at planning time on its own with the pairs 2 and 2, 3 and 2, 10 and 9 (pass), 1 and 2, an empty release, an empty floor, `x` and 2 (fail, with the message above) and 09 and 8 (pass).
 Run: `shellcheck -x -e SC1090,SC1091 ci/watch-qt tests/test-watch.sh tests/test-specs.sh` Expected: no output.
 
@@ -1597,7 +1671,7 @@ In `.github/workflows/ci.yml`, the ShellCheck line grows once more:
            tests/run tests/lib.sh tests/test-*.sh tests/fixtures/make-tree.sh install.sh tests/fixtures/make-payload.sh
 ```
 
-Run: `./dev check` Expected: green; `tests/test-watch.sh` at `1..125`. Not measured at planning time, as above.
+Run: `./dev check` Expected: green; `tests/test-watch.sh` at `1..139`. Not measured at planning time, as above.
 
 - [ ] **Step 5: Commit**
 
@@ -1653,6 +1727,11 @@ assert_contains "$text" "  schedule:" "weekly: runs on a schedule"
 assert_contains "$text" '    - cron: "17 5 * * 1"' "weekly: on Mondays"
 assert_contains "$text" "  workflow_dispatch:" "weekly: and on dispatch"
 
+# a red test or gate does not hide the lock check, and a red upstream watch does not hide the Qt watch
+# shellcheck disable=SC2016  # GitHub's expression syntax, compared as text
+assert_eq "$(grep -c '^        if: \${{ !cancelled() }}$' <<<"$text" || true)" 2 "weekly: the lock check and the Qt watch run after an earlier step failed"
+assert_eq "$(sed -n '/^  gates:/,/^  watch:/p' <<<"$text" | grep -A3 'name: The COPR' | grep -c '!cancelled()' || true)" 1 "weekly: and the first of those two is in the gates job"
+
 # the gates job has every tool ci.yml's check job has
 tools() { sed -nE 's/^[[:space:]]*run: dnf -y install (.*)$/\1/p' "$1" | head -n1 | tr ' ' '\n' | sort -u; }
 missing=$(comm -23 <(tools "$W/ci.yml") <(tools "$weekly") | paste -sd' ')
@@ -1679,7 +1758,7 @@ finish
 
 The container check reads the one-line form every workflow uses today (`container: fedora:44`); if plan 3B's `release.yml` spells it as a mapping (`container:` and `image:` on the next line), change that workflow to the one-line form in this commit rather than teaching the test a second spelling.
 
-Run: `bash tests/test-workflows.sh` Expected: `1..21` with 16 `not ok`; the five that pass are 1 (the existing workflows already use the lock's Fedora), 14 and 15 (the two scripts exist), 19 and 21 (nothing forbidden in a file that is not there).
+Run: `bash tests/test-workflows.sh` Expected: `1..23` with 18 `not ok`; the five that pass are 1 (the existing workflows already use the lock's Fedora), 16 and 17 (the two scripts exist), 21 and 23 (nothing forbidden in a file that is not there).
 
 - [ ] **Step 2: The workflow**
 
@@ -1730,6 +1809,8 @@ jobs:
       - name: Gates on the real upstream tree
         run: ./dev gates
       - name: The COPR's packages satisfy the lock and the specs
+        # also when a test or a gate failed: the three checks are independent
+        if: ${{ !cancelled() }}
         run: |
           mkdir -p .cache
           build/tinkero-release list > .cache/copr-list.tsv
@@ -1757,7 +1838,7 @@ jobs:
         run: ci/watch-qt
 ```
 
-Why it is shaped this way. The design gives the `watch` job `issues: write`; `contents: read` is added because `permissions` lists are exhaustive and the checkout needs it. `github.token` reaches the scripts through `env:`, never spliced into a `run:` line, and there is no input to splice. The Qt watch runs even when the upstream watch failed (`!cancelled()`): they share nothing. The lock check writes its list under `.cache/`, which is ignored by git and which `./dev gates` has already created. The schedule is deliberately off the hour: GitHub delays jobs queued at `:00`.
+Why it is shaped this way. The design gives the `watch` job `issues: write`; `contents: read` is added because `permissions` lists are exhaustive and the checkout needs it. `github.token` reaches the scripts through `env:`, never spliced into a `run:` line, and there is no input to splice. The Qt watch runs even when the upstream watch failed, and the lock check even when `./dev check` or `./dev gates` failed (`if: ${{ !cancelled() }}` on both steps, which the test counts): the design calls the three checks independent in purpose, and a red test must not hide the lock check for that week. The lock check writes its list under `.cache/`, which is ignored by git and which `./dev gates` has already created. The schedule is deliberately off the hour: GitHub delays jobs queued at `:00`.
 
 - [ ] **Step 3: The guide's section on the watches**
 
@@ -1778,7 +1859,7 @@ Both take `TINKERO_WATCH_DRY_RUN=1`, which prints what they would write and writ
 
 - [ ] **Step 4: The master spec, the roadmap, the workflow guide, `CLAUDE.md`**
 
-Every edit below is an exact replacement or insertion: each quoted text occurs exactly once in its file at `b008633`. Plans 3A and 3B edit some of the same documents before this plan lands; where one of them changed a quoted line, make the same change to the line as it reads then (the item says what must stay). The implementer fills `2026-10-XX` with the date the branch is pushed.
+Every edit below is an exact replacement or insertion: each quoted text occurs exactly once in its file at `b008633` (checked with `grep -cF` against the committed documents at planning time). Plans 3A and 3B edit some of the same documents before this plan lands, so **when this issue is executed, run `grep -cF '<quoted text>' <file>` for every quoted text before editing and read the count**: `1` is the expected answer. A `0` is a line that plan 3A or 3B changed; three are known (the workflow guide's "Its issues await approval." line, master spec section 12's workflows and `build/` lines, and section 8 item 5), and for each the item says what to do with the line as it reads then. Those items are therefore instructions, not exact replacements. After plan 3A's edit the workflow guide's list says that "the issues of 3B, 3C and 3D await approval": take `3C` out of that sentence in the same edit that adds 3C's bullet, since the bullet says it landed. The implementer fills `2026-10-XX` with the date the branch is pushed. The roadmap rule for the whole phase: every "## What executing 3X added to the queue" section is inserted immediately above the heading "## What the first real assembly found (inputs to 2B and 2C)", so that the sections read in order (planning, 3A, 3B, 3C, 3D); this plan's section goes there, below 3A's and 3B's.
 
 In `docs/superpowers/specs/2026-09-17-tinkero-design.md`:
 
@@ -1849,7 +1930,7 @@ Follow `docs/guides/bump-checklist.md` (Phase 3 design, D16), on the issue the w
    with
 
 ````text
-**GitHub Actions, weekly** (`.github/workflows/weekly.yml`, Mondays and on dispatch): `ci/watch-upstream` reads upstream's newest release and keeps one bump issue open, with the bump checklist as its body and only the tag taken from upstream (Phase 3 design, D15); `ci/watch-qt` compares the Qt minor Fedora offers with the one the COPR's Quickshell requires and, when they differ, opens the rebuild issue instead of rebuilding (D14), so no COPR token is needed; the tests and the CI gates run against the current lock, and `build/tinkero-release verify` checks that the COPR's packages satisfy the lock and the specs (D24). Neither watch applies `approved`.
+**GitHub Actions, weekly** (`.github/workflows/weekly.yml`, Mondays and on dispatch): `ci/watch-upstream` reads upstream's newest release and keeps one bump issue open, with the bump checklist as its body and only the tag taken from upstream (Phase 3 design, D15), counting only open issues that carry `area:build` (the repository is public, and only a collaborator can label an issue); `ci/watch-qt` compares the Qt minor Fedora offers with the one the COPR's Quickshell requires and, when they differ and no open issue labelled `area:specs` has the title, opens the rebuild issue instead of rebuilding (D14), so no COPR token is needed; the tests and the CI gates run against the current lock, and `build/tinkero-release verify` checks that the COPR's packages satisfy the lock and the specs (D24). Neither watch applies `approved`.
 ````
 
 6. 4.12, the `quickshell_release` bullet (design section 5: a floor).
@@ -1980,7 +2061,7 @@ In `docs/superpowers/plans/2026-09-17-phase-2-roadmap.md`:
 **done** 2026-10-XX: `2026-10-01-phase-3c-bump-procedure-and-watches.md`; the first weekly run is its post-merge issue; the first real bump is its own `size:large` issue, blocked until upstream tags a release after `v4.0.4`
 ````
 
-2. A new section, before the heading below (after the queue sections plans 3A and 3B added).
+2. A new section, immediately above the heading below, which puts it after the queue sections plans 3A and 3B added (the phase-wide rule: every "What executing 3X added to the queue" section goes immediately above that heading, so that they read in order, planning, 3A, 3B, 3C, 3D).
 
    Immediately before
 
@@ -1994,7 +2075,7 @@ In `docs/superpowers/plans/2026-09-17-phase-2-roadmap.md`:
 ## What executing 3C added to the queue (2026-10-XX)
 
 - **Post-merge (this plan's own issue):** dispatch `weekly` once from `master` and record both jobs (Task 6). The workflow could not run before it was on `master`; that run is its proof.
-- **The first real bump:** its own `size:large` issue, titled so that `ci/watch-upstream` comments on it instead of opening a second one; blocked by the code issues of 3A to 3D and by upstream. It is the first execution of `docs/guides/bump-checklist.md`: stage 1's `gh api` call, stage 4's plan against the real payload, stage 5's source for the pins and all of stage 7 have never been run, and every correction lands in the bump's PR.
+- **The first real bump:** its own `size:large` issue, filed with the others at planning time with a header only (the guide did not exist yet) and titled so that `ci/watch-upstream` comments on it instead of opening a second one; blocked by the code issues of 3A to 3D and by upstream. Task 6 adds the guide's checklist and known items to its body once this plan has landed. It is the first execution of `docs/guides/bump-checklist.md`: stage 1's `gh api` call, stage 4's plan against the real payload, stage 5's source for the pins and all of stage 7 have never been run, and every correction lands in the bump's PR.
 - **How the watches behave, by decision:** neither applies `approved`; the Qt watch opens an issue and rebuilds nothing, so the workflow holds no COPR token (D14); the upstream watch keeps one bump issue open, comments once per newer tag, and takes only the tag from upstream (D15, D3). Only open issues that carry `area:build` (or `area:specs` for Qt) count, so a stranger's issue under a watched title cannot silence a watch; closing the bump issue without bumping makes the next run open a new one.
 - **`bump-report` limits, accepted:** the menu section lists ids added and removed, not rows reworded under the same id (the guide reads the menu's diff for the ids Tinkero replaces); file modes are not compared; a watched path that is in neither tree is a warning on stderr, not a failure.
 - **Fedora 45:** when the lock's `fedora` moves, `tests/test-workflows.sh` fails until every workflow's `container:` follows it, and `ci/watch-qt` reads the new chroot's repository.
@@ -2003,7 +2084,7 @@ In `docs/superpowers/plans/2026-09-17-phase-2-roadmap.md`:
 
 In `docs/guides/workflow.md`:
 
-1. "Where the build is": a new last bullet of that list. At `b008633` the list ends with the line quoted; plan 3A rewords that line and plan 3B adds a bullet after it, and then this one goes after plan 3B's.
+1. "Where the build is": a new last bullet of that list. At `b008633` the list ends with the line quoted; plan 3A rewords that line and plan 3B adds a bullet after it, and then this one goes after plan 3B's; and if the sentence plan 3A left reads that the issues of 3B, 3C and 3D await approval, take 3C out of it in the same edit.
 
    After the line
 
@@ -2038,11 +2119,11 @@ In `CLAUDE.md`:
 
 - [ ] **Step 5: Verify and commit**
 
-Run: `bash tests/test-workflows.sh` Expected: `1..21`, no `not ok`.
-Run: `bash tests/test-bump-guide.sh` Expected: `1..14`, no `not ok` (the section added in Step 3 names `ci/watch-upstream` and `ci/watch-qt`, which exist, and adds no checkbox).
-Run: `bash tests/test-watch.sh` Expected: `1..125`, no `not ok` (the body built from the real guide still ends before "Known items").
+Run: `bash tests/test-workflows.sh` Expected: `1..23`, no `not ok`.
+Run: `bash tests/test-bump-guide.sh` Expected: `1..19`, no `not ok` (the section added in Step 3 names `ci/watch-upstream` and `ci/watch-qt`, which exist, and adds no checkbox).
+Run: `bash tests/test-watch.sh` Expected: `1..139`, no `not ok` (the body built from the real guide still ends before "Known items").
 Run: `shellcheck -x -e SC1090,SC1091 tests/test-workflows.sh` Expected: no output.
-Run: `./dev check` Expected: green; four test files more than before this plan (test-bump-report `1..52`, test-bump-guide `1..14`, test-watch `1..125`, test-workflows `1..21`). Not measured at planning time (the planning session ran under a no-delete rule and did not execute tests that delete files); the implementer measures it.
+Run: `./dev check` Expected: green; four test files more than before this plan (test-bump-report `1..52`, test-bump-guide `1..19`, test-watch `1..139`, test-workflows `1..23`). Not measured at planning time (the planning session ran under a no-delete rule and did not execute tests that delete files); the implementer measures it.
 Run: `git diff -U0 master -- docs CLAUDE.md .github | grep '^+' | grep -c "$(printf '\342\200\224')"` Expected: `0`.
 Run: `grep -c 'triggers the rebuild\|trigger a COPR rebuild\|rebuild trigger' docs/superpowers/specs/2026-09-17-tinkero-design.md` Expected: `0` (design D14 is stated everywhere the old sentence stood).
 
@@ -2095,61 +2176,122 @@ Expected: the two lines of Step 1, this time from the container. If either watch
 
 Run: `gh api repos/dromeropa/tinkero/actions/workflows/weekly.yml --jq '.state'` Expected: `active`.
 
-- [ ] **Step 6: Record and close**
+- [ ] **Step 6: Complete the first real bump's issue**
 
-Comment on the issue with: the run's URL; the two outputs of Step 1; each job's conclusion; the `watch` job's two lines; the lock check's output; any issue a watch opened or commented on. Close the issue by hand. A failure at any step is a new issue against the task that owns the cause, and this one stays open. Likely first-contact corrections, each a one-line fix in its own issue: the name of the `gh` package in the container, an option of `dnf repoquery` that dnf5 spells differently for a `--repofrompath` repository, the token's reach for another repository's public API.
+The first real bump's issue (Task 7) was filed at planning time with a header only, because the guide did not exist then. Now it does, on `master`. From a checkout of `master`, run this block: it reads the guide's marked section, checks that it has at least one checkbox and that the issue is found, and only then edits the issue's body, once, by appending the checklist under the heading `## The checklist`. Run twice, it changes nothing the second time. It writes only under `.cache/`, which git ignores.
 
-**Verification for the issue:** the comment of Step 6, with both jobs green and both watches' lines present.
+```bash
+# Run from a checkout of master that has docs/guides/bump-checklist.md. Writes only under .cache/ (git ignores it)
+# and, as its last step, edits the one issue titled below; every check comes before that edit.
+mkdir -p .cache
+guide=docs/guides/bump-checklist.md
+title='Bump upstream to the next release after v4.0.4 (first real bump, Milestone D)'
+sed -n '/^<!-- bump-checklist:start -->$/,/^<!-- bump-checklist:end -->$/p' "$guide" 2>/dev/null | sed '1d;$d' > .cache/first-bump-checklist.md
+boxes=$(grep -c '^- \[ \] ' .cache/first-bump-checklist.md || true)
+issue=$(gh issue list --state open --label area:build --search 'first real bump in:title' --json number,title \
+          --jq ".[] | select(.title == \"$title\") | .number" | head -n 1)
+if [[ $boxes -ge 1 && $issue =~ ^[0-9]+$ ]]; then
+  gh issue view "$issue" --json body --jq .body > .cache/first-bump-body.md
+  if grep -qxF '## The checklist' .cache/first-bump-body.md; then
+    echo "issue #$issue already has its checklist: nothing changed"
+  else
+    { cat .cache/first-bump-body.md; printf '\n## The checklist\n\n'; cat .cache/first-bump-checklist.md; } > .cache/first-bump-new.md
+    gh issue edit "$issue" --body-file .cache/first-bump-new.md
+    echo "issue #$issue: $boxes checkboxes added"
+  fi
+else
+  echo "nothing changed: the guide's marked section has $boxes checkboxes (read $guide), and the issue number is '${issue:-none}'"
+fi
+```
+
+The block was run at planning time in the sandbox against a stub `gh`, with the real guide (42 checkboxes added, the edit called once with the body built from the issue's own header and the checklist), with no guide and with a guide without markers (0 checkboxes, no `gh issue edit` call) and against a body that already carried the heading (no edit). The real `gh issue list --search`, `--jq` and `gh issue edit` are Task 6's first contact with them: if the list finds no issue, the block says so and edits nothing; look the issue up by hand and run its last `gh issue edit` with the number. Record the result in Step 7's comment.
+
+- [ ] **Step 7: Record and close**
+
+Comment on the issue with: the run's URL; the two outputs of Step 1; each job's conclusion; the `watch` job's two lines; the lock check's output; any issue a watch opened or commented on; the line Step 6 printed. Close the issue by hand. A failure at any step is a new issue against the task that owns the cause, and this one stays open. Likely first-contact corrections, each a one-line fix in its own issue: the name of the `gh` package in the container, an option of `dnf repoquery` that dnf5 spells differently for a `--repofrompath` repository, the token's reach for another repository's public API.
+
+**Verification for the issue:** the comment of Step 7, with both jobs green, both watches' lines present and Step 6's line saying the checklist was added.
 
 ---
 
 ### Task 7: The first real bump (its own issue, blocked by upstream)
 
-**Files:** none in this plan. Design D21: upstream's newest release is still `v4.0.4` (measured 2026-10-01), so the bump cannot be written as tasks with code. It is one issue, filed with the others.
+**Files:** none in this plan. Design D21: upstream's newest release is still `v4.0.4` (measured 2026-10-01), so the bump cannot be written as tasks with code. It is one issue, filed with the others at planning time (design 4.3), with a header only: its title, labels and the text below are all `ci/watch-upstream` and the workflow guide need. The guide's checklist is added to its body by Task 6, Step 6, once this plan has landed.
 
 **Interfaces:**
 - Consumes: everything Phase 3 delivers: `tinkero-status` (3A), the release workflow and `docs/guides/release.md` (3B), `build/bump-report`, `docs/guides/bump-checklist.md` and the weekly watch (this plan), the VM smoke test (3D).
 - Produces: Milestone D's second half (master spec 8), and a guide that has been executed once and corrected.
 
-- [ ] **Step 1: File the issue**
+- [ ] **Step 1: File the issue, with the others, from this text**
 
-Title, exactly: `Bump upstream to the next release after v4.0.4 (first real bump, Milestone D)`. It starts with `Bump upstream to `, so when upstream tags a release `ci/watch-upstream` comments on this issue, once per newer tag, instead of opening a second one. Labels: `size:large`, `area:build` (the watch only counts issues carrying it), `blocked`. Body, built from the guide as it is on `master` that day (the body file goes under `.cache/`, which git ignores):
+The issue is filed by the same session that files the issues of plans 3A to 3D, right after this plan is committed, and replaces placeholder #11 together with them. Title, exactly: `Bump upstream to the next release after v4.0.4 (first real bump, Milestone D)`. It starts with `Bump upstream to `, so when upstream tags a release `ci/watch-upstream` comments on this issue, once per newer tag, instead of opening a second one. Labels: `size:large`, `area:build` (the watch only counts issues carrying it) and `blocked`; never `approved`. Body: the text of the block below, verbatim, with the four numbers on the `blocked by` line replaced by the issue numbers filed for the code issues of plans 3A, 3B, 3C and 3D. Nothing else is added at filing time.
 
-```bash
-mkdir -p .cache
-{ cat <<'EOF'
-The first real bump of `upstream.lock`, and the second half of Milestone D (master spec 8; Phase 3 design 4.3). Blocked by the code issues of plans 3A, 3B, 3C and 3D, and by upstream publishing a release after `v4.0.4`: `ci/watch-upstream` comments here when it does. A bump is `size:large` and plan-first (`docs/guides/workflow.md`, adaptation 2).
+```text
+The first real bump of `upstream.lock`, and the second half of Milestone D (master spec, section 8; Phase 3 design, 4.3). A bump is `size:large` and plan-first (`docs/guides/workflow.md`, adaptation 2): the session dispatched on this issue writes its plan first, then follows the checklist.
 
-**WHAT:** move `upstream.lock` from `v4.0.4` to the newest upstream release named in this issue's comments when the work starts, by following `docs/guides/bump-checklist.md` end to end.
-**WHERE:** `upstream.lock`, `build/drop.list`, `patches/`, `distro/fedora/`, `menu/overrides.jsonc`, `branding/`, `provision/`, `config-notes/`, the documents the checklist names, and the guide itself wherever a step was wrong.
-**HOW TO VERIFY (done means all four):** the checklist below was followed end to end and the guide corrected where it was wrong, in the same PR; CI passed on that PR; after the merge the changed packages and `tinkero` were built in the COPR, the smoke test passed and the release was cut (`docs/guides/release.md`); `sudo dnf upgrade` on a second machine moved the tree and its pins in one transaction and `tinkero-provision` there reported moved defaults correctly. Each is recorded here. Closed by hand.
+**WHAT:** move `upstream.lock` from `v4.0.4` to the newest upstream release named in this issue's comments when the work starts, by following `docs/guides/bump-checklist.md` end to end, and correct that guide in the same PR wherever a step was wrong.
+
+**WHERE:** `upstream.lock`, `build/drop.list`, `patches/`, `distro/fedora/`, `menu/overrides.jsonc`, `branding/`, `provision/`, `config-notes/`, the documents the checklist names, and the guide itself.
+
+**HOW TO VERIFY (done means all four, each recorded on this issue):**
+1. The guide was followed end to end and corrected where it was wrong, in the bump's PR.
+2. CI passed on that PR.
+3. After the merge the changed packages and `tinkero` were built in the COPR, the VM smoke test passed and the release was cut (`docs/guides/release.md`).
+4. `sudo dnf upgrade` on a second machine moved the tree and its pins in one transaction, and `tinkero-provision` there reported moved defaults correctly (master spec, section 8, Milestone D).
+Closed by hand, with the COPR build ids, the smoke record, the release URL, the dnf transaction summary and `tinkero-provision`'s report.
+
+**Blocked by:** #<3A code issue>, #<3B code issue>, #<3C code issue> and #<3D code issue> (`tinkero-status`; the release workflow and its guide; this checklist, `build/bump-report` and the weekly watch; the VM smoke test), and by upstream publishing a release after `v4.0.4` (its newest on 2026-10-01). `ci/watch-upstream` comments here when upstream does. Do not start before the checklist below exists.
+
+**The checklist** is not in this body yet: `docs/guides/bump-checklist.md` is written by plan 3C, and its checklist is added to this body, under the heading "The checklist", once plan 3C has landed on `master`.
+
+**Known items for the first bump past `v4.0.4`** (from the audit's section 10, item 6, and the Phase 1 queue; the guide's closing section carries the same list):
+- `omarchy-install-chromium-claude`, and the hook that calls it from `omarchy-default-agent`: it writes to `/usr/share/chromium/extensions` through `pkexec`. Expect both in the report's privilege section and decide the verdict there (Chromium is a non-goal, master spec 3).
+- The `gemini` agent is renamed `agy`: the roster in `install/user/mise.sh`, `omarchy-default-agent`, the menu's agent rows, master spec 4.1.
+- A new `ori` stub joins the roster.
+- The skill loop gains `~/.gemini/config/skills`: `step_skills` in `bin/tinkero-provision` is a copy of upstream's loop and follows it, with master spec 4.5 and the audit's section 6.
+- `herdr` is packaged at `0.8.0^13.git0766aa5` (Omedora's pin) while its upstream is at 0.9.1: take the version the new tag expects (stage 5).
+- `voxtype` 1.0.1 builds from Omedora's fork source: check whether upstream's own release builds, and point `Source0` at it if it does.
 
 Nothing from upstream's release notes belongs in this issue, its PR or its commits: an agent session works from this text.
-
-EOF
-  sed -n '/^<!-- bump-checklist:start -->$/,/^<!-- bump-checklist:end -->$/p' docs/guides/bump-checklist.md | sed '1d;$d'
-  echo
-  sed -n '/^## Known items/,/^## The watches/p' docs/guides/bump-checklist.md | sed '$d'
-} > .cache/first-bump-issue.md
-gh issue create --title 'Bump upstream to the next release after v4.0.4 (first real bump, Milestone D)' \
-  --label size:large --label area:build --label blocked --body-file .cache/first-bump-issue.md
 ```
 
-The first `sed` pair prints the lines between the two markers; the second prints the "Known items" section up to, not including, the heading "The watches". Check before creating: `grep -c '^- \[ \] ' .cache/first-bump-issue.md` prints the guide's checkbox count (42 as written by this plan) and `tail -n 3 .cache/first-bump-issue.md` shows the `voxtype` item.
+The six known items are the guide's closing section as Task 2 writes it; if Task 2's text changes during review, change this block with it. The filer checks that each of the six bullets occurs in the guide on the branch (`grep -cF` of its first words).
 
-- [ ] **Step 2: When upstream tags**
+- [ ] **Step 2: Complete the body**
+
+Task 6, Step 6, appends the guide's checklist under the heading `## The checklist`, from the guide as it is on `master` that day. Until it has run, the issue is not approvable: say so on the issue if Diego asks.
+
+- [ ] **Step 3: When upstream tags**
 
 The watch's comment names the tag. Diego removes `blocked` and applies `approved`; the session dispatched on the issue writes its plan first (the lane of `size:large`), then follows the checklist: stages 1 to 6 in one PR that says `Part of #N`, stage 7 after the merge.
 
-- [ ] **Step 3: Done**
+- [ ] **Step 4: Done**
 
 Design 4.3's four conditions, each recorded on the issue: the guide was followed end to end and corrected where it was wrong; CI passed; the release was cut; a second machine took tree and pins in one transaction, with provisioning reporting moved defaults correctly (master spec 8, Milestone D). Then a line under the roadmap's "What executing 3C added to the queue" with the date, the tag and what the guide got wrong, in the bump's own PR or a `docs:` PR after it, and the issue is closed by hand.
 
-**Verification for the issue:** Step 3's record.
+**Verification for the issue:** Step 4's record.
 
 ---
 
 ## Deviations
+
+### From the design, built in at planning time
+
+Nine places where this plan departs from, or adds to, the Phase 3 design as it was written. Each was the smallest change that works; the first is the only one that changed a design rule, so it is first.
+
+1. **Only labelled issues count for the watches (Tasks 3 and 4). Adopted into the design.** The design's section 5 first said that an open issue titled exactly `Bump upstream to <tag>`, or whose title starts with `Bump upstream to `, decides what the watch does. The repository is public: anyone can open an issue under a watched title and silence a watch (the tag is then "tracked") or collect its comments, and only a collaborator can label an issue. So the same rules apply among the open issues that carry `area:build` (upstream watch) or `area:specs` (Qt watch). The design's section 5 now says exactly that, so the plan and the design agree. The cost: a bump issue filed by hand without `area:build` is not seen, and the watch opens its own. The first real bump's issue carries the label.
+2. **A warning on stderr for a watched path in neither tree (Task 1).** The design's output (`A`, `D` and `M` lines on stdout, exit 0 or 2) is unchanged. Without the warning a directory upstream moved is an empty section forever, which reads as "nothing changed".
+3. **`ci/lib-watch.sh` (Task 3).** Not in the design's file list: `say`, `die`, the dry run and the issue listing, thirty lines shared by the two watches, after the precedent of `ci/lib-gate.sh`. It is in the ShellCheck list.
+4. **`contents: read` on the `watch` job (Task 5).** The design gives that job `issues: write`; a job-level `permissions` block sets every permission it does not name to none, and the checkout needs `contents: read`. No other write permission exists, and a test pins it.
+5. **The guide's markers are checked on every run of `ci/watch-upstream` (Task 3),** before the network, not only when an issue is about to be opened: a damaged guide fails the week it is damaged, not the week a release appears. `tests/test-bump-guide.sh` catches it earlier, in CI.
+6. **`TINKERO_WATCH_DRY_RUN=1` and exit 2 on an argument, on both watches (Tasks 3 and 4).** The design names neither; one code path in the library serves both, and exit 2 for usage is the house convention.
+7. **The `grep` row's argument is `PATHS ~ ERE` (Task 1).** The design's table gives the paths and the pattern in prose; one column has to carry both, and the form is validated (a missing separator and an expression that does not compile both exit 2, tested).
+8. **Test files (Tasks 2, 3 and 5).** The guide's marker test is `tests/test-bump-guide.sh` and the workflow pins are `tests/test-workflows.sh`; the design's section 9 names `tests/test-watch.sh`, which holds both watches. The guide and workflow tests need no `jq`, so they never skip.
+9. **Documents beyond the brief's list (Tasks 2 and 5).** Master spec 4.1, 7 and 9 each said the workflow "triggers the rebuild", contradicting D14 as it stands; the audit's sections 11 and 12 pointed at the section that becomes a pointer; `CLAUDE.md` gets one reading-list bullet for the guide, which lands through the PR.
+
+Two changes made after the plan was reviewed are not deviations: the design now carries them. Both watches run in the C locale (design D3, "Every script that matches a fetched token against a pattern runs in the C locale"), and the first real bump's issue is filed with the others with a header only (design 4.3).
+
+### Found while executing
 
 Filled by the PR that implements Tasks 1 to 5 (and by Task 6's and Task 7's issues for theirs), per task, when anything deviated from this plan.
 
@@ -2169,8 +2311,10 @@ Filled by the PR that implements Tasks 1 to 5 (and by Task 6's and Task 7's issu
 
 Prototyped in a sandboxed copy of the repository at `95bb8d4` (read-only filesystem except the copy, no network, `rm` a no-op), test first, task by task. Every code block above is the prototype's file, included mechanically, not retyped; every diff is `diff -u` of the repository's file against the prototype's.
 
-Measured there: `tests/test-bump-report.sh` `1..52` (46 failing before the script existed); `tests/test-bump-guide.sh` `1..14` (8 failing without the guide); `tests/test-watch.sh` `1..73` after Task 3 (58 failing before) and `1..125` after Task 4 (40 failing before); `tests/test-workflows.sh` `1..21` (16 failing without `weekly.yml`). ShellCheck (`-x -e SC1090,SC1091`) and `bash -n` clean on the three scripts, the library, the four new test files and the edited `tests/test-specs.sh`. `build/bump-report` on the pinned upstream tarball given twice, and on the unpacked tree given twice: nine empty sections, exit 0, about three seconds for the tarballs; on the tree against an edited copy of it: the edits, section by section. The tests were also run against deliberately broken copies of the scripts (no label filter, `--state all`, no tag pattern, a plain substring match for the comment, a listing failure ignored, no version pattern, no check for two minors): each mutation failed the assertions written for it. The guide's commands that could be run offline were run against the pinned tree (listed in Task 2). Every "replace this" string of the two Docs steps was applied to a copy of the documents by a script that refuses a string found zero times or twice.
+Measured there: `tests/test-bump-report.sh` `1..52` (46 failing before the script existed); `tests/test-bump-guide.sh` `1..19` (13 failing without the guide); `tests/test-watch.sh` `1..84` after Task 3 (66 failing before) and `1..139` after Task 4 (42 failing before); `tests/test-workflows.sh` `1..23` (18 failing without `weekly.yml`). ShellCheck (`-x -e SC1090,SC1091`) and `bash -n` clean on the three scripts, the library, the four new test files and the edited `tests/test-specs.sh`. `build/bump-report` on the pinned upstream tarball given twice, and on the unpacked tree given twice: nine empty sections, exit 0, about three seconds for the tarballs; on the tree against an edited copy of it: the edits, section by section. The tests were also run against deliberately broken copies of the scripts (no label filter, `--state all`, no tag pattern, a plain substring match for the comment, a listing failure ignored, no version pattern, no check for two minors, no `LC_ALL=C`, no ceiling and no `Skipped patch` check in the guide's loop): each mutation failed the assertions written for it. The guide's commands that could be run offline were run against the pinned tree (listed in Task 2). Every "replace this" string of the two Docs steps was applied to a copy of the documents by a script that refuses a string found zero times or twice.
 
 Found and fixed while prototyping: a first stub `gh` ignored `--label` when the script passed none, so the stranger's-issue case passed for the wrong reason; `grep | cut` on a guide without markers ended the script silently under `pipefail`, before its message; `-h` assertions that matched the "No such file" error of a missing script; a `Release:` with a leading zero read as octal; the ShellCheck additions were moved to a line of their own so that plans 3A and 3B can edit the neighbouring lines.
 
 Not measured, and marked so in the steps: `./dev check` and `tests/test-specs.sh` (the planning session ran under a no-delete rule and did not execute pre-existing tests; the relaxed assertion was derived by reading and its if-statement exercised on its own); `./dev gates`, `./dev lock`, the two wallpaper tools and `tinkero-provision --plan` against a real payload in the guide (the same rule, and no ImageMagick or python3-fonttools on the planning machine); everything that needs the network or GitHub: the real `gh`, the real `dnf repoquery` against Fedora and the COPR, and `weekly.yml` itself, whose first run is Task 6. The stubs model `gh` and `dnf` from their documentation and from the real outputs recorded on 2026-10-01 (upstream's `releases/latest` document; the COPR Quickshell's requirement list, with `libQt6Gui.so.6(Qt_6.11_PRIVATE_API)(64bit)`; `qt6-qtbase` 6.11.2 on Fedora 44).
+
+**Review.** An independent review after planning found 0 Critical, 3 Important and 7 Minor findings, and kept the nine design deviations above as sound. What changed: (1) both watches now run under `export LC_ALL=C` (a fullwidth digit passed the tag pattern under `en_US.UTF-8`), with a test that runs the bad tag under an English UTF-8 locale or prints an `ok ... # skip` line, and the guide's commit-id check is pinned the same way; (2) the guide's scratch loop no longer reports `applies:` for a git-format patch that git skipped (`GIT_CEILING_DIRECTORIES`, and a `Skipped patch` line counts as a failure), the claim that all fourteen apply was measured again, and `tests/test-bump-guide.sh` runs the loop against a git-format patch; (3) the first real bump's issue is filed with the others with a header only (its full text is in Task 7), and Task 6 completes its body from the guide, checking that the guide was read before any `gh issue edit`; (4) the guide's stage 5 says where the pins come from (`omarchy-pkgs`' `pkgbuilds/quickshell-git/` for the commit, the spec's own `Version:` for the Quickshell version, and a stated heuristic for Hyprland), and that no session has read those files yet; (5) the guide's six small defects are fixed (the lock edit inside the success branch, the `./dev clean` warning inside the markers, the audit's scope stated, the pipeline status and the lost `$new`, the COPR deletion note, the tools stage 3 needs); (6) the Task 4 insertion keeps its blank line, so the implementer's `tests/test-watch.sh` equals the prototype's byte for byte; (7) failed `gh issue create`, `gh issue comment` and `gh issue view` have test cases, and the Interfaces state the real exit status (1, whatever `gh` returned); (8) the lock check step of `weekly.yml` runs with `if: ${{ !cancelled() }}`, counted by the test; (9) the shared-document items say to re-run `grep -cF` for each quoted text when the issue is executed, and the workflow-guide item takes 3C out of the "await approval" sentence; (10) the nine deviations are listed together under "## Deviations", the label filter first, as adopted into the design.
