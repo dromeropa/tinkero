@@ -1,7 +1,7 @@
 # Tinkero design spec
 
 **Tagline:** a tinkerable desktop for Hyprland, bring your own distro.
-**Status:** revision 2.1, 2026-09-21. Phase 0 spike done (`docs/research/phase-0-findings.md`, GO on Phase 1); plans 2A and 2B executed; Phase 1 done 2026-09-22 (the package set builds in `dromero/tinkero`); 2C (menu rewrite) done 2026-09-23; 2E (provisioning and install) done 2026-09-23 (design: 2026-09-23-phase-2e-provision-design.md); 2D (branding) done 2026-09-24 (design: 2026-09-23-phase-2d-branding-design.md); 2F (session integration) done 2026-09-24 (design: 2026-09-24-phase-2f-session-design.md), the first COPR build of tinkero and the VM check being its post-merge issues. Fedora 44 x86_64 is the first target.
+**Status:** revision 2.1, 2026-09-21. Phase 0 spike done (`docs/research/phase-0-findings.md`, GO on Phase 1); plans 2A and 2B executed; Phase 1 done 2026-09-22 (the package set builds in `dromero/tinkero`); 2C (menu rewrite) done 2026-09-23; 2E (provisioning and install) done 2026-09-23 (design: 2026-09-23-phase-2e-provision-design.md); 2D (branding) done 2026-09-24 (design: 2026-09-23-phase-2d-branding-design.md); 2F (session integration) done 2026-09-24 (design: 2026-09-24-phase-2f-session-design.md), the first COPR build of tinkero and the VM check being its post-merge issues; Phase 3 (maintenance and release) planned 2026-10-01 (design: 2026-10-01-phase-3-maintenance-release-design.md). Fedora 44 x86_64 is the first target.
 **Pronunciation:** tin-KEH-ro.
 
 This document records what Tinkero is, why it is shaped the way it is, and the decisions behind it. It is the input to the implementation plans.

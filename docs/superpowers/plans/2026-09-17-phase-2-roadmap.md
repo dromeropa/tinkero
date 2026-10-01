@@ -27,6 +27,27 @@ Milestones A, B and C of the spec (section 8) need 2A to 2F and the Phase 1 COPR
 - Gates compare findings with `ci/allow/<gate>.allow` through `compare_with_allowlist`; allowlists only shrink. A plan is done when the entries it owns are gone.
 - Python is allowed from 2C on (JSONC, fonts and manifests are not shell jobs): standard library only plus `python3-fonttools` for the font, tests with `python3 -m unittest`, no pytest.
 
+## Phase 3: maintenance and release
+
+Phase 3 of the design spec (section 7) is planned as four plans from one design, `docs/superpowers/specs/2026-10-01-phase-3-maintenance-release-design.md` (decisions D1 to D24). It supersedes placeholder issue #11. Nothing in it adds capability to the desktop.
+
+| Plan | Delivers | Depends on | Status |
+|---|---|---|---|
+| **3A** `tinkero-status` | `bin/tinkero-status` with `--json` and `--rollback`, `distro/fedora/lib/status.sh`, `tinkero_rev` 3 | Phase 2 | **planned** 2026-10-01: `2026-10-01-phase-3a-tinkero-status.md`; awaiting approval. One orchestrated issue; the COPR build of `tinkero` 4.0.4-3 and the first run on an installed host are a post-merge issue |
+| **3B** release archive | `build/tinkero-release`, the `release` workflow, `docs/guides/release.md`; each release's RPM set and a pinned `install.sh` on its GitHub release | Phase 2 | **planned** 2026-10-01: `2026-10-01-phase-3b-release-archive.md`; awaiting approval. One orchestrated issue; the first release and the rollback drill are a post-merge issue |
+| **3C** bump procedure and watches | `build/bump-report` and `build/bump-watch.tsv`, `docs/guides/bump-checklist.md`, `ci/watch-upstream`, `ci/watch-qt`, the `weekly` workflow | 3B (`tinkero-release list` and `verify`) | **planned** 2026-10-01: `2026-10-01-phase-3c-bump-procedure-and-watches.md`; awaiting approval. One orchestrated issue; the first weekly run is a post-merge issue; the first real bump is its own `size:large` issue, blocked until upstream tags a release after `v4.0.4` |
+| **3D** VM smoke test | `ci/vm-smoke/`, `./dev vm-smoke`, `docs/guides/vm-smoke.md` | Phase 2; `tinkero-status` when 3A has landed | **planned** 2026-10-01: `2026-10-01-phase-3d-vm-smoke-test.md`; awaiting approval. One orchestrated issue; the first run on the operator's host is a manual issue |
+
+Order: 3A, 3B, 3C, 3D, landing serially, because all four edit `.github/workflows/ci.yml`'s ShellCheck list and the same documents. 3D shares no code with 3B or 3C and may be built in parallel with either if its branch is rebased before its PR merges. The first release needs 3B and a smoke record (design D23); the first real bump needs all four. Milestone D (spec 8) is a test in 3A plus the first real bump.
+
+## What planning Phase 3 added to the queue (2026-10-01)
+
+- **Fedora 45:** Fedora's `releases.json` lists "45 Beta" on 2026-10-01, so the twice-yearly duty of spec 4.7 arrives during Phase 3. Adding the `fedora-45-x86_64` chroot, a lock whose `fedora` accepts two releases and `install.sh`'s pin are not designed; they are their own issue. `tinkero-status`'s `chroot` check names the day it matters.
+- **The first release:** it is `v4.0.4-3`, because 3A lands before 3B and takes `tinkero_rev` to 3. It needs the COPR build of `tinkero` 4.0.4-3 (3A's post-merge issue) and a smoke record for that build: 3D's first run, or a manual pass of the 2F guide (design D23). The #37 check was made on an earlier build and cannot be cited for it.
+- **The first real bump:** upstream's newest release is still `v4.0.4` (2026-09-15), so Milestone D's second half waits for upstream.
+- **Not built, by decision:** a staging COPR (a build still reaches users before the smoke test runs); a gate that fails when the payload changed and `tinkero_rev` did not (the rule of spec 4.12 stays a review point); a smoke job on GitHub-hosted runners (design D17).
+- **Spec amendments the plans carry:** section 8 item 6 (the smoke test is a release gate, D17) and item 5 (the lock check runs weekly and at release, D24); 4.7 (the Qt watch opens an issue, D14; "held back" is the Qt comparison, D5); 4.12 (`quickshell_release` is a floor); the audit's section 10 becomes a pointer to `docs/guides/bump-checklist.md`.
+
 ## What the first real assembly found (inputs to 2B and 2C)
 
 Running the 2A prototype against the real tree while writing the plan produced 28 arch-leak findings and 50 dropped-reference findings. Most are exactly the audit's work list. These were not in the audit and need a decision in 2B:
