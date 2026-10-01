@@ -19,7 +19,7 @@
 - Scripts start with `#!/bin/bash` and `set -euo pipefail`, carry a header comment that is their usage text (printed with `sed -n 'A,Bp' "$0"`), and are ShellCheck clean with `-x -e SC1090,SC1091`; no `A && B || C` one-liners (SC2015); `# shellcheck disable=SC2016` above `printf` lines that write a literal `$*` into a stub. New scripts join the ShellCheck step of `.github/workflows/ci.yml`.
 - Tests are `tests/test-<area>.sh`, source `tests/lib.sh`, use its helpers and assert on messages, not only on exit codes. They never use the network and never run a real `virsh`, `virt-install`, `virt-clone`, `ssh`, `scp`, `ssh-keygen`, `curl`, `qemu-img`, package manager, `rpm`, `dnf`, `systemctl`, `systemd-run`, `loginctl`, `busctl`, `gsettings`, `dconf`, `sudo`, `faillock`, `ausearch` or `authselect`: each is a stub on a `PATH` the test builds in its temporary directory. `sha256sum`, `cp`, `mv`, `diff`, `cmp`, `awk`, `sed` and `timeout` are the real ones. CI runs the suite as root in a container: the driver's refusal to run as root goes through `TINKERO_EUID`.
 - **Test safety.** A test deletes only its own `mktmp` directory, by the house idiom's last line (`rm -rf "$d"; finish`), and nothing else: where a case needs a file to be absent it points the command at another fixture directory (`GHOME`, `GROOT`, `STATE`), it does not delete. No test exports `HOME` or reassigns a variable that a later `rm` expands; the guest gets `HOME="$d/home"` on its own command line and the driver gets `TINKERO_SMOKE_STATE` and `TINKERO_SMOKE_RESULTS` under `$d`, so nothing depends on the caller's `HOME`.
-- **Host safety** (the operator reads `ci/vm-smoke/run` with this in mind). Every host path the driver writes derives from two variables set once at its top: `TINKERO_SMOKE_STATE` (default `${XDG_CACHE_HOME:-$HOME/.cache}/tinkero-smoke`) and the results directory (default `.cache/vm-smoke/` in the checkout). Neither script contains `rm`, `rmdir`, `unlink` or `shred`: a stale file is overwritten, never removed. The only thing ever removed is the clone the driver created, through `virsh undefine --nvram --remove-all-storage` on a name that is checked to start with `tinkero-smoke` and not to name a base. The base domain and its disk are never removed by the script.
+- **Host safety** (the operator reads `ci/vm-smoke/run` with this in mind). Every host path the driver writes derives from two variables set once at its top: `TINKERO_SMOKE_STATE` (default `${XDG_CACHE_HOME:-$HOME/.cache}/tinkero-smoke`) and the results directory (default `.cache/vm-smoke/` in the checkout). Neither script contains `rm`, `rmdir`, `unlink` or `shred`: a stale file is overwritten, never removed. The only thing ever removed is the clone the driver created, through `virsh undefine --nvram --remove-all-storage` on a name that is checked to start with `tinkero-smoke` and not to name a base, and only after `virsh domblklist --details` has shown that every disk of that domain is a file directly under `TINKERO_SMOKE_STATE` (so a domain of that name made by hand, with its disk elsewhere, is refused). The base domain and its disk are never removed by the script, and no disk file the run did not just create is overwritten. Both scripts set `LC_ALL=C` (bash's `[0-9]` admits non-ASCII digits under a UTF-8 locale; sibling plans' reviews found it), `ci/vm-smoke/guest` refuses to run on a machine without the marker file `/etc/tinkero-smoke-vm` that cloud-init writes into the VM, and the values read from `upstream.lock` that reach a command line are validated against a fixed pattern.
 - No em dashes in Tinkero's own prose. Attribution trailers on every commit per the session's rules. Land through a PR against the approved issue; never push master. `copr-build` is never triggered by this plan's code issue, and no step of Tasks 1 to 4 starts a virtual machine.
 - Each task's PR includes its Deviations line in this plan's "## Deviations" section when anything deviated.
 
@@ -29,13 +29,13 @@ To be filed as two issues superseding the 3D part of placeholder #11 (which is c
 
 | Task | Size | Area | WHAT | WHERE | HOW TO VERIFY |
 |---|---|---|---|---|---|
-| 1 The guest script | medium | ci | `ci/vm-smoke/guest`: `snap`, `diff-snap`, `check STAGE` for every stage of design 6.1 as TAP, the steps and the session controls | `ci/vm-smoke/guest`, `tests/test-vm-smoke.sh`, `.github/workflows/ci.yml` | `bash tests/test-vm-smoke.sh` at `1..137`; ShellCheck clean |
-| 2 The base image | medium | ci | `ci/vm-smoke/run base`: the SSH key, the pinned image checked by sha256 before use, the rendered user-data, `virt-install --import --cloud-init`; never rebuilt over an existing base | `ci/vm-smoke/run`, `ci/vm-smoke/cloud-init.yaml`, `ci/vm-smoke/image.lock`, `tests/test-vm-smoke.sh`, `.github/workflows/ci.yml` | `bash tests/test-vm-smoke.sh` at `1..190` (53 more); the dry run prints the eleven-line sequence |
-| 3 The run stages | large | ci | `ci/vm-smoke/run [--stages LIST] [--keep] [--lockout]`: clone, boot, SSH, the eight stages, the key table, `report.tap` and the results directory, exit 0, 1 or 2; `./dev vm-smoke` | `ci/vm-smoke/run`, `dev`, `tests/test-vm-smoke.sh` | `bash tests/test-vm-smoke.sh` at `1..265` (75 more); no `rm` in the dry run's sequence |
+| 1 The guest script | medium | ci | `ci/vm-smoke/guest`: `snap`, `diff-snap`, `check STAGE` for every stage of design 6.1 as TAP, the steps and the session controls | `ci/vm-smoke/guest`, `tests/test-vm-smoke.sh`, `.github/workflows/ci.yml` | `bash tests/test-vm-smoke.sh` at `1..153`; ShellCheck clean |
+| 2 The base image | medium | ci | `ci/vm-smoke/run base`: the SSH key, the pinned image checked by sha256 before use, the rendered user-data, `virt-install --import --cloud-init`; never rebuilt over an existing base, nor over a disk file of its name | `ci/vm-smoke/run`, `ci/vm-smoke/cloud-init.yaml`, `ci/vm-smoke/image.lock`, `tests/test-vm-smoke.sh`, `.github/workflows/ci.yml` | `bash tests/test-vm-smoke.sh` at `1..216` (63 more); the dry run prints the eleven-line sequence |
+| 3 The run stages | large | ci | `ci/vm-smoke/run [--stages LIST] [--keep] [--lockout]`: clone, boot, SSH, the eight stages, the key table, `report.tap` and the results directory, exit 0, 1 or 2; `./dev vm-smoke` | `ci/vm-smoke/run`, `dev`, `tests/test-vm-smoke.sh` | `bash tests/test-vm-smoke.sh` at `1..306` (90 more); no `rm` in the dry run's sequence |
 | 4 Docs | small | docs | `docs/guides/vm-smoke.md`; the pointer in the 2F guide; master spec 4.7, 7, 8 item 6 and 12 (D17); roadmap; workflow guide; `CLAUDE.md` | `docs/**`, `CLAUDE.md` | `./dev check` green; no em dash added; each quoted string replaced once |
 | 5 The first run (manual) | medium | ci | on the operator's host: build the base, run every stage, record `report.tap`, the duration, every correction, and the verdict on the three unproven mechanisms of design 6.5 | none (a record on the issue, one roadmap line, follow-up issues) | every line of `report.tap` recorded; each of the three mechanisms marked worked or fallen back; closed by hand |
 
-After Tasks 1 to 4, `./dev check` runs one more test file, `tests/test-vm-smoke.sh`, at `1..265`; every other file keeps the tally it has when this plan's branch starts (at `95bb8d4`: test-assemble `1..70`, test-branding-render `1..34`, test-branding `1..14`, test-check-rpm `1..16`, test-copr `1..21`, test-fastfetch-fedora `1..3`, test-fetch `1..9`, test-gates `1..94`, test-install `1..34`, test-launch-webapp `1..41`, test-lock `1..4`, test-menu-guards `1..8`, test-pam-sync `1..75`, test-provision `1..189`, test-render-spec `1..25`, test-replacements `1..54`, test-session-end `1..35`, test-specs `1..88`, test-theme-set-browser `1..15`, test-update `1..6`, Python `Ran 45 tests`; plans 3A to 3C move some of these and add their own files). The whole-suite run was not measured at planning time (the planning session ran under a no-delete rule and did not execute tests that delete files); the implementer measures it.
+After Tasks 1 to 4, `./dev check` runs one more test file, `tests/test-vm-smoke.sh`, at `1..306`; every other file keeps the tally it has when this plan's branch starts (at `95bb8d4`: test-assemble `1..70`, test-branding-render `1..34`, test-branding `1..14`, test-check-rpm `1..16`, test-copr `1..21`, test-fastfetch-fedora `1..3`, test-fetch `1..9`, test-gates `1..94`, test-install `1..34`, test-launch-webapp `1..41`, test-lock `1..4`, test-menu-guards `1..8`, test-pam-sync `1..75`, test-provision `1..189`, test-render-spec `1..25`, test-replacements `1..54`, test-session-end `1..35`, test-specs `1..88`, test-theme-set-browser `1..15`, test-update `1..6`, Python `Ran 45 tests`; plans 3A to 3C move some of these and add their own files). The whole-suite run was not measured at planning time (the planning session ran under a no-delete rule and did not execute tests that delete files); the implementer measures it.
 
 ## File Structure
 
@@ -55,12 +55,13 @@ Interfaces later work relies on: `./dev vm-smoke`'s exit status (0, 1, 2) and `r
 
 Failure modes the design implies and does not spell out; each has its tests in the task that owns the code.
 
-1. **The driver on the operator's host must not be able to delete anything it did not create.** Every host path derives from `TINKERO_SMOKE_STATE` or the results directory, both refused when relative or `/`; neither script contains `rm`; a partial download and a rendered `user-data` are overwritten; the clone is removed only through `virsh undefine --nvram --remove-all-storage`, on a name checked before anything runs and again in `remove_clone`; a base that exists is never rebuilt over, and a disk file with the clone's name that no domain owns stops the run instead of being removed. Tasks 2 and 3 (the static `rm` greps on both scripts, the dry-run sequence with no `rm` and no `destroy` or `undefine` of anything but the clone, the refused clone names, the existing-base and the stale-disk cases).
+1. **The driver on the operator's host must not be able to delete anything it did not create.** Every host path derives from `TINKERO_SMOKE_STATE` or the results directory, both refused when relative or `/`; neither script contains `rm`; a partial download and a rendered `user-data` are overwritten; the clone is removed only through `virsh undefine --nvram --remove-all-storage`, on a name checked before anything runs and again in `remove_clone`; a base that exists is never rebuilt over, a disk file with the base's or the clone's name that no domain owns stops the run instead of being overwritten or removed, and before the clone is undefined `virsh domblklist --details` must show every one of its disks as a file directly under the state directory (a hand-made domain of that name, with its disk elsewhere, is refused with the disk's path and nothing is stopped). Tasks 2 and 3 (the static `rm` greps on both scripts, the dry-run sequence with no `rm`, with the `domblklist` call before the `destroy` and the `undefine`, and no `destroy` or `undefine` of anything but the clone, the refused clone names, the existing-base, the stale base-disk, the stale clone-disk and the foreign-disk cases: outside the state directory, a subdirectory, a sibling directory whose name starts like it, a block device, a second disk elsewhere).
 2. **A check that passes by not running.** A guest check that dies half way, an SSH connection that drops, an empty `install.txt`, a stage whose prerequisite never came up: each must be a line that is not ok, never a shorter report. The guest ends every check with its plan line; the driver fails a check that has no plan line or an exit status above 1, and gives every other guest call its own line; a dry run asserts nothing and prints no `ok`. Task 1 (the plan line, the single failure for an empty log) and Task 3 (the check without a plan line, the failing step, exit 2 with `Bail out!` when the VM does not answer).
 3. **GNOME's own writes against a leak.** After a Tinkero session the first GNOME login moves the dconf checksum by itself (#27: Ptyxis, Nautilus, the file chooser). The diff must stay clean for those, and must fail for a key under `org/gnome/desktop/interface` in GNOME's own database, for a changed line in any other section, and for `DCONF_PROFILE` left in the user manager or in a running service. Task 1 (the five `diff-snap` cases, the `check gnome` cases).
 4. **A stuck lock or a host left on `with-faillock`.** `with-faillock` brings the host's `deny=3`: a failure left on the tally, or a mistyped line, can lock the lock screen for ten minutes, and the stages after `lock` need the session. So the tally is cleared before the switch, the host is put back on `wrapped` whatever the plain rounds did, the switch is never made behind a lock that could not be cleared, and a lock that survives a tally reset and the right password ends the session so that GDM is back. Task 3 (the stuck-lock case) and Task 1 (`check pam-plain` and `check pam-wrapped`).
 5. **The wrong build under test.** The COPR keeps earlier builds (#48), and a merged revision may not have been built yet: the run would pass on a package that is not the one being released. The `install` stage compares the PAM file's owner with the package the checkout's lock names, and `hyprland` and `quickshell` must come from the COPR by dnf5's `%{from_repo}`. Task 1 (`check install`'s cases) and Task 3 (the header line of the report carries the expected package).
-6. **The test's own traces in the home it tests.** The menu guard canary rewrites the user's seeded `omarchy-menu.jsonc`; if it were not put back byte for byte, the `reinstall` plan and the removal would see a file the "user" changed. It is put back on the failing path too, and the script leaves no other file in a seeded place. And a password that `virsh send-key` cannot type (a capital letter, a symbol) is refused before anything runs. Task 1 (the canary's two cases) and Task 2 (the refused password).
+6. **The test's own traces in the home it tests.** The menu guard canary rewrites the user's seeded `omarchy-menu.jsonc`; if it were not put back byte for byte, the `reinstall` plan and the removal would see a file the "user" changed. It is put back on the failing path too, and the script leaves no other file in a seeded place. And a password that `virsh send-key` cannot type (a capital letter, a symbol) is refused before anything runs. The canary is put back by a trap on `EXIT`, `HUP` and `TERM` (an SSH session the driver times out ends with a TERM), and a check that finds a canary left behind by a killed one puts the file back before it does anything else. Task 1 (the canary's passing and failing cases, the TERM case, the leftover case) and Task 2 (the refused password).
+7. **The guest script on the wrong machine, and a tally that reads zero because it was read.** `ci/vm-smoke/guest` removes packages, switches authselect features and ends sessions; it refuses to run (exit 2) without `/etc/tinkero-smoke-vm`, which cloud-init writes into the VM and nothing else does. The faillock tally is read without `sudo`, whose PAM account phase on a `with-faillock` host could clear it first; a snapshot cut short fails the checks of its last two sections instead of passing them as empty. Task 1 (the marker cases for seven subcommands, the `sudo`-free reads, the incomplete snapshot) and Task 2 (the marker in `cloud-init.yaml`, and the guest looking for that very path).
 
 ---
 
@@ -87,16 +88,16 @@ Failure modes the design implies and does not spell out; each has its tests in t
 | `in-session CMD...` | `systemd-run --user --wait --pipe --quiet --collect -- CMD...` | CMD's |
 | `lock`, `lock-wait STATE [S]`, `lock-reset` | lock and wait for the compositor's lock; wait for `unlocked` or `idle`; clear the tally | 0; 1 |
 
-  Files go to `$TINKERO_SMOKE_DIR` (default `~/vmcheck`). Environment: `TINKERO_SMOKE_USER2` (default `smoke2`), `TINKERO_SMOKE_EXPECT_NVR`, `TINKERO_COPR`. Test seams: `TINKERO_SMOKE_ROOT` (a prefix for `/etc`, `/run`, `/usr/share`), `TINKERO_PROC`, `TINKERO_SMOKE_HOME2`. Task 3's driver calls every one of these.
+  Files go to `$TINKERO_SMOKE_DIR` (default `~/vmcheck`). Environment: `TINKERO_SMOKE_USER2` (default `smoke2`), `TINKERO_SMOKE_EXPECT_NVR`, `TINKERO_COPR`. Test seams: `TINKERO_SMOKE_ROOT` (a prefix for `/etc`, `/run`, `/usr/share`), `TINKERO_PROC`, `TINKERO_SMOKE_HOME2`, `TINKERO_SMOKE_MARKER` (the marker file, default `/etc/tinkero-smoke-vm`). Every subcommand except the usage text exits 2 with `this script is for the smoke-test VM only` when the marker file is missing: cloud-init writes it into the VM (Task 2), so a copy of the script run on a real machine by mistake does nothing. Task 3's driver calls every one of these.
 
 Two decisions of this task that the design leaves open:
 
-- **"The menu model loads" (design 6.1, spec 8 item 6 "with guards evaluated").** Two calls exist at `v4.0.4` and both are used. `omarchy-menu ping` is `omarchy-shell shell call omarchy.menu ping`: the shell answers `unknown` unless the menu plugin's `Menu.qml` is instantiated (`callIfLoaded` in `shell/shell.qml`), and `Menu.qml` imports the patched `MenuModel.js`, so `ok` proves the model's code loaded. No IPC call returns the guard results (`whenResults` is a QML property without an accessor), so the check makes the evaluation visible instead: it writes one row into the user's menu extension, `~/.config/omarchy/extensions/omarchy-menu.jsonc`, whose `when:` guard is `touch <marker>`, calls `omarchy-menu refresh` (which reloads both menu files; each load ends in `evaluateGuards()`), and waits for the marker. The marker appears only if the model parsed and merged both files and the one bash batch that evaluates every guard, Tinkero's rpm prelude of patch 0010 included, ran as far as that row. The user's file is put back byte for byte on both paths, because it is a seeded file and the later stages read the provisioning plan.
+- **"The menu model loads" (design 6.1, spec 8 item 6 "with guards evaluated").** Two calls exist at `v4.0.4` and both are used. `omarchy-menu ping` is `omarchy-shell shell call omarchy.menu ping`: the shell answers `unknown` unless the menu plugin's `Menu.qml` is instantiated (`callIfLoaded` in `shell/shell.qml`), and `Menu.qml` imports the patched `MenuModel.js`, so `ok` proves the model's code loaded. No IPC call returns the guard results (`whenResults` is a QML property without an accessor), so the check makes the evaluation visible instead: it writes one row into the user's menu extension, `~/.config/omarchy/extensions/omarchy-menu.jsonc`, whose `when:` guard is `touch <marker>`, calls `omarchy-menu refresh` (which reloads both menu files; each load ends in `evaluateGuards()`), and waits for the marker. The marker appears only if the model parsed and merged both files and the one bash batch that evaluates every guard, Tinkero's rpm prelude of patch 0010 included, ran as far as that row. The user's file is put back byte for byte on the passing and the failing path, by a trap on `EXIT`, `HUP` and `TERM` when the check is killed (a timed-out SSH session sends a TERM), and, if even the trap did not run (`kill -9`), by the next `check`, which finds `menu-canary.state` still `pending` and restores first; it is a seeded file and the later stages read the provisioning plan. The faillock tally is read as the user, without `sudo`: the tally file is `0660 <user> root`, and sudo's account phase on a `with-faillock` host runs `pam_faillock`, which could clear the tally before it is printed.
 - **Where a command runs.** The snapshot, `install.sh`, `tinkero-provision --remove` and everything that asks the shell or Hyprland run through `systemd-run --user --wait --pipe`, so they see what the graphical session put into the user manager's environment (upstream's autostart imports Hyprland's whole environment into it; under GNOME it is what a terminal there has). An SSH shell has no `DBUS_SESSION_BUS_ADDRESS`, and `tinkero-provision` skips the dconf seeding without one. `systemctl --user`, `loginctl`, `rpm`, `faillock` and the files under `/etc` are read directly.
 
 - [ ] **Step 1: Write the failing test**
 
-`tests/test-vm-smoke.sh` (new). Every command the guest calls is a stub in `$d/gbin`, on the guest's `PATH` only, answering from a file under `$d/st`; `good` writes the state of a healthy VM and each case changes one file. The `tinkero-pam-sync` stub is a small model of the real tool (the installed variant follows what the host calls for, with its real messages and the repository's real variant files), and the `omarchy-menu` stub evaluates the canary row's guard on `refresh`. No case deletes a fixture file: a case that needs a file to be absent points the guest at another fixture home or root (`GHOME`, `GROOT`).
+`tests/test-vm-smoke.sh` (new). Every command the guest calls is a stub in `$d/gbin`, on the guest's `PATH` only, answering from a file under `$d/st`; `good` writes the state of a healthy VM and each case changes one file. The `tinkero-pam-sync` stub is a small model of the real tool (the installed variant follows what the host calls for, with its real messages and the repository's real variant files), and the `omarchy-menu` stub evaluates the canary row's guard on `refresh`. No case deletes a fixture file: a case that needs a file to be absent points the guest at another fixture home or root (`GHOME`, `GROOT`) or marker (`GMARK`); `$d/vm-marker` is the marker file the guest finds by default.
 
 ```bash
 #!/bin/bash
@@ -118,6 +119,7 @@ mkdir -p "$d/gbin" "$d/st" "$d/vm" "$d/run" "$d/proc/4242" "$d/home/.config/dcon
   "$d/root/run/faillock" "$d/root/usr/share/wayland-sessions" "$d/pkg/usr/lib/systemd/user" \
   "$d/root-clean/etc/pam.d" "$d/root-left/etc/pam.d" "$d/home-clean/.config/dconf"
 export ST=$d/st GLOG=$d/glog FIXROOT=$d/root VARIANTS=$ROOT/distro/fedora/pam
+: > "$d/vm-marker"   # the file cloud-init writes into the smoke-test VM; the guest refuses to run without it
 gstub() { cat > "$d/gbin/$1"; chmod +x "$d/gbin/$1"; }
 gstub systemd-run <<'S'
 #!/bin/bash
@@ -294,7 +296,8 @@ echo "omarchy-menu $*" >> "$GLOG"
 ext=$HOME/.config/omarchy/extensions/omarchy-menu.jsonc
 case "$1" in
   ping) cat "$ST/menu-ping" ;;
-  refresh) if [[ $(cat "$ST/guards") == on ]]; then
+  refresh) if [[ $(cat "$ST/guards") == term ]]; then echo off > "$ST/guards"; kill -TERM "$PPID"; fi   # a TERM, once, as a timed-out SSH session sends
+           if [[ $(cat "$ST/guards") == on ]]; then
              guard=$(sed -n 's/.*"when":"\(touch [^"]*\)".*/\1/p' "$ext"); [[ -z $guard ]] || $guard
            fi; echo ok ;;
 esac
@@ -419,7 +422,7 @@ good() {
 # database, a root without Tinkero's files): the tests never delete a fixture file.
 g() {
   out=$(HOME="${GHOME:-$d/home}" USER=smoke XDG_RUNTIME_DIR="$d/run" TINKERO_SMOKE_DIR="$d/vm" TINKERO_SMOKE_ROOT="${GROOT:-$d/root}" \
-    TINKERO_PROC="$d/proc" TINKERO_SMOKE_HOME2="$d/home2" TINKERO_SMOKE_EXPECT_NVR="$nvr" PATH="$d/gbin:$PATH" bash "$G" "$@" 2>&1) && rc=0 || rc=$?
+    TINKERO_PROC="$d/proc" TINKERO_SMOKE_HOME2="$d/home2" TINKERO_SMOKE_EXPECT_NVR="$nvr" TINKERO_SMOKE_MARKER="${GMARK:-$d/vm-marker}" PATH="$d/gbin:$PATH" bash "$G" "$@" 2>&1) && rc=0 || rc=$?
 }
 not_oks() { grep -c '^not ok ' <<<"$out"; }
 
@@ -535,6 +538,18 @@ assert_eq "$(find "$d/run" -name 'tinkero-smoke-guard.*' | wc -l)" 1 "check sess
 echo off > "$ST/guards"; g check session
 assert_contains "$out" "not ok 6 - the menu model loads with its guards evaluated" "check session: a menu whose guards never run fails"
 assert_eq "$(cmp -s "$ext" "$d/ext.orig" && echo same)" same "check session: and the extension file is still put back"
+good; echo tinkero > "$ST/session"; echo "DCONF_PROFILE=tinkero" > "$ST/env"; echo term > "$ST/guards"; g check session
+assert_eq "$rc" 143 "check session: a TERM while the canary is in place ends the check"
+assert_eq "$(cmp -s "$ext" "$d/ext.orig" && echo same)" same "check session: and the trap puts the user's menu extension back"
+assert_eq "$(cat "$d/vm/menu-canary.state")" restored "check session: and records that it did"
+good; echo tinkero > "$ST/session"; cp "$ext" "$d/ext.orig"; cp "$ext" "$d/vm/menu-extension.orig"; echo pending > "$d/vm/menu-canary.state"
+printf '{\n  "tinkero-smoke": {"label":"Tinkero smoke canary","when":"touch /nonexistent"}\n}\n' > "$ext"
+g check power-key
+assert_eq "$(cmp -s "$ext" "$d/ext.orig" && echo same)" same "check: a canary left behind by a check that was killed is taken out before anything else runs"
+assert_contains "$out" "# an earlier check was cut short with the menu canary in place" "check: and the report says so"
+printf '# the user added this later\n' >> "$ext"; g check power-key
+assert_contains "$(cat "$ext")" "the user added this later" "check: once restored, a later check leaves the user's file alone"
+assert_eq "$(grep -c 'cut short' <<<"$out")" 0 "check: and says nothing"
 good; echo tinkero > "$ST/session"; echo "DCONF_PROFILE=tinkero" > "$ST/env"; echo 2 > "$ST/status-rc"; g check session
 assert_contains "$out" "not ok 17 - tinkero-status exits 0 or 1" "check session: tinkero-status exit 2 (a check failed) fails"
 echo 1 > "$ST/status-rc"; echo "omarchy-fcitx5.service" > "$ST/inactive"; g check session
@@ -570,7 +585,8 @@ echo gone > "$ST/lock"; g lock-wait unlocked 4
 assert_eq "$rc" 1 "lock-wait unlocked: a compositor that cannot be asked (a session that died) is not an unlock"
 good; printf '%s\n' "$fail2" >> "$ST/faillock"; g check lock-failures 2
 assert_eq "$rc" 0 "check lock-failures: two failures from omarchy-lock-password"
-assert_contains "$(cat "$GLOG")" "sudo faillock --user smoke" "check lock-failures: read with the guide's command"
+assert_contains "$(cat "$GLOG")" "faillock --user smoke" "check lock-failures: read with the guide's command"
+assert_eq "$(grep -c '^sudo faillock' "$GLOG")" 0 "check lock-failures: without sudo, whose PAM account phase could clear the tally before it is read"
 assert_contains "$(cat "$d/vm/lock.txt")" "omarchy-lock-password" "check lock-failures: the tally is kept in lock.txt"
 printf '%s\n' "$fail2" >> "$ST/faillock"; g check lock-failures 2
 assert_contains "$out" "not ok 1 - faillock shows exactly 2 failures" "check lock-failures: four (a double count) fails"
@@ -579,6 +595,7 @@ g check lock-clear
 assert_eq "$rc" 1 "check lock-clear: failures left after an unlock fail"
 good; g check lock-clear
 assert_eq "$rc" 0 "check lock-clear: an empty tally passes"
+assert_eq "$(grep -c '^sudo faillock' "$GLOG")" 0 "check lock-clear: read without sudo too"
 g check lock-journal
 assert_eq "$rc" 0 "check lock-journal: a clean journal and no AVC"
 echo "PAM unable to dlopen(substack): module is unknown" >> "$ST/journal"; echo 'type=AVC msg=audit(1): avc:  denied  { read } comm="quickshell"' > "$ST/avc"
@@ -617,6 +634,9 @@ good; printf 'user text-scaling-factor 1.3636363636363635\ntinkero text-scaling-
 assert_contains "$out" "not ok 7 - GNOME's text-scaling-factor is still 1.0" "check gnome: the session's text size in GNOME's database fails"
 good; echo no > "$ST/linger"; g check gnome 1-menu-logout
 assert_contains "$out" "not ok 8 - lingering is on" "check gnome: a cycle without lingering did not test the hard case, and fails"
+good; g snap 1-menu-logout; sed '/^## tinkero units$/,$d' "$d/vm/snap-1-menu-logout.txt" > "$d/vm/snap-short.txt"; g check gnome short
+assert_contains "$out" "not ok 4 - snapshot short: no Tinkero unit is active" "check gnome: a snapshot cut short is not an empty section"
+assert_contains "$out" "the snapshot is incomplete" "check gnome: and the detail says why"
 
 # --- check reinstall, step remove, check remove ------------------------------------------------------------
 good; g check reinstall
@@ -667,6 +687,13 @@ g in-session echo hello; assert_eq "$out" hello "in-session: runs a command thro
 g; assert_eq "$rc" 2 "no subcommand prints usage and exits 2"
 assert_contains "$out" "guest check STAGE" "usage: names the subcommands"
 g check nope; assert_eq "$rc" 2 "check: an unknown stage is exit 2"
+good; codes=""
+for c in "snap x" "check baseline" "step remove" "session-next gnome" "lock-reset" "in-session true" "session-end kill"; do read -ra w <<<"$c"; GMARK=$d/no-such-marker g "${w[@]}"; codes+=" $rc"; done
+assert_eq "$codes" " 2 2 2 2 2 2 2" "without the smoke-test VM's marker file every subcommand is exit 2"
+assert_contains "$out" "this script is for the smoke-test VM only" "and says why"
+assert_eq "$(wc -l < "$GLOG")" 0 "and no command was called"
+GMARK=$d/no-such-marker g --help; assert_eq "$rc" 0 "the usage text needs no marker"
+assert_eq "$(grep -c '^export LC_ALL=C$' "$G")" 1 "the guest fixes the locale: its patterns are byte patterns"
 assert_eq "$(grep -v '^[[:space:]]*#' "$G" | grep -cE '(^|[^[:alnum:]_.-])(rm|rmdir|unlink|shred)([[:space:]]|$)')" 0 "the guest script deletes nothing"
 rm -rf "$d"; finish
 ```
@@ -674,11 +701,11 @@ rm -rf "$d"; finish
 - [ ] **Step 2: Run it to see it fail**
 
 Run: `bash tests/test-vm-smoke.sh`
-Expected: `1..137`, exit 1, 133 `not ok` (every call fails with `ci/vm-smoke/guest: No such file or directory`; cases 35, 58, 61 and 137 pass without the script: they look at files the test itself wrote, or grep a file that is not there).
+Expected: `1..153`, exit 1, 143 `not ok` (every call fails with `ci/vm-smoke/guest: No such file or directory`; cases 35, 58, 61, 63, 67, 68, 87, 93, 150 and 153 pass without the script: they look at files the test itself wrote, count nothing in a log that is not there, or grep a file that is not there).
 
 - [ ] **Step 3: `ci/vm-smoke/guest`**
 
-Create `ci/vm-smoke/guest` with exactly this content, then `chmod +x ci/vm-smoke/guest`. It contains no `rm`: the one-line dconf profile and the saved copy of the menu extension are overwritten on the next call, and the guard canary's marker stays in the runtime directory, which the next boot empties.
+Create `ci/vm-smoke/guest` with exactly this content, then `chmod +x ci/vm-smoke/guest`. It contains no `rm`: the one-line dconf profile, the saved copy of the menu extension and its state file are overwritten on the next call, and the guard canary's marker stays in the runtime directory, which the next boot empties.
 
 ```bash
 #!/bin/bash
@@ -706,13 +733,21 @@ Create `ci/vm-smoke/guest` with exactly this content, then `chmod +x ci/vm-smoke
 # Files go to $TINKERO_SMOKE_DIR (default ~/vmcheck). Other environment: TINKERO_SMOKE_USER2
 # (the second account, default smoke2), TINKERO_SMOKE_EXPECT_NVR (the tinkero package the
 # checkout's lock names), TINKERO_COPR. Seams for tests/test-vm-smoke.sh: TINKERO_SMOKE_ROOT (a
-# prefix for /etc, /run and /usr/share), TINKERO_PROC, TINKERO_SMOKE_HOME2.
+# prefix for /etc, /run and /usr/share), TINKERO_PROC, TINKERO_SMOKE_HOME2, TINKERO_SMOKE_MARKER.
+# Every subcommand but the usage text refuses to run (exit 2) unless the marker file
+# /etc/tinkero-smoke-vm exists: cloud-init writes it into the smoke-test VM, so a copy of this
+# script run by mistake on a real machine does nothing (it would otherwise remove packages, switch
+# authselect features and end sessions).
 # This script deletes nothing: what it writes it overwrites, and it leaves its files in place.
 set -euo pipefail
+# The patterns below are byte patterns: under a UTF-8 locale bash's [0-9] admits non-ASCII digits
+# (a sibling plan's review found it), so the locale is fixed.
+export LC_ALL=C
 
 self=$(readlink -f -- "${BASH_SOURCE[0]}")
 dir=${TINKERO_SMOKE_DIR:-$HOME/vmcheck}
 root=${TINKERO_SMOKE_ROOT:-}
+marker=${TINKERO_SMOKE_MARKER:-/etc/tinkero-smoke-vm}
 proc=${TINKERO_PROC:-/proc}
 user=${USER:-$(id -un)}
 user2=${TINKERO_SMOKE_USER2:-smoke2}
@@ -1000,11 +1035,17 @@ cmd_step() {
 }
 
 # --- the checks ------------------------------------------------------------------------------
+# empty_section SNAP HEADING DESCRIPTION: the section is there and has no line. A snapshot cut short
+# has no such section, and an absent section is not an empty one.
+empty_section() {
+  if ! grep -qxF -- "## $2" "$1"; then not_ok "$3" "no '## $2' section in $1: the snapshot is incomplete"; return; fi
+  eq "$(section "$1" "$2")" "" "$3"
+}
 snap_env_checks() {   # NAME: the three sections of a GNOME snapshot that must be empty
   local snap=$dir/snap-$1.txt
   eq "$(section "$snap" "user env")" none "snapshot $1: the user manager has no DCONF_PROFILE or OMARCHY_PATH"
-  eq "$(section "$snap" "running user services that see DCONF_PROFILE")" "" "snapshot $1: no running user service sees DCONF_PROFILE"
-  eq "$(section "$snap" "tinkero units")" "" "snapshot $1: no Tinkero unit is active"
+  empty_section "$snap" "running user services that see DCONF_PROFILE" "snapshot $1: no running user service sees DCONF_PROFILE"
+  empty_section "$snap" "tinkero units" "snapshot $1: no Tinkero unit is active"
 }
 check_baseline() {
   local snap=$dir/snap-0-baseline.txt db=$dir/userdb-0-baseline.ini out
@@ -1098,27 +1139,43 @@ wait_active() {   # UNIT: its state, after waiting up to 30 s for "active" (tink
 # results. So the check adds one row to the user's menu extension whose guard touches a marker
 # file: the marker appears only if the model parsed and merged both menu files and the batch,
 # Tinkero's rpm prelude included (patch 0010), ran as far as that row. The user's file is put
-# back byte for byte; the marker stays in the runtime directory, which the next boot empties.
+# back byte for byte: on the way out, by a trap on EXIT, HUP and TERM (an SSH session the driver
+# times out ends this way), and, if even that did not run (kill -9), by the next `check`, which
+# finds menu-canary.state still saying "pending" and restores first. The guard marker stays in the
+# runtime directory, which the next boot empties.
+menu_ext=$HOME/.config/omarchy/extensions/omarchy-menu.jsonc
+restore_menu() {
+  if [[ -f $dir/menu-canary.state && $(<"$dir/menu-canary.state") == pending ]]; then
+    cat -- "$dir/menu-extension.orig" > "$menu_ext"
+    echo restored > "$dir/menu-canary.state"
+    in_session omarchy-menu refresh >/dev/null 2>&1 || true
+  fi
+}
+on_signal() { restore_menu; exit "$1"; }
 menu_guards() {
-  local ext=$HOME/.config/omarchy/extensions/omarchy-menu.jsonc marker i seen=0
-  marker=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/tinkero-smoke-guard.$$
-  if [[ ! -f $ext ]]; then
-    not_ok "the menu model loads with its guards evaluated" "no $ext to add the canary row to (tinkero-provision seeds it)"
+  local guard_marker i seen=0
+  guard_marker=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/tinkero-smoke-guard.$$
+  if [[ ! -f $menu_ext ]]; then
+    not_ok "the menu model loads with its guards evaluated" "no $menu_ext to add the canary row to (tinkero-provision seeds it)"
     return
   fi
-  cat -- "$ext" > "$dir/menu-extension.orig"
-  printf '{\n  "tinkero-smoke": {"label":"Tinkero smoke canary","when":"touch %s"}\n}\n' "$marker" > "$ext"
+  cat -- "$menu_ext" > "$dir/menu-extension.orig"
+  echo pending > "$dir/menu-canary.state"
+  trap restore_menu EXIT
+  trap 'on_signal 129' HUP
+  trap 'on_signal 143' TERM
+  printf '{\n  "tinkero-smoke": {"label":"Tinkero smoke canary","when":"touch %s"}\n}\n' "$guard_marker" > "$menu_ext"
   in_session omarchy-menu refresh >/dev/null 2>&1
   for ((i = 0; i * poll < 20; i++)); do
-    if [[ -e $marker ]]; then seen=1; break; fi
+    if [[ -e $guard_marker ]]; then seen=1; break; fi
     sleep "$poll"
   done
-  cat -- "$dir/menu-extension.orig" > "$ext"
-  in_session omarchy-menu refresh >/dev/null 2>&1
+  restore_menu
+  trap - EXIT HUP TERM
   if ((seen)); then
     ok "the menu model loads with its guards evaluated (a canary guard ran)"
   else
-    not_ok "the menu model loads with its guards evaluated" "the canary row's guard never ran: no $marker after 20 s"
+    not_ok "the menu model loads with its guards evaluated" "the canary row's guard never ran: no $guard_marker after 20 s"
   fi
 }
 check_session() {
@@ -1167,9 +1224,12 @@ check_power_key() {
   fi
   in_session omarchy-menu close >/dev/null 2>&1
 }
-# tally: the guide's command, kept in lock.txt. Nothing calls it before the first wrong password:
-# a root faillock call creates the tally file and would hide #29's first defect.
-tally() { sudo faillock --user "$user" 2>&1 | tee -a "$dir/lock.txt"; }
+# tally: the guide's reading of the tally, kept in lock.txt, taken without sudo: the file is the
+# user's (tmpfiles.d makes it 0660 user root), and sudo runs PAM's account phase, where a host on
+# with-faillock has pam_faillock, which clears the invoking user's tally before faillock prints it
+# (a reading of 0 would then mean nothing). Nothing calls it before the first wrong password: a
+# root faillock call creates the tally file and would hide #29's first defect.
+tally() { faillock --user "$user" 2>&1 | tee -a "$dir/lock.txt"; }
 check_lock_failures() {
   local want=${1:-} out
   [[ $want =~ ^[0-9]+$ ]] || die "check lock-failures: a number"
@@ -1283,6 +1343,10 @@ cmd_check() {
   shift || true
   mkdir -p "$dir"
   set +e
+  if [[ -f $dir/menu-canary.state && $(<"$dir/menu-canary.state") == pending ]]; then
+    note "an earlier check was cut short with the menu canary in place: putting the user's menu extension back first"
+    restore_menu
+  fi
   case $stage in
     baseline|install|users|session|power-key|lock-failures|lock-clear|lock-journal|pam-plain|pam-wrapped|theme|gnome|reinstall|remove)
       "check_${stage//-/_}" "$@" ;;
@@ -1294,6 +1358,10 @@ cmd_check() {
 
 cmd=${1:-}
 shift || true
+case $cmd in
+  ""|-h|--help) ;;
+  *) [[ -f $marker ]] || die "this script is for the smoke-test VM only: $marker is missing" ;;
+esac
 case $cmd in
   snap)         cmd_snap "$@" ;;
   snap-body)    snap_body "$@" ;;
@@ -1315,7 +1383,7 @@ esac
 
 - [ ] **Step 4: Run the tests**
 
-Run: `bash tests/test-vm-smoke.sh` Expected: `1..137`, no `not ok`, exit 0.
+Run: `bash tests/test-vm-smoke.sh` Expected: `1..153`, no `not ok`, exit 0.
 
 - [ ] **Step 5: CI and ShellCheck**
 
@@ -1337,7 +1405,7 @@ In `.github/workflows/ci.yml`, add the script to the ShellCheck list (`tests/tes
 
 Run: `shellcheck -x -e SC1090,SC1091 ci/vm-smoke/guest tests/test-vm-smoke.sh` Expected: no output.
 Run: `bash -n ci/vm-smoke/guest` Expected: no output.
-Run: `./dev check` Expected: green; `# tests/test-vm-smoke.sh` ends with `1..137` and every other file keeps its tally (not measured at planning time: the planning session ran under a no-delete rule and did not execute tests that delete files; the implementer measures it).
+Run: `./dev check` Expected: green; `# tests/test-vm-smoke.sh` ends with `1..153` and every other file keeps its tally (not measured at planning time: the planning session ran under a no-delete rule and did not execute tests that delete files; the implementer measures it).
 
 - [ ] **Step 6: Commit**
 
@@ -1346,7 +1414,7 @@ git add ci/vm-smoke/guest tests/test-vm-smoke.sh .github/workflows/ci.yml
 git commit -m "ci: the VM smoke test's guest script: snapshots, the diff rule, the stage checks as TAP (plan 3D)"
 ```
 
-**Verification for the issue:** `bash tests/test-vm-smoke.sh` at `1..137`; ShellCheck clean on both files; `grep -v '^[[:space:]]*#' ci/vm-smoke/guest | grep -cE '(^|[^[:alnum:]_.-])(rm|rmdir|unlink|shred)([[:space:]]|$)'` prints `0`; CI green.
+**Verification for the issue:** `bash tests/test-vm-smoke.sh` at `1..153`; ShellCheck clean on both files; `grep -v '^[[:space:]]*#' ci/vm-smoke/guest | grep -cE '(^|[^[:alnum:]_.-])(rm|rmdir|unlink|shred)([[:space:]]|$)'` prints `0`; CI green.
 
 ---
 
@@ -1357,10 +1425,10 @@ git commit -m "ci: the VM smoke test's guest script: snapshots, the diff rule, t
 - Modify: `tests/test-vm-smoke.sh` (a block before its last line), `.github/workflows/ci.yml` (the ShellCheck list)
 
 **Interfaces:**
-- Consumes: `upstream.lock` (`fedora`); the 2F guide's VM (8192 MiB, 4 vCPUs, 40 GiB, UEFI, `--video virtio,accel3d=yes --graphics spice,gl.enable=yes,listen=none`, the `rendernode=` of an Optimus host) and its passt port forward (`<backend type='passt'/>`, `<portForward proto='tcp'><range start='2222' to='22'/>`); Fedora's `Fedora-Cloud-44-1.7-x86_64-CHECKSUM`.
+- Consumes: `upstream.lock` (`fedora`); the 2F guide's VM (8192 MiB, 4 vCPUs, 40 GiB, UEFI, `--video virtio,accel3d=yes --graphics spice,gl.enable=yes,listen=none`, the `rendernode=` of an Optimus host) and its passt port forward (`<backend type='passt'/>`, `<portForward proto='tcp'><range start='2222' to='22'/>`, which the driver binds to `127.0.0.1` with `portForward0.address`); Fedora's `Fedora-Cloud-44-1.7-x86_64-CHECKSUM`.
 - Produces: `ci/vm-smoke/run base` (exit 0 built; 2 anything else), which leaves the shut-off domain `tinkero-smoke-base-f<fedora>` and, under `TINKERO_SMOKE_STATE`: `id_ed25519` and `id_ed25519.pub`, the verified image under its own name, `user-data`, `tinkero-smoke-base-f<fedora>.qcow2`. The helpers Task 3 builds on: `run CMD...` (every host command that changes something; prints it in a dry run), `probe DEFAULT CMD...` and `domain_state NAME DEFAULT` (host commands that only ask; a dry run prints them and answers the default), `show`, `lock_get FILE KEY`, `die` (exit 2), `say`. Environment: `TINKERO_SMOKE_DRY_RUN`, `TINKERO_SMOKE_STATE`, `TINKERO_SMOKE_BASE`, `TINKERO_SMOKE_USER`, `TINKERO_SMOKE_PASSWORD`, `TINKERO_SMOKE_USER2`, `TINKERO_SMOKE_PASSWORD2`, `TINKERO_SMOKE_SSH_PORT`, `TINKERO_SMOKE_RENDERNODE`, `TINKERO_SMOKE_URI`; seams `TINKERO_ROOT`, `TINKERO_LOCK`, `TINKERO_SMOKE_IMAGE_LOCK`, `TINKERO_EUID`.
 
-Design 6.2 and D18: the base is Workstation's package set on the Cloud image's disk layout, built without a person. `cloud-init.yaml` is a template: the driver fills `@USER@`, `@PASSWORD@`, `@USER2@`, `@PASSWORD2@` and `@SSH_KEY@`, so that the accounts the stages use and the accounts the base has are one set of variables. Three things in it go beyond the design's list and are needed for it to work: `--allowerasing` on the group install (the Cloud image's `fedora-release-cloud` has to give way to Workstation's release package), `/etc/cloud/cloud-init.disabled` (virt-install's own "disable after first boot" only applies to user-data it generates itself, and a clone must not run cloud-init again), and `systemctl set-default graphical.target` (the Cloud image boots to a text console).
+Design 6.2 and D18: the base is Workstation's package set on the Cloud image's disk layout, built without a person. `cloud-init.yaml` is a template: the driver fills `@USER@`, `@PASSWORD@`, `@USER2@`, `@PASSWORD2@` and `@SSH_KEY@`, so that the accounts the stages use and the accounts the base has are one set of variables. Four things in it go beyond the design's list and are needed for it to work: `--allowerasing` on the group install (the Cloud image's `fedora-release-cloud` has to give way to Workstation's release package), `/etc/cloud/cloud-init.disabled` (virt-install's own "disable after first boot" only applies to user-data it generates itself, and a clone must not run cloud-init again), `systemctl set-default graphical.target` (the Cloud image boots to a text console), and a `write_files` entry, `/etc/tinkero-smoke-vm`, the marker file without which `ci/vm-smoke/guest` refuses to run (a copy of it run by mistake on a real machine then does nothing; a hand-built base gets the file by hand).
 
 The image line comes from Fedora's signed CHECKSUM file, fetched by the orchestrator on 2026-10-01: `SHA256 (Fedora-Cloud-Base-Generic-44-1.7.x86_64.qcow2) = 28680fe5b371a5a82ebf43a31926e086a168e59949d03969c5093e7071f90b7f`, 583729152 bytes.
 
@@ -1387,6 +1455,8 @@ assert_contains "$(cat "$ci_yaml")" "systemctl set-default graphical.target" "cl
 assert_contains "$(cat "$ci_yaml")" 'TimedLoginEnable=true\nTimedLogin=%s\nTimedLoginDelay=5' "cloud-init: GDM logs the test account in after five seconds (D20)"
 assert_eq "$(grep -cx 'package_upgrade: true' "$ci_yaml")" 1 "cloud-init: the base is upgraded"
 assert_contains "$(cat "$ci_yaml")" "/etc/cloud/cloud-init.disabled" "cloud-init: it switches itself off for the clones"
+assert_contains "$(cat "$ci_yaml")" "path: /etc/tinkero-smoke-vm" "cloud-init: it writes the marker file without which the guest script refuses to run"
+assert_contains "$(cat "$G")" 'TINKERO_SMOKE_MARKER:-/etc/tinkero-smoke-vm' "cloud-init: and the guest script looks for that very file"
 assert_eq "$(sed -n '/^power_state:/,$p' "$ci_yaml" | grep -c 'mode: poweroff')" 1 "cloud-init: it powers the base off at the end"
 assert_eq "$(grep -o '@[A-Z0-9_]*@' "$ci_yaml" | LC_ALL=C sort -u | paste -sd" ")" "@PASSWORD2@ @PASSWORD@ @SSH_KEY@ @USER2@ @USER@" "cloud-init: the five placeholders run base fills, and no other"
 url=$(sed -n 's/^url=//p' "$ilock"); fed=$(sed -n 's/^fedora=//p' "$ROOT/upstream.lock")
@@ -1405,6 +1475,7 @@ echo "virsh $*" >> "$HLOG"
 case "$3" in
   dominfo) grep -qx -- "$4" "$ST/domains" ;;
   domstate) cat "$ST/domstate" ;;
+  domblklist) cat "$ST/blklist" ;;
 esac
 S
 hstub virt-install <<'S'
@@ -1453,7 +1524,7 @@ mv -f -- $s/$img.part $s/$img
 # write $s/user-data from ci/vm-smoke/cloud-init.yaml
 cp --reflink=auto -- $s/$img $s/tinkero-smoke-base-f44.qcow2
 qemu-img resize $s/tinkero-smoke-base-f44.qcow2 40G
-virt-install --connect qemu:///session --name tinkero-smoke-base-f44 --memory 8192 --vcpus 4 --import --disk path=$s/tinkero-smoke-base-f44.qcow2,format=qcow2,bus=virtio --osinfo detect=on,require=off --boot uefi --network user,model.type=virtio,backend.type=passt,portForward0.proto=tcp,portForward0.range0.start=2222,portForward0.range0.to=22 --video virtio,accel3d=yes --graphics spice,gl.enable=yes,listen=none --cloud-init user-data=$s/user-data --noautoconsole --wait 90
+virt-install --connect qemu:///session --name tinkero-smoke-base-f44 --memory 8192 --vcpus 4 --import --disk path=$s/tinkero-smoke-base-f44.qcow2,format=qcow2,bus=virtio --osinfo detect=on,require=off --boot uefi --network user,model.type=virtio,backend.type=passt,portForward0.proto=tcp,portForward0.address=127.0.0.1,portForward0.range0.start=2222,portForward0.range0.to=22 --video virtio,accel3d=yes --graphics spice,gl.enable=yes,listen=none --cloud-init user-data=$s/user-data --noautoconsole --wait 90
 virsh -c qemu:///session domstate tinkero-smoke-base-f44
 vm-smoke: the base tinkero-smoke-base-f44 is ready. It is never booted again: every run clones it" "base, dry run: the command sequence, checksum before use"
 assert_no_path "$s" "base, dry run: nothing is written"
@@ -1461,6 +1532,7 @@ assert_eq "$(wc -l < "$HLOG")" 0 "base, dry run: nothing is called"
 STATE=$s TINKERO_SMOKE_DRY_RUN=1 TINKERO_SMOKE_RENDERNODE=/dev/dri/by-path/pci-0000:00:02.0-render TINKERO_SMOKE_SSH_PORT=2200 r base
 assert_contains "$out" "--graphics spice,gl.enable=yes,listen=none,rendernode=/dev/dri/by-path/pci-0000:00:02.0-render" "base: TINKERO_SMOKE_RENDERNODE pins virgl on an Optimus host"
 assert_contains "$out" "portForward0.range0.start=2200" "base: TINKERO_SMOKE_SSH_PORT is the forwarded port"
+assert_eq "$(grep -c 'portForward0.address=127.0.0.1,portForward0.range0.start' <<<"$out")" 1 "base: the forward is bound to 127.0.0.1, not to every address of the host"
 
 hgood; r base
 assert_eq "$rc" 0 "base: builds against the stubs"
@@ -1473,11 +1545,18 @@ assert_contains "$ud" '"smoke" > /etc/gdm/custom.conf' "base: and the timed logi
 assert_eq "$(grep -c '^ssh-keygen ' "$HLOG")" 1 "base: the SSH key is generated once, under the state directory"
 assert_eq "$(cat "$d/state/tinkero-smoke-base-f44.qcow2")" "the cloud image" "base: the base disk is a copy of the verified image"
 assert_contains "$(cat "$HLOG")" "--cloud-init user-data=$d/state/user-data --noautoconsole --wait 90" "base: virt-install gets the rendered user-data and waits for the power-off"
-hgood; r base
-assert_eq "$(grep -c '^curl \|^ssh-keygen ' "$HLOG")" 0 "base: a cached image that verifies and an existing key are reused"
-hgood; echo "tampered" > "$d/state/$img"; r base
+echo "somebody's disk" > "$d/state/tinkero-smoke-base-f44.qcow2"; hgood; r base
+assert_eq "$rc" 2 "base: a disk file with the base's name and no domain owning it stops the run"
+assert_contains "$out" "This script overwrites nothing it did not just create" "base: and the operator is told to move that file aside"
+assert_eq "$(grep -vc '^virsh -c qemu:///session dominfo ' "$HLOG")" 0 "base: nothing but the question was asked"
+assert_eq "$(cat "$d/state/tinkero-smoke-base-f44.qcow2")" "somebody's disk" "base: and the file is what it was"
+s2=$d/state2; mkdir -p "$s2"; cp "$d/state/id_ed25519" "$d/state/id_ed25519.pub" "$d/state/$img" "$s2/"
+hgood; STATE=$s2 r base
+assert_eq "$rc:$(grep -c '^curl \|^ssh-keygen ' "$HLOG")" "0:0" "base: a cached image that verifies and an existing key are reused"
+s3=$d/state3; mkdir -p "$s3"; cp "$d/state/id_ed25519" "$d/state/id_ed25519.pub" "$s3/"; echo "tampered" > "$s3/$img"
+hgood; STATE=$s3 r base
 assert_eq "$rc:$(grep -c '^curl ' "$HLOG")" "0:1" "base: a cached image that fails the checksum is downloaded again"
-assert_eq "$(cat "$d/state/$img")" "the cloud image" "base: and overwritten, not removed"
+assert_eq "$(cat "$s3/$img")" "the cloud image" "base: and overwritten, not removed"
 hgood; STATE=$d/state-bad ILOCK=$d/image-bad.lock r base
 assert_eq "$rc" 2 "base: a download that fails the checksum is exit 2"
 assert_contains "$out" "checksum mismatch" "base: and says so"
@@ -1487,10 +1566,10 @@ hgood; echo tinkero-smoke-base-f44 > "$ST/domains"; r base
 assert_eq "$rc" 2 "base: an existing base is refused"
 assert_contains "$out" "already exists. This script never removes it" "base: and the message says who removes it"
 assert_eq "$(grep -vc '^virsh -c qemu:///session dominfo ' "$HLOG")" 0 "base: nothing but the question was asked"
-hgood; echo 1 > "$ST/virt-install-rc"; r base
+hgood; echo 1 > "$ST/virt-install-rc"; STATE=$d/state-vi1 r base
 assert_eq "$rc" 2 "base: a failing virt-install is exit 2"
 assert_contains "$out" "virt-viewer --connect qemu:///session --attach tinkero-smoke-base-f44" "base: and says how to look at it"
-hgood; echo running > "$ST/domstate"; r base
+hgood; echo running > "$ST/domstate"; STATE=$d/state-vi2 r base
 assert_eq "$rc" 2 "base: a base that is not shut off afterwards is exit 2"
 hgood; EUID_AS=0 r base
 assert_eq "$rc" 2 "root is refused (through TINKERO_EUID)"
@@ -1500,12 +1579,16 @@ assert_eq "$rc" 2 "a password with a capital letter is refused"
 assert_contains "$out" "lower-case letters and digits" "since virsh send-key types one key per character"
 hgood; TINKERO_SMOKE_BASE=tinkero-spike-clean-f44 r base
 assert_eq "$rc" 2 "base: refuses to build a base that TINKERO_SMOKE_BASE says was built by hand"
+printf 'fedora=44; touch x\n' > "$d/bad-fedora.lock"; hgood; TINKERO_LOCK=$d/bad-fedora.lock r base
+assert_eq "$rc" 2 "a lock whose fedora value is not a number is refused"
+assert_contains "$out" "fedora must be a number" "and the message says so"
 hgood; STATE=relative/path r base
 assert_eq "$rc" 2 "a relative TINKERO_SMOKE_STATE is refused"
+assert_eq "$(grep -c '^export LC_ALL=C$' "$R")" 1 "the driver fixes the locale: its patterns are byte patterns"
 assert_eq "$(grep -v '^[[:space:]]*#' "$R" | grep -cE '(^|[^[:alnum:]_.-])(rm|rmdir|unlink|shred)([[:space:]]|$)')" 0 "the driver has no rm, rmdir, unlink or shred"
 ```
 
-Run: `bash tests/test-vm-smoke.sh` Expected: `1..190`, exit 1, 44 `not ok`, all among the 53 new cases (137 was the tally before; nine of the new cases pass without the files: they count lines in a log that is empty or look for a path that is not there).
+Run: `bash tests/test-vm-smoke.sh` Expected: `1..216`, exit 1, 53 `not ok`, all among the 63 new cases (153 was the tally before; ten of the new cases pass without the files: they count lines in a log that is empty, look for a path that is not there, or look in the guest script for a path the new files are meant to match).
 
 - [ ] **Step 2: The two data files**
 
@@ -1539,7 +1622,9 @@ size=583729152
 #     manager with a five-second timed login of the first account (GDM starts every session of a
 #     run, D20), and sshd;
 #   - an upgraded system, cloud-init switched off for the clones, and a power-off at the end,
-#     which is what virt-install --wait waits for.
+#     which is what virt-install --wait waits for;
+#   - /etc/tinkero-smoke-vm, the marker file without which ci/vm-smoke/guest refuses to run, so
+#     that a copy of it run on a real machine by mistake does nothing.
 hostname: tinkero-smoke
 users:
   - name: "@USER@"
@@ -1557,6 +1642,11 @@ users:
     lock_passwd: false
     plain_text_passwd: "@PASSWORD2@"
 ssh_pwauth: false
+write_files:
+  - path: /etc/tinkero-smoke-vm
+    content: |
+      This is the Tinkero smoke-test VM (ci/vm-smoke/cloud-init.yaml).
+      ci/vm-smoke/guest runs only where this file exists.
 package_update: true
 package_upgrade: true
 runcmd:
@@ -1577,7 +1667,7 @@ power_state:
 
 - [ ] **Step 3: `ci/vm-smoke/run`, with `base`**
 
-Create `ci/vm-smoke/run` with exactly this content, then `chmod +x ci/vm-smoke/run`. Task 3 adds the stages to it. Read `build_base` for what it does on the host: it refuses when the base exists, it never removes, and the downloaded file gets the image's name only after its checksum matched.
+Create `ci/vm-smoke/run` with exactly this content, then `chmod +x ci/vm-smoke/run`. Task 3 adds the stages to it. Read `build_base` for what it does on the host: it refuses when the base exists and when a disk file of the base's name exists with no domain to own it (move it aside by hand), it never removes anything and overwrites no disk it did not just create, it binds the SSH forward to 127.0.0.1 only, it validates the lock's `fedora` value before using it in a name, and the downloaded file gets the image's name only after its checksum matched.
 
 ```bash
 #!/bin/bash
@@ -1601,9 +1691,12 @@ Create `ci/vm-smoke/run` with exactly this content, then `chmod +x ci/vm-smoke/r
 #   TINKERO_SMOKE_RENDERNODE  a /dev/dri/by-path/...-render node for virgl (an Optimus host)
 #   TINKERO_SMOKE_URI         the libvirt URI (default qemu:///session)
 # On the host this script writes under TINKERO_SMOKE_STATE and nowhere else. It deletes nothing:
-# a stale file is overwritten, and the base domain and its disk are yours to remove
-# (docs/guides/vm-smoke.md says how).
+# a stale download or user-data is overwritten, a disk file it did not make is never touched, and
+# the base domain and its disk are yours to remove (docs/guides/vm-smoke.md says how).
 set -euo pipefail
+# The patterns below are byte patterns: under a UTF-8 locale bash's [0-9] admits non-ASCII digits
+# (a sibling plan's review found it), so the locale is fixed.
+export LC_ALL=C
 
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 root=${TINKERO_ROOT:-$(cd "$here/../.." && pwd)}
@@ -1630,6 +1723,7 @@ state=${TINKERO_SMOKE_STATE:-${XDG_CACHE_HOME:-${HOME:?HOME is not set}/.cache}/
 # Names.
 uri=${TINKERO_SMOKE_URI:-qemu:///session}
 fedora=$(lock_get "$lock" fedora)
+[[ $fedora =~ ^[0-9]+$ ]] || die "$lock: fedora must be a number: $fedora"
 base=${TINKERO_SMOKE_BASE:-tinkero-smoke-base-f$fedora}
 user=${TINKERO_SMOKE_USER:-smoke}
 password=${TINKERO_SMOKE_PASSWORD:-tinkero1}
@@ -1724,6 +1818,11 @@ build_base() {
   if domain_exists 1 "$base"; then
     die "the base domain $base already exists. This script never removes it: to rebuild, remove it by hand (docs/guides/vm-smoke.md, 'Removing the base') and run 'base' again"
   fi
+  # Nothing is overwritten that this run did not create: a disk file with the base's name and no
+  # domain to own it is somebody's (an older base whose domain was undefined, say).
+  if [[ $dry != 1 && -e $disk ]]; then
+    die "$disk exists and no domain $base owns it. This script overwrites nothing it did not just create: move that file aside by hand (mv), and run 'base' again"
+  fi
   run mkdir -p "$state"
   if [[ $dry == 1 || ! -f $key ]]; then run ssh-keygen -q -t ed25519 -N "" -C tinkero-smoke -f "$key"; fi
   fetch_image
@@ -1734,7 +1833,7 @@ build_base() {
   # place of the installer. --wait returns when cloud-init's power_state has shut the VM down.
   run virt-install --connect "$uri" --name "$base" --memory "$memory" --vcpus "$vcpus" \
     --import --disk "path=$disk,format=qcow2,bus=virtio" --osinfo detect=on,require=off --boot uefi \
-    --network "user,model.type=virtio,backend.type=passt,portForward0.proto=tcp,portForward0.range0.start=$ssh_port,portForward0.range0.to=22" \
+    --network "user,model.type=virtio,backend.type=passt,portForward0.proto=tcp,portForward0.address=127.0.0.1,portForward0.range0.start=$ssh_port,portForward0.range0.to=22" \
     --video virtio,accel3d=yes --graphics "$graphics" \
     --cloud-init "user-data=$state/user-data" --noautoconsole --wait "$base_wait" \
     || die "virt-install failed, or cloud-init did not power the base off within $base_wait minutes. Look at it with: virt-viewer --connect $uri --attach $base"
@@ -1753,7 +1852,7 @@ esac
 
 - [ ] **Step 4: Run the tests**
 
-Run: `bash tests/test-vm-smoke.sh` Expected: `1..190`, no `not ok`.
+Run: `bash tests/test-vm-smoke.sh` Expected: `1..216`, no `not ok`.
 Run: `TINKERO_EUID=1000 TINKERO_SMOKE_DRY_RUN=1 TINKERO_SMOKE_STATE=/nonexistent/state ci/vm-smoke/run base` Expected: eleven lines on stdout and one on stderr, and nothing is created (a dry run touches no path; `TINKERO_EUID=1000` is for an agent session that runs as root, which the script otherwise refuses):
 
 ```
@@ -1766,7 +1865,7 @@ mv -f -- /nonexistent/state/Fedora-Cloud-Base-Generic-44-1.7.x86_64.qcow2.part /
 # write /nonexistent/state/user-data from ci/vm-smoke/cloud-init.yaml
 cp --reflink=auto -- /nonexistent/state/Fedora-Cloud-Base-Generic-44-1.7.x86_64.qcow2 /nonexistent/state/tinkero-smoke-base-f44.qcow2
 qemu-img resize /nonexistent/state/tinkero-smoke-base-f44.qcow2 40G
-virt-install --connect qemu:///session --name tinkero-smoke-base-f44 --memory 8192 --vcpus 4 --import --disk path=/nonexistent/state/tinkero-smoke-base-f44.qcow2,format=qcow2,bus=virtio --osinfo detect=on,require=off --boot uefi --network user,model.type=virtio,backend.type=passt,portForward0.proto=tcp,portForward0.range0.start=2222,portForward0.range0.to=22 --video virtio,accel3d=yes --graphics spice,gl.enable=yes,listen=none --cloud-init user-data=/nonexistent/state/user-data --noautoconsole --wait 90
+virt-install --connect qemu:///session --name tinkero-smoke-base-f44 --memory 8192 --vcpus 4 --import --disk path=/nonexistent/state/tinkero-smoke-base-f44.qcow2,format=qcow2,bus=virtio --osinfo detect=on,require=off --boot uefi --network user,model.type=virtio,backend.type=passt,portForward0.proto=tcp,portForward0.address=127.0.0.1,portForward0.range0.start=2222,portForward0.range0.to=22 --video virtio,accel3d=yes --graphics spice,gl.enable=yes,listen=none --cloud-init user-data=/nonexistent/state/user-data --noautoconsole --wait 90
 virsh -c qemu:///session domstate tinkero-smoke-base-f44
 vm-smoke: the base tinkero-smoke-base-f44 is ready. It is never booted again: every run clones it
 ```
@@ -1806,7 +1905,7 @@ git add ci/vm-smoke/run ci/vm-smoke/cloud-init.yaml ci/vm-smoke/image.lock tests
 git commit -m "ci: the smoke test's base VM from the pinned Fedora Cloud image and cloud-init (plan 3D, D18)"
 ```
 
-**Verification for the issue:** `bash tests/test-vm-smoke.sh` at `1..190`; the dry run prints the lines of Step 4 and creates nothing; `grep -c '^sha256=28680fe5b371a5a82ebf43a31926e086a168e59949d03969c5093e7071f90b7f$' ci/vm-smoke/image.lock` prints `1`; CI green. The build itself (`virt-install`, cloud-init, the group install) runs for the first time in Task 5: nothing here downloads the image or starts a VM.
+**Verification for the issue:** `bash tests/test-vm-smoke.sh` at `1..216`; the dry run prints the lines of Step 4 and creates nothing; `grep -c '^sha256=28680fe5b371a5a82ebf43a31926e086a168e59949d03969c5093e7071f90b7f$' ci/vm-smoke/image.lock` prints `1`; CI green. The build itself (`virt-install`, cloud-init, the group install) runs for the first time in Task 5: nothing here downloads the image or starts a VM.
 
 ---
 
@@ -1818,7 +1917,7 @@ git commit -m "ci: the smoke test's base VM from the pinned Fedora Cloud image a
 **Interfaces:**
 - Consumes: Task 1's guest subcommands, exactly as its table lists them; Task 2's helpers and base; `upstream.lock` (`omarchy_tag`, `tinkero_rev`, `fedora`: the expected package is `tinkero-<tag without v>-<rev>.fc<fedora>.noarch`); the checkout's `install.sh`.
 - Produces: `ci/vm-smoke/run [--stages LIST] [--keep] [--lockout]` and `./dev vm-smoke [ARG...]`.
-  - Stages, in the default order: `clone`, `baseline`, `install`, `users`, `session`, `lock`, `gnome`, `reinstall`, `remove`. `--stages a,b` runs those on the kept clone (a list with `clone` starts from a fresh one) and keeps the clone; `--keep` keeps it after a passing full run; a run with a failure always keeps it; `--lockout` adds round 3.
+  - Stages, in the default order: `clone`, `baseline`, `install`, `users`, `session`, `lock`, `gnome`, `reinstall`, `remove`. `--stages a,b` runs those on the kept clone (a list with `clone`, which must come first or the run is refused with exit 2, starts from a fresh one) and keeps the clone; `--keep` keeps it after a passing full run; a run with a failure always keeps it; `--lockout` adds round 3.
   - Stdout is the report: a `# vm-smoke: <package>, base <base>, clone <clone>, stages: <list>` line, `# stage <name>` lines, `ok N - <stage>: <description>` and `not ok N - <stage>: <description>` with `#   ` detail lines, numbered across the whole run, then `1..N` and `# <a> ok, <b> not ok, <seconds>s`. Everything else goes to stderr.
   - Results: `<TINKERO_SMOKE_RESULTS>/<UTC timestamp, YYYYMMDDTHHMMSSZ>/` with `report.tap`, `commands.log`, `host.log`, `stage-<name>.log` and `vmcheck/` (the guest's files, copied out after every stage).
   - Exit status: 0 every line ok; 1 any line not ok; 2 the VM could not be built or reached (the report ends with `Bail out! <reason>`), or bad usage.
@@ -1829,6 +1928,7 @@ How the stages map to design 6.1 and 6.3, and what the first run may have to cor
 - **One function per stage, two helpers for everything outside it.** Host commands go through `run` (or `probe`, `domain_state` when they only ask), guest commands through `guest`; `guest_do` turns one guest command into one report line, `guest_check` renumbers a check's TAP lines. Names and timeouts are variables at the top. A stage that cannot get the session it needs returns after its failed lines; the run goes on with the next stage.
 - **Sessions** are entered by `enter NAME`: the guest sets the session in AccountsService (`session-next`), ends the running session (`session-end terminate`), and waits for GDM's timed login to start the next one (`session-wait`). The `session` stage reboots instead of logging out, as the guide does, because the lock rounds need a boot on which nothing has run `faillock` as root.
 - **Typing** is `type_line`: one `virsh send-key` per character from the key table, a first key that types nothing (it wakes a lock that has blanked the display), and Enter. The lock's state is asked of the compositor through upstream's `omarchy-hyprland-session-locked`, never assumed.
+- **Removing the clone** (`remove_clone`, the only place the driver destroys anything) first checks the name again and then asks `virsh domblklist --details` for the clone's disks: every one must be a file directly under `TINKERO_SMOKE_STATE`, or the driver stops with exit 2 naming the disk, before anything is stopped. `virt-clone --file` puts the clone's disk there, so a clone the driver made always passes, and a domain with a `tinkero-smoke*` name that somebody made by hand, with its disk elsewhere, never has its storage removed. An empty CD-ROM drive (source `-`) is not a disk. The lock's `omarchy_tag` and `tinkero_rev` are validated before they are used to build the expected package name, which reaches the guest's command line quoted with `printf %q`.
 - **The clone's disk** is given to `virt-clone` with `--file` under `TINKERO_SMOKE_STATE`, where the guide used `--auto-clone`: the path then derives from the state variable for a hand-built base too, whose own disk lives in libvirt's image directory.
 - **The `reinstall` stage's plan check** is "nothing a run would write", not the design's literal "all-`current` plan": after the `gnome` stage the terminal configs carry the text size the test set, so tinkero-provision reports them as the user's (`keep-user`). The guest's `check reinstall` (Task 1) allows `current` and `keep-user` and fails on every decision that writes; see "Deviations".
 
@@ -1877,6 +1977,7 @@ assert_eq "$seq" "# vm-smoke: $lock_nvr, base tinkero-smoke-base-f44, clone tink
 # stage clone
 VIRSH dominfo tinkero-smoke-base-f44
 VIRSH dominfo tinkero-smoke
+VIRSH domblklist --details tinkero-smoke
 VIRSH domstate tinkero-smoke
 VIRSH destroy tinkero-smoke
 VIRSH undefine tinkero-smoke --nvram --remove-all-storage
@@ -1910,9 +2011,10 @@ dry --stages remove
 assert_eq "$(calls GUEST | sed 's/^.*session-wait gnome 180|//')" "GUEST step remove|GUEST snap 4-removed|GUEST check remove|GUEST diff-snap 0-baseline 4-removed" "stage remove: the guide's removal, the snapshot, the checks"
 dry
 assert_eq "$(grep '^# stage ' <<<"$seq" | paste -sd' ')" "# stage clone # stage baseline # stage install # stage users # stage session # stage lock # stage gnome # stage reinstall # stage remove" "no --stages: every stage, in the design's order"
-assert_eq "$(tail -n 3 <<<"$seq")" "VIRSH domstate tinkero-smoke
+assert_eq "$(tail -n 4 <<<"$seq")" "VIRSH domblklist --details tinkero-smoke
+VIRSH domstate tinkero-smoke
 VIRSH destroy tinkero-smoke
-VIRSH undefine tinkero-smoke --nvram --remove-all-storage" "a full run that passed removes its clone at the end, through libvirt"
+VIRSH undefine tinkero-smoke --nvram --remove-all-storage" "a full run that passed removes its clone at the end, through libvirt, after looking at its disks"
 assert_eq "$(grep -cE '(^|[ /])(rm|rmdir|unlink|shred)( |$)' <<<"$out")" 0 "dry run: no rm of any kind in the whole sequence"
 assert_eq "$(grep -E 'destroy|undefine|remove-all-storage' <<<"$seq" | grep -vcE '^VIRSH (destroy|undefine) tinkero-smoke( --nvram --remove-all-storage)?$')" 0 "dry run: the only thing ever destroyed or undefined is the clone, by name"
 assert_eq "$(grep -c 'tinkero-smoke-base-f44' <<<"$(grep -vE '^(VIRSH dominfo|virt-clone|# vm-smoke)' <<<"$seq")")" 0 "dry run: the base is only asked about and cloned"
@@ -1926,6 +2028,11 @@ assert_eq "$rc:$(grep -c 'bash vmcheck/guest check users' "$d/dev.out")" "0:1" "
 dry --stages base; assert_eq "$rc" 2 "--stages base is refused"
 assert_contains "$out" "the base is built by 'run base'" "and says how the base is built"
 dry --stages; assert_eq "$rc" 2 "--stages without a list is exit 2"
+dry --stages baseline,clone; assert_eq "$rc" 2 "--stages with clone after another stage is exit 2"
+assert_contains "$out" "clone must come first" "and says why"
+printf 'fedora=44\nomarchy_tag=v4.0.4; touch x\ntinkero_rev=3\n' > "$d/bad-tag.lock"; TINKERO_LOCK=$d/bad-tag.lock dry --stages users
+assert_eq "$rc" 2 "a lock whose tag is not a version is refused: it would reach the guest's command line"
+assert_contains "$out" "malformed" "and the message says so"
 dry --frobnicate; assert_eq "$rc" 2 "an unknown option is exit 2"
 TINKERO_SMOKE_CLONE=tinkero-smoke-base-f44 dry --stages users
 assert_eq "$rc" 2 "a clone name that names the base is refused"
@@ -1957,7 +2064,9 @@ hstub virt-clone <<'S'
 #!/bin/bash
 echo "virt-clone $*" >> "$HLOG"
 S
-sgood() { hgood; printf 'tinkero-smoke-base-f44\ntinkero-smoke\n' > "$ST/domains"; echo running > "$ST/domstate"; echo up > "$ST/h-ssh"; echo gnome > "$ST/h-kind"; : > "$ST/h-fail"; }
+blk() { printf ' Type   Device   Target   Source\n------------------------------------------------\n%s\n' "$1" > "$ST/blklist"; }
+sgood() { hgood; blk " file   disk     vda      $d/state/tinkero-smoke.qcow2
+ file   cdrom    sda      -"; printf 'tinkero-smoke-base-f44\ntinkero-smoke\n' > "$ST/domains"; echo running > "$ST/domstate"; echo up > "$ST/h-ssh"; echo gnome > "$ST/h-kind"; : > "$ST/h-fail"; }
 report() { cat "$d"/results/*/report.tap | tail -n "${1:-1000}"; }
 latest() { find "$d/results" -mindepth 1 -maxdepth 1 -type d | LC_ALL=C sort | tail -n 1; }
 sgood; r --stages baseline
@@ -2017,13 +2126,23 @@ assert_contains "$out" "lock: the lock could be cleared for the next round" "loc
 assert_contains "$(cat "$HLOG")" "vmcheck/guest lock-reset" "lock: the tally is cleared (the guide's escape hatch)"
 assert_contains "$(cat "$HLOG")" "vmcheck/guest session-end terminate" "lock: and the session is ended so that GDM is back"
 assert_eq "$(grep -c 'check pam-plain' "$HLOG")" 0 "lock: the host is not switched to with-faillock behind a stuck lock"
+for bad in " file   disk     vda      /var/lib/libvirt/images/tinkero-smoke.qcow2" " file   disk     vda      $d/state/sub/tinkero-smoke.qcow2" \
+           " file   disk     vda      $d/state-other/tinkero-smoke.qcow2" " block  disk     vda      /dev/sdb" \
+           " file   disk     vda      $d/state/tinkero-smoke.qcow2
+ file   disk     vdb      $HOME/secrets.qcow2"; do
+  sgood; blk "$bad"; r --stages clone
+  assert_eq "$rc:$(grep -c 'destroy\|undefine\|^virt-clone' "$HLOG")" "2:0" "a clone whose disk is not a file directly under the state directory is refused, and nothing is stopped or removed"
+  assert_contains "$out" "is not a file directly under $d/state, so this script did not create it" "and the message names the disk"
+done
+sgood; r --stages clone,baseline
+assert_eq "$rc" 0 "a clone whose only disk is under the state directory (and an empty CD-ROM drive) is removed and made again"
 sgood; : > "$d/state/tinkero-smoke.qcow2"; echo tinkero-smoke-base-f44 > "$ST/domains"; r
 assert_eq "$rc" 2 "a disk under the clone's name that no domain owns stops the run"
 assert_contains "$out" "This script removes nothing by path" "and the operator is told to remove that one file"
 assert_file "$d/state/tinkero-smoke.qcow2" "and it is still there"
 ```
 
-Run: `bash tests/test-vm-smoke.sh` Expected: `1..265`, exit 1, 55 `not ok`, all among the 75 new cases (190 was the tally before): Task 2's driver knows no stage and no `--stages`.
+Run: `bash tests/test-vm-smoke.sh` Expected: `1..306`, exit 1, 63 `not ok`, all among the 90 new cases (216 was the tally before): Task 2's driver knows no stage and no `--stages`.
 
 - [ ] **Step 2: The stages in `ci/vm-smoke/run`**
 
@@ -2032,7 +2151,7 @@ Apply this diff to `ci/vm-smoke/run` (`git apply` takes it as it is). It replace
 ```diff
 --- a/ci/vm-smoke/run
 +++ b/ci/vm-smoke/run
-@@ -4,22 +4,36 @@
+@@ -4,23 +4,38 @@
  #
  #   ci/vm-smoke/run base    build the base VM once, unattended, from the pinned Fedora Cloud
  #                           image and ci/vm-smoke/cloud-init.yaml; it is never booted again
@@ -2040,8 +2159,8 @@ Apply this diff to `ci/vm-smoke/run` (`git apply` takes it as it is). It replace
 +#                           clone the base, boot the clone and run the stages. LIST is comma
 +#                           separated; the default is every stage, in this order:
 +#                           clone,baseline,install,users,session,lock,gnome,reinstall,remove
-+#     --stages LIST         run only these, on the kept clone (a list with "clone" starts from a
-+#                           fresh one); the clone is kept afterwards
++#     --stages LIST         run only these, on the kept clone (a list with "clone", which must come
++#                           first, starts from a fresh one); the clone is kept afterwards
 +#     --keep                keep the clone after a full run that passed (a failed run keeps it)
 +#     --lockout             add round 3 to the lock stage: ten failures and the two-minute wait
  #
@@ -2065,23 +2184,26 @@ Apply this diff to `ci/vm-smoke/run` (`git apply` takes it as it is). It replace
  #   TINKERO_SMOKE_RENDERNODE  a /dev/dri/by-path/...-render node for virgl (an Optimus host)
  #   TINKERO_SMOKE_URI         the libvirt URI (default qemu:///session)
 -# On the host this script writes under TINKERO_SMOKE_STATE and nowhere else. It deletes nothing:
--# a stale file is overwritten, and the base domain and its disk are yours to remove
+-# a stale download or user-data is overwritten, a disk file it did not make is never touched, and
+-# the base domain and its disk are yours to remove (docs/guides/vm-smoke.md says how).
 +# On the host this script writes under TINKERO_SMOKE_STATE and TINKERO_SMOKE_RESULTS and nowhere
-+# else. It deletes nothing by path: a stale file is overwritten, the clone it made is removed
-+# through libvirt, by name, and the base domain and its disk are yours to remove
- # (docs/guides/vm-smoke.md says how).
++# else. It deletes nothing by path: a stale download or user-data is overwritten, a disk file it
++# did not make is never touched, the clone it made is removed through libvirt, by name (and only
++# if its disks are files directly under TINKERO_SMOKE_STATE), and the base domain and its disk
++# are yours to remove (docs/guides/vm-smoke.md says how).
  set -euo pipefail
- 
-@@ -31,7 +45,7 @@
+ # The patterns below are byte patterns: under a UTF-8 locale bash's [0-9] admits non-ASCII digits
+ # (a sibling plan's review found it), so the locale is fixed.
+@@ -34,7 +49,7 @@
  dry=${TINKERO_SMOKE_DRY_RUN:-0}
  euid=${TINKERO_EUID:-$EUID}
  
 -usage() { sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; }
-+usage() { sed -n '2,37p' "$0" | sed 's/^# \{0,1\}//'; }
++usage() { sed -n '2,38p' "$0" | sed 's/^# \{0,1\}//'; }
  die() { echo "vm-smoke: $*" >&2; exit 2; }
  say() { echo "vm-smoke: $*" >&2; }
  # lock_get FILE KEY: upstream.lock and image.lock are parsed, never sourced.
-@@ -41,32 +55,60 @@
+@@ -44,33 +59,62 @@
    printf '%s\n' "${line#*=}"
  }
  
@@ -2095,6 +2217,7 @@ Apply this diff to `ci/vm-smoke/run` (`git apply` takes it as it is). It replace
  # Names.
  uri=${TINKERO_SMOKE_URI:-qemu:///session}
  fedora=$(lock_get "$lock" fedora)
+ [[ $fedora =~ ^[0-9]+$ ]] || die "$lock: fedora must be a number: $fedora"
  base=${TINKERO_SMOKE_BASE:-tinkero-smoke-base-f$fedora}
 +clone=${TINKERO_SMOKE_CLONE:-tinkero-smoke}
  user=${TINKERO_SMOKE_USER:-smoke}
@@ -2105,9 +2228,10 @@ Apply this diff to `ci/vm-smoke/run` (`git apply` takes it as it is). It replace
  ssh_port=${TINKERO_SMOKE_SSH_PORT:-2222}
  rendernode=${TINKERO_SMOKE_RENDERNODE:-}
  key=$state/id_ed25519
-+tag=$(lock_get "$lock" omarchy_tag)
++tag=$(lock_get "$lock" omarchy_tag); rev=$(lock_get "$lock" tinkero_rev)
++[[ $tag =~ ^v[0-9]+(\.[0-9]+)*$ && $rev =~ ^[0-9]+$ ]] || die "$lock: omarchy_tag (vN.N.N) or tinkero_rev (a number) is malformed: $tag, $rev"
 +# The tinkero package this checkout's lock names: what the COPR must have built for the run to mean anything.
-+expect_nvr=tinkero-${tag#v}-$(lock_get "$lock" tinkero_rev).fc$fedora.noarch
++expect_nvr=tinkero-${tag#v}-$rev.fc$fedora.noarch
 +all_stages="clone baseline install users session lock gnome reinstall remove"
  # The VM, as the 2F guide built it.
  memory=8192; vcpus=4; disk_gb=40
@@ -2145,7 +2269,7 @@ Apply this diff to `ci/vm-smoke/run` (`git apply` takes it as it is). It replace
  
  # --- host commands ---------------------------------------------------------------------------
  exec 3>&1   # a dry run's command lines go here, also from inside $(...)
-@@ -78,10 +120,14 @@
+@@ -82,10 +126,14 @@
    done
    echo "${s# }" >&3
  }
@@ -2162,7 +2286,7 @@ Apply this diff to `ci/vm-smoke/run` (`git apply` takes it as it is). It replace
  }
  # probe DEFAULT CMD...: a host command that only asks. A dry run prints it and answers DEFAULT.
  probe() {
-@@ -161,9 +207,342 @@
+@@ -170,9 +218,358 @@
    say "the base $base is ready. It is never booted again: every run clones it"
  }
  
@@ -2196,7 +2320,7 @@ Apply this diff to `ci/vm-smoke/run` (`git apply` takes it as it is). It replace
 +guest() {
 +  local s remote
 +  printf -v s '%q ' "$@"
-+  remote="TINKERO_SMOKE_USER2=$user2 TINKERO_SMOKE_EXPECT_NVR=$expect_nvr bash vmcheck/guest ${s% }"
++  remote="TINKERO_SMOKE_USER2=$(printf '%q' "$user2") TINKERO_SMOKE_EXPECT_NVR=$(printf '%q' "$expect_nvr") bash vmcheck/guest ${s% }"
 +  if [[ $dry == 1 ]]; then show timeout "$guest_timeout" ssh "${ssh_opts[@]}" "$user@localhost" "$remote"; return 0; fi
 +  log "guest $*"
 +  timeout "$guest_timeout" ssh "${ssh_opts[@]}" "$user@localhost" "$remote"
@@ -2292,10 +2416,25 @@ Apply this diff to `ci/vm-smoke/run` (`git apply` takes it as it is). It replace
 +}
 +
 +# --- the clone ---------------------------------------------------------------------------------
++# clone_disks_are_ours: every disk of the clone is a file directly under $state, as virt-clone
++# --file put it there. A domain with this name that somebody made by hand, its disk anywhere else,
++# is refused before anything is stopped: --remove-all-storage would delete that disk.
++clone_disks_are_ours() {
++  local out type dev src
++  if [[ $dry == 1 ]]; then show virsh -c "$uri" domblklist --details "$clone"; return 0; fi
++  out=$(virsh -c "$uri" domblklist --details "$clone" 2>&1) || die "could not read the disks of $clone: $out"
++  while read -r type dev _ src; do
++    case $type in Type|---*|"") continue ;; esac
++    if [[ $src == - ]]; then continue; fi   # an empty CD-ROM drive
++    [[ $type == file && $src == "${state%/}"/* && ${src#"${state%/}"/} != */* && ${src#"${state%/}"/} != .. ]] \
++      || die "refusing to remove '$clone': its disk '$src' (a $type $dev) is not a file directly under $state, so this script did not create it. Remove the domain yourself if it is yours"
++  done <<<"$out"
++}
 +# remove_clone: the one place this script destroys anything, and it does so through libvirt: the
 +# clone it made itself, by name. Never the base, never a path.
 +remove_clone() {
 +  [[ $clone == tinkero-smoke* && $clone != *base* && $clone != "$base" ]] || die "refusing to remove '$clone': it is not a smoke-test clone"
++  clone_disks_are_ours
 +  if [[ $(domain_state "$clone" running) == running ]]; then run virsh -c "$uri" destroy "$clone" || true; fi
 +  run virsh -c "$uri" undefine "$clone" --nvram --remove-all-storage || bail "could not remove the clone $clone"
 +}
@@ -2377,7 +2516,7 @@ Apply this diff to `ci/vm-smoke/run` (`git apply` takes it as it is). It replace
 +  local i
 +  for ((i = 1; i <= $2; i++)); do
 +    type_line "$wrong_password"; pause "$lock_settle"
-+    guest_do "$1: wrong password $i of $2 is refused" lock-wait idle 30 || true
++    guest_do "$1: after wrong password $i of $2 the lock is up and idle" lock-wait idle 30 || true
 +  done
 +}
 +# lock_rounds VARIANT FIRST SECOND: the guide's pair of rounds on one PAM variant: the right
@@ -2406,7 +2545,7 @@ Apply this diff to `ci/vm-smoke/run` (`git apply` takes it as it is). It replace
 +    wrong_passwords "$a" 10
 +    guest_check lock-failures 10
 +    type_line "$password"; pause "$lock_settle"
-+    guest_do "$a: the right password is refused while the account is locked out" lock-wait idle 30 || true
++    guest_do "$a: after the right password during the lockout the lock is still up and idle" lock-wait idle 30 || true
 +    pause "$lockout_wait"
 +    type_line "$password"
 +    guest_do "$a: two minutes later the right password unlocks" lock-wait unlocked 30 || true
@@ -2469,6 +2608,7 @@ Apply this diff to `ci/vm-smoke/run` (`git apply` takes it as it is). It replace
 +    shift
 +  done
 +  if [[ -n $list ]]; then keep=1; else list=$all_stages; fi
++  [[ " $list " != *" clone "* || $list == clone || $list == "clone "* ]] || die "clone must come first in --stages: it replaces the VM that the stages before it would have used"
 +  for s in $list; do
 +    [[ " $all_stages " == *" $s "* ]] || die "unknown stage '$s'. Stages: ${all_stages// /, }; the base is built by 'run base'"
 +  done
@@ -2534,14 +2674,15 @@ Apply this diff to `ci/vm-smoke/run` (`git apply` takes it as it is). It replace
 
 - [ ] **Step 4: Run the tests**
 
-Run: `bash tests/test-vm-smoke.sh` Expected: `1..265`, no `not ok`.
-Run: `TINKERO_EUID=1000 TINKERO_SMOKE_DRY_RUN=1 TINKERO_SMOKE_STATE=/nonexistent/state TINKERO_SMOKE_RESULTS=/nonexistent/results ./dev vm-smoke --stages clone,baseline` Expected: these 23 lines, with the checkout's path where the listing says `<checkout>` and the package the lock names at that time (`tinkero-4.0.4-3` once plan 3A has landed); nothing is created or called:
+Run: `bash tests/test-vm-smoke.sh` Expected: `1..306`, no `not ok`.
+Run: `TINKERO_EUID=1000 TINKERO_SMOKE_DRY_RUN=1 TINKERO_SMOKE_STATE=/nonexistent/state TINKERO_SMOKE_RESULTS=/nonexistent/results ./dev vm-smoke --stages clone,baseline` Expected: these 24 lines, with the checkout's path where the listing says `<checkout>` and the package the lock names at that time (`tinkero-4.0.4-3` once plan 3A has landed); nothing is created or called:
 
 ```
 # vm-smoke: tinkero-4.0.4-2.fc44.noarch, base tinkero-smoke-base-f44, clone tinkero-smoke, stages: clone baseline
 # stage clone
 virsh -c qemu:///session dominfo tinkero-smoke-base-f44
 virsh -c qemu:///session dominfo tinkero-smoke
+virsh -c qemu:///session domblklist --details tinkero-smoke
 virsh -c qemu:///session domstate tinkero-smoke
 virsh -c qemu:///session destroy tinkero-smoke
 virsh -c qemu:///session undefine tinkero-smoke --nvram --remove-all-storage
@@ -2565,7 +2706,7 @@ vm-smoke: the clone tinkero-smoke is kept: virt-viewer --connect qemu:///session
 
 Run: `TINKERO_EUID=1000 TINKERO_SMOKE_DRY_RUN=1 TINKERO_SMOKE_STATE=/nonexistent/state TINKERO_SMOKE_RESULTS=/nonexistent/results ./dev vm-smoke 2>&1 | grep -cE '(^|[ /])(rm|rmdir|unlink|shred)( |$)'` Expected: `0`.
 Run: `shellcheck -x -e SC1090,SC1091 dev ci/vm-smoke/run ci/vm-smoke/guest tests/test-vm-smoke.sh` Expected: no output.
-Run: `./dev check` Expected: green, `# tests/test-vm-smoke.sh` at `1..265` (the whole suite was not measured at planning time: the planning session ran under a no-delete rule and did not execute tests that delete files; the implementer measures it).
+Run: `./dev check` Expected: green, `# tests/test-vm-smoke.sh` at `1..306` (the whole suite was not measured at planning time: the planning session ran under a no-delete rule and did not execute tests that delete files; the implementer measures it).
 Do not run `./dev vm-smoke` without `TINKERO_SMOKE_DRY_RUN=1` in an agent session: it would try to reach libvirt. Task 5 is the first real run.
 
 - [ ] **Step 5: Commit**
@@ -2575,7 +2716,7 @@ git add ci/vm-smoke/run dev tests/test-vm-smoke.sh
 git commit -m "ci: the VM smoke test's stages: clone, GDM sessions, the lock typed with send-key, the report (plan 3D)"
 ```
 
-**Verification for the issue:** `bash tests/test-vm-smoke.sh` at `1..265`; the two dry runs of Step 4; `grep -v '^[[:space:]]*#' ci/vm-smoke/run | grep -cE '(^|[^[:alnum:]_.-])(rm|rmdir|unlink|shred)([[:space:]]|$)'` prints `0`; ShellCheck clean; CI green.
+**Verification for the issue:** `bash tests/test-vm-smoke.sh` at `1..306`; the two dry runs of Step 4; `grep -v '^[[:space:]]*#' ci/vm-smoke/run | grep -cE '(^|[^[:alnum:]_.-])(rm|rmdir|unlink|shred)([[:space:]]|$)'` prints `0`; ShellCheck clean; CI green.
 
 ---
 
@@ -2623,11 +2764,11 @@ It does, in this order, and nothing else:
 
 1. creates `~/.cache/tinkero-smoke/` and, in it, an SSH key pair used only for these VMs (`id_ed25519`);
 2. downloads the Fedora Cloud Base image named in `ci/vm-smoke/image.lock` (0.6 GiB) into that directory and refuses to use it unless its sha256 is the pinned one;
-3. writes `user-data` there from `ci/vm-smoke/cloud-init.yaml` (two accounts, the key, Workstation's package set, GDM with a five-second timed login, sshd);
-4. copies the image to `tinkero-smoke-base-f44.qcow2`, grows it to 40 GiB (sparse), and runs `virt-install --import --cloud-init` on it with the 2F guide's graphics and its passt port forward (host port 2222 to the guest's sshd);
+3. writes `user-data` there from `ci/vm-smoke/cloud-init.yaml` (two accounts, the key, Workstation's package set, GDM with a five-second timed login, sshd, and the marker file `/etc/tinkero-smoke-vm` that the guest script requires: see section 4);
+4. copies the image to `tinkero-smoke-base-f44.qcow2`, grows it to 40 GiB (sparse), and runs `virt-install --import --cloud-init` on it with the 2F guide's graphics and its passt port forward (host port 2222, bound to 127.0.0.1 only, to the guest's sshd);
 5. waits, up to 90 minutes, until cloud-init has installed everything and powered the VM off.
 
-`virt-viewer --connect qemu:///session --attach tinkero-smoke-base-f44` shows it working (a text console; the desktop only starts in the clones). If you have `cloud-init` on the host, `cloud-init schema --config-file ~/.cache/tinkero-smoke/user-data` checks the rendered file before the VM is built (it printed "Valid schema" with cloud-init 26.1 when the plan was written). The base is never booted again; every run clones it. Building it again is refused while it exists: see "Removing the base" in section 4.
+`virt-viewer --connect qemu:///session --attach tinkero-smoke-base-f44` shows it working (a text console; the desktop only starts in the clones). If you have `cloud-init` on the host, `cloud-init schema --config-file ~/.cache/tinkero-smoke/user-data` checks the rendered file before the VM is built (it printed "Valid schema" with cloud-init 26.1 when the plan was written). The base is never booted again; every run clones it. Building it again is refused while the domain exists, and also when a file named `~/.cache/tinkero-smoke/tinkero-smoke-base-f44.qcow2` is there with no domain owning it (the script overwrites no disk it did not just create: move that file aside with `mv` and run again): see "Removing the base" in section 4.
 
 ## 2. Running it
 
@@ -2698,8 +2839,9 @@ When a line fails, read its `#` detail, then the stage's log, then the file unde
 ## 4. What it writes and removes on your host
 
 - Files: only under the two directories of section 2's table (`~/.cache/tinkero-smoke/` and `.cache/vm-smoke/` in the checkout). libvirt keeps the two domains' definitions and UEFI variables in its own directories.
-- The scripts contain no `rm`. A stale file (a partial download, the rendered `user-data`) is overwritten. A results directory is never removed.
-- The one thing the run removes is the clone it created, through libvirt and by name: `virsh destroy tinkero-smoke` and `virsh undefine tinkero-smoke --nvram --remove-all-storage`, at the start of the next full run and at the end of a full run that passed. The name is checked first: it must start with `tinkero-smoke` and must not be a base.
+- The scripts contain no `rm`. A stale partial download or the rendered `user-data` is overwritten; a disk file the run did not just create is never overwritten (a base disk or a clone disk that is already there stops the run with the file's name). A results directory is never removed.
+- The one thing the run removes is the clone it created, through libvirt and by name: `virsh destroy tinkero-smoke` and `virsh undefine tinkero-smoke --nvram --remove-all-storage`, at the start of the next full run and at the end of a full run that passed. The name is checked first: it must start with `tinkero-smoke` and must not be a base. Its disks are checked too, with `virsh domblklist --details`: every one must be a file directly under `~/.cache/tinkero-smoke/` (where `virt-clone --file` puts them), or the run refuses, naming the disk, before it stops or removes anything. A domain with that name that you made by hand, with its disk somewhere else, is therefore never touched; remove it yourself or choose another `TINKERO_SMOKE_CLONE`.
+- The guest script (`ci/vm-smoke/guest`) deletes nothing either, and refuses to run (exit 2, "this script is for the smoke-test VM only") on any machine that lacks the marker file `/etc/tinkero-smoke-vm`, which cloud-init writes into the VM. A hand-built base (section 5) needs that file too: `echo smoke-test VM | sudo tee /etc/tinkero-smoke-vm`.
 - The base and its disk are never removed by the script.
 
 **Removing the base** (to rebuild it after a Fedora release, an `image.lock` change or a failed build), by hand:
@@ -2714,7 +2856,7 @@ That removes the domain and `~/.cache/tinkero-smoke/tinkero-smoke-base-f44.qcow2
 
 The design (6.5) names three mechanisms that no test without a VM can prove. Each has a fallback that keeps the rest unattended.
 
-1. **The base from the Cloud image.** Symptom: `./dev vm-smoke base` fails, or the clone never answers SSH, or `baseline` fails on GDM, SELinux or authselect. Fallback: build the base by hand as the 2F guide's section 1 does (the clean checkpoint), and give it what the stages rely on: `sudo systemctl enable sshd`, the passt port forward of the guide's "Optional: SSH" paragraph, `~/.cache/tinkero-smoke/id_ed25519.pub` in the account's `~/.ssh/authorized_keys` (make the key with `ssh-keygen -t ed25519 -N '' -f ~/.cache/tinkero-smoke/id_ed25519`), a sudoers file `<user> ALL=(ALL) NOPASSWD:ALL`, a password of lower-case letters and digits, `TimedLoginEnable=true`, `TimedLogin=<user>` and `TimedLoginDelay=5` under `[daemon]` in `/etc/gdm/custom.conf`, and a second account. Then run with `TINKERO_SMOKE_BASE=<that domain> TINKERO_SMOKE_USER=<user> TINKERO_SMOKE_PASSWORD=<password> TINKERO_SMOKE_USER2=<second>`.
+1. **The base from the Cloud image.** Symptom: `./dev vm-smoke base` fails, or the clone never answers SSH, or `baseline` fails on GDM, SELinux or authselect. Fallback: build the base by hand as the 2F guide's section 1 does (the clean checkpoint), and give it what the stages rely on: `sudo systemctl enable sshd`, the passt port forward of the guide's "Optional: SSH" paragraph, `~/.cache/tinkero-smoke/id_ed25519.pub` in the account's `~/.ssh/authorized_keys` (make the key with `ssh-keygen -t ed25519 -N '' -f ~/.cache/tinkero-smoke/id_ed25519`), a sudoers file `<user> ALL=(ALL) NOPASSWD:ALL`, the marker file `/etc/tinkero-smoke-vm` (any content), a password of lower-case letters and digits, `TimedLoginEnable=true`, `TimedLogin=<user>` and `TimedLoginDelay=5` under `[daemon]` in `/etc/gdm/custom.conf`, and a second account. Then run with `TINKERO_SMOKE_BASE=<that domain> TINKERO_SMOKE_USER=<user> TINKERO_SMOKE_PASSWORD=<password> TINKERO_SMOKE_USER2=<second>`.
 2. **GDM's timed login with the AccountsService session switch.** Symptom: the `session-wait` lines fail (the wrong session, or none, comes up after a session end). Fallback: the `gnome` stage is dropped from the automatic run and stays the 2F guide's section 4. `session` and `lock` still run, half attended: when the `session` stage waits after its reboot, pick Tinkero at GDM in the viewer and log in by hand within three minutes.
 3. **Typing at the lock with `virsh send-key`.** Symptom: the lock comes up and "the right password unlocks" fails while the guide's manual round passes. Fallback: the `lock` stage is dropped and stays the 2F guide's section 3.
 
@@ -2722,9 +2864,9 @@ A stage that falls back is removed from the default list: delete its name from `
 
 Smaller things the first run is the first contact with, each one line to correct in the script named:
 
-- the `virt-install` spelling of the passt port forward and `--boot uefi` with the Cloud image (`build_base` in `ci/vm-smoke/run`). If `virt-install` refuses the `--network` option, drop its `backend.type` and `portForward0` parts and add the forward with `virsh edit`, as the 2F guide does;
+- the `virt-install` spelling of the passt port forward and `--boot uefi` with the Cloud image (`build_base` in `ci/vm-smoke/run`). If `virt-install` refuses the `--network` option, drop its `backend.type` and `portForward0` parts and add the forward with `virsh edit`, as the 2F guide does (keep `address='127.0.0.1'` on the `<portForward>` element: the build binds the forward to localhost only, and `ss -ltn` should show `127.0.0.1:2222`);
 - `dnf -y install --allowerasing @workstation-product-environment` on the Cloud image (`ci/vm-smoke/cloud-init.yaml`);
-- `sudo faillock --user` on a `with-faillock` host (rounds 4 and 5). It is the guide's command and worked there with a password; if a round reads 0 failures where 2 are expected, the first suspect is sudo's own account phase clearing the tally, and the fix is to read it without `sudo` (`tally` in `ci/vm-smoke/guest`: the tally file belongs to the user);
+- reading the tally with `faillock --user` on a `with-faillock` host (rounds 4 and 5): the guest reads it without `sudo`, because sudo's own account phase runs `pam_faillock` there and could clear the tally before it is printed (the 2F guide used `sudo faillock` with a password and saw the failures, so both may work). The tally file belongs to the user (`0660 user root`); if the unprivileged read is refused, put `sudo` back in `tally` in `ci/vm-smoke/guest` and read the first round's count carefully;
 - the menu's guard canary and the power menu's layer name (`menu_guards` and `check_power_key` in the guest script);
 - `omarchy-theme-set` without a person: on a VM with a Chromium-family browser it raises a polkit dialog (#52; #56 removed it where none is installed, which is the base's case). If one appears, `check theme` fails after its 120 seconds instead of hanging;
 - `install.sh` and the snapshots running inside a transient unit of the user manager (`in_session`).
@@ -2791,7 +2933,7 @@ Add this section immediately before the heading `## What the first real assembly
 
 - **The first run (this plan's own issue):** `./dev vm-smoke base`, then `./dev vm-smoke`, on the operator's host, against the COPR's build of the package the lock names. Until it has passed, nothing in `ci/vm-smoke/` has met a real VM: the plan's tests cover the guest's logic against stubs and the driver's command sequence.
 - **Three mechanisms it decides (design 6.5):** the Cloud image base (fallback `TINKERO_SMOKE_BASE`), GDM's timed login with the AccountsService session switch (fallback: `gnome` leaves the default stages), the lock typed with `virsh send-key` (fallback: `lock` leaves them). A stage that falls back is recorded in the table at the end of `docs/guides/vm-smoke.md`.
-- **Smaller first contacts, each a one-line correction if wrong:** virt-install's spelling of the passt port forward; `--boot uefi` and `dnf install --allowerasing @workstation-product-environment` on the Cloud image; `sudo faillock` on a `with-faillock` host with password-less sudo; the menu's guard canary; `install.sh` run from a transient unit of the user manager.
+- **Smaller first contacts, each a one-line correction if wrong:** virt-install's spelling of the passt port forward; `--boot uefi` and `dnf install --allowerasing @workstation-product-environment` on the Cloud image; the faillock tally read without `sudo` on a `with-faillock` host; the menu's guard canary; `install.sh` run from a transient unit of the user manager.
 - **The release (plan 3B):** the `smoke` input of the `release` workflow names the comment that records a passing run for the package being released; a manual pass of the 2F guide still qualifies (design D23).
 - **Bump checklist:** `ci/vm-smoke/image.lock` moves with `upstream.lock`'s `fedora` (a test fails until it does), and the base is rebuilt by hand then; `active_units` and `session_sections` at the top of `ci/vm-smoke/guest` are the two lists a new upstream unit or a new gsettings write would extend.
 - **Not built, by decision:** a smoke job on a hosted runner (D17: the driver takes its whole configuration from `TINKERO_SMOKE_*`, so it is one workflow file once software rendering is shown to carry the session); a way out of Hyprland's Safe Mode, so `session` and `lock` cannot be re-run on a clone after `gnome`; the lock's on-screen failure counter.
@@ -2821,7 +2963,7 @@ If the Phase 3 bullet still counts 3D among the issues that await approval (plan
 
 - [ ] **Step 6: Verify and commit**
 
-Run: `./dev check` Expected: green (`tests/test-vm-smoke.sh` still at `1..265`: its comparison with the 2F guide's `snap.sh` reads below the new pointer; not measured at planning time, the implementer measures it).
+Run: `./dev check` Expected: green (`tests/test-vm-smoke.sh` still at `1..306`: its comparison with the 2F guide's `snap.sh` reads below the new pointer; not measured at planning time, the implementer measures it).
 Run: `git diff -U0 -- docs CLAUDE.md | grep '^+' | grep -c "$(printf '\342\200\224')"` Expected: `0` (no em dash added).
 Run: `grep -c 'VM smoke test in CI\|manual before then' docs/superpowers/specs/2026-09-17-tinkero-design.md` Expected: `0`.
 Run: `grep -c 'vm-smoke' docs/guides/phase-2f-vm-check.md docs/guides/workflow.md CLAUDE.md` Expected: each file at `1` or more.
@@ -2857,7 +2999,7 @@ bash tests/test-vm-smoke.sh | tail -n 1
 TINKERO_SMOKE_DRY_RUN=1 ./dev vm-smoke base
 ```
 
-Expected: the repoquery prints the `tinkero` package of `upstream.lock` (`tinkero-<tag without v>-<tinkero_rev>.fc44`) and a `quickshell` whose release is at least the lock's `quickshell_release`; the test file ends with `1..265`; the dry run prints the base's eleven commands. If the COPR does not have that `tinkero` build, stop: the `install` stage would fail on it by design. On the Phase 0 laptop (Optimus), `export TINKERO_SMOKE_RENDERNODE=/dev/dri/by-path/pci-0000:00:02.0-render` before the next step.
+Expected: the repoquery prints the `tinkero` package of `upstream.lock` (`tinkero-<tag without v>-<tinkero_rev>.fc44`) and a `quickshell` whose release is at least the lock's `quickshell_release`; the test file ends with `1..306`; the dry run prints the base's eleven commands. If the COPR does not have that `tinkero` build, stop: the `install` stage would fail on it by design. On the Phase 0 laptop (Optimus), `export TINKERO_SMOKE_RENDERNODE=/dev/dri/by-path/pci-0000:00:02.0-render` before the next step.
 
 - [ ] **Step 2: The base**
 
@@ -2873,7 +3015,7 @@ Expected: it ends with `vm-smoke: the base tinkero-smoke-base-f44 is ready`, and
 ./dev vm-smoke; echo "exit $?"
 ```
 
-Do not type in the viewer while it runs. Expected: exit 0, and `.cache/vm-smoke/<timestamp>/report.tap` ends with `1..N` and `# N ok, 0 not ok, <seconds>s`. On a failure the clone is kept: read the line's `#` detail and the stage's log, correct the script, and run that stage again with `./dev vm-smoke --stages <stage>` (start from `clone` again once `gnome` has run: the clone is then in Safe Mode for its next Tinkero login). Then run `./dev vm-smoke --lockout --stages clone,baseline,install,session,lock` once, for round 3.
+Do not type in the viewer while it runs. While it runs, `ss -ltn | grep 2222` in another terminal must show the forward on `127.0.0.1:2222` only (record it). Expected: exit 0, and `.cache/vm-smoke/<timestamp>/report.tap` ends with `1..N` and `# N ok, 0 not ok, <seconds>s`. On a failure the clone is kept: read the line's `#` detail and the stage's log, correct the script, and run that stage again with `./dev vm-smoke --stages <stage>` (start from `clone` again once `gnome` has run: the clone is then in Safe Mode for its next Tinkero login). Then run `./dev vm-smoke --lockout --stages clone,baseline,install,session,lock` once, for round 3.
 
 - [ ] **Step 4: Record**
 
@@ -2883,7 +3025,7 @@ Comment on the issue with:
 - `report.tap` of the passing run in full, and its duration; the base build's duration;
 - every command or line that had to change, as a diff, with the failing output that led to it;
 - for each of the three mechanisms of design 6.5, one line: **the Cloud image base** (built by `run base`, or fallback 1), **the timed login with the AccountsService session switch** (every `session-wait` line ok, or `gnome` dropped), **typing at the lock** (rounds 1, 2, 4 and 5 ok, or `lock` dropped);
-- the smaller first contacts of the guide's section 5 that needed a correction (the passt option, `--allowerasing`, `sudo faillock` under `with-faillock`, the guard canary, the power menu's layer, `install.sh` in a transient unit), and whether the one AVC denial Phase 0 saw at boot (`systemd-resolve`, not the desktop's) appeared: if it did, the `lock-journal` check needs the list of the desktop's processes that plan 3A's `selinux` check uses, and that is a follow-up issue, not a pass.
+- the smaller first contacts of the guide's section 5 that needed a correction (the passt option, `--allowerasing`, the tally read without `sudo` under `with-faillock` (the first round's count of 2 is the evidence; if the unprivileged read is refused, put `sudo` back and read round 4's count with care), the guard canary, the power menu's layer, `install.sh` in a transient unit), and whether the one AVC denial Phase 0 saw at boot (`systemd-resolve`, not the desktop's) appeared: if it did, the `lock-journal` check needs the list of the desktop's processes that plan 3A's `selinux` check uses, and that is a follow-up issue, not a pass.
 
 - [ ] **Step 5: Corrections and the verdict**
 
@@ -2904,6 +3046,7 @@ Recorded at planning time, where the plan builds something other than the Phase 
 - Design 6.2 calls `cloud-init.yaml` the user-data; it is a template with five placeholders, and the user-data is the rendered `user-data` under the state directory. It also carries three lines the design does not list (`--allowerasing`, `cloud-init.disabled`, `set-default graphical.target`), each needed for the base to work.
 - Design 6.3 and the 2F guide clone with `virt-clone --auto-clone`; the driver passes `--file <state>/<clone>.qcow2`, so that every path it writes derives from the state variable.
 - Design 6.1, `session`: "the menu model loads" is two checks, `omarchy-menu ping` and a guard canary written into the user's menu extension file and taken out again, because no IPC call at `v4.0.4` returns the guard results.
+- Added to what design 6.3 says, none of it contradicting it (the safety requirements of the resumed planning session and the plan review): the driver binds the SSH forward to `127.0.0.1`, refuses to overwrite a base disk it did not create, checks the clone's disks with `virsh domblklist --details` before undefining it, and validates the lock values that reach a command line; the guest script refuses to run without the marker file `/etc/tinkero-smoke-vm` that `cloud-init.yaml` writes; the faillock tally is read without `sudo`; `--stages` refuses a `clone` that is not first.
 
 ## What this plan deliberately leaves out
 
@@ -2919,12 +3062,14 @@ Recorded at planning time, where the plan builds something other than the Phase 
 
 The planning session had no libvirt and ran under a no-delete rule: it wrote the plan's code in a sandboxed copy of the repository (read-only file system outside the copy, no network, `rm` a no-op), and ran only the new test file. What that leaves measured and what it does not:
 
-**Prototyped and run green in the sandbox:** `ci/vm-smoke/guest`, `ci/vm-smoke/run`, `ci/vm-smoke/cloud-init.yaml`, `ci/vm-smoke/image.lock`, the `dev` and `ci.yml` edits, and `tests/test-vm-smoke.sh`, task by task and test first. Measured tallies: Task 1 `1..137` (133 not ok before the guest existed); Task 2 `1..190` (44 not ok before the driver existed); Task 3 `1..265` (55 not ok against Task 2's driver); all green at the end. ShellCheck 0.11 with `-x -e SC1090,SC1091` is clean on `dev`, both scripts and the test file, and `bash -n` passes on each. The code blocks of this plan were generated from the prototype's files, not retyped. The rendered `user-data` of the stubbed base build passed `cloud-init schema` (cloud-init 26.1: "Valid schema"). The `dnf5 environment` and `dnf5-specs` man pages of dnf5 5.4.3 were read for the group install's spelling (`dnf install @<environment id>` selects an environment).
+**Prototyped and run green in the sandbox:** `ci/vm-smoke/guest`, `ci/vm-smoke/run`, `ci/vm-smoke/cloud-init.yaml`, `ci/vm-smoke/image.lock`, the `dev` and `ci.yml` edits, and `tests/test-vm-smoke.sh`, task by task and test first. Measured tallies: Task 1 `1..153` (143 not ok before the guest existed); Task 2 `1..216` (53 not ok before the driver existed); Task 3 `1..306` (63 not ok against Task 2's driver); all green at the end. ShellCheck 0.11 with `-x -e SC1090,SC1091` is clean on `dev`, both scripts and the test file, and `bash -n` passes on each. The code blocks of this plan were generated from the prototype's files, not retyped. The rendered `user-data` of the stubbed base build passed `cloud-init schema` (cloud-init 26.1: "Valid schema"). The `dnf5 environment` and `dnf5-specs` man pages of dnf5 5.4.3 were read for the group install's spelling (`dnf install @<environment id>` selects an environment).
 
 **Read, not run:** upstream's tree at `v4.0.4` for every command the guest calls: `shell/shell.qml` (the `shell` IPC target: `ping`, `call`, `listPlugins`), `shell/plugins/menu/Menu.qml` and `MenuModel.js` (`ping`, `refresh`, the guard batch, the user extension file), `shell/plugins/lock/Service.qml` (`lock isLocked`, `lock status` and its `authenticating` field, the five-second blank timer that the wake key answers), `bin/omarchy-hyprland-session-locked`, `bin/omarchy-system-logout` (`uwsm stop` from a background job two seconds later, which is why the guest keeps its unit alive), `default/hypr/bindings/utilities.lua` (`XF86PowerOff` toggles the `system` menu), `default/hypr/autostart.lua` (the whole environment is imported into the user manager), `bin/omarchy-display-text-size` (it rewrites seeded terminal configs: the `reinstall` deviation).
 
 **Not measured at planning time; the implementer measures it:** `./dev check` as a whole and every pre-existing test file (the no-delete rule: those tests delete files as part of their work). In CI the suite runs as root in the `fedora:44` container, where the test file's stubs stand in for every host and guest tool; that run is the implementer's.
 
-**Not measurable before Task 5:** everything that needs a VM. In particular: that Fedora's Cloud Base image boots under `--boot uefi` and takes the Workstation environment group with `--allowerasing`; that virt-install accepts the `--network user,...,backend.type=passt,portForward0...` spelling of the guide's hand-edited XML; that GDM's timed login starts the session AccountsService holds after every session end (the `SetSession` call was not checked against an installed AccountsService: this machine has none); that `virsh send-key` reaches the lock's password field and that a modifier key wakes it; that `systemd-run --user --wait --pipe` gives `install.sh` and the snapshot the environment they need; that `sudo faillock --user` shows, and does not clear, the tally on a `with-faillock` host when sudo asks for no password (the guide's runs used a password; if sudo's account phase clears the tally, the reading is taken without `sudo`); the layer name of the power menu; the menu guard canary; `journalctl --user -u tinkero-session-end.service --since @<epoch>`; the run's duration. Each is named in the guide's section 5 with its correction or fallback, and Task 5 records the outcome.
+**Not measurable before Task 5:** everything that needs a VM. In particular: that Fedora's Cloud Base image boots under `--boot uefi` and takes the Workstation environment group with `--allowerasing`; that virt-install accepts the `--network user,...,backend.type=passt,portForward0...` spelling of the guide's hand-edited XML; that GDM's timed login starts the session AccountsService holds after every session end (the `SetSession` call was not checked against an installed AccountsService: this machine has none); that `virsh send-key` reaches the lock's password field and that a modifier key wakes it; that `systemd-run --user --wait --pipe` gives `install.sh` and the snapshot the environment they need; that `faillock --user`, run by the user without `sudo`, may read the tally on a `with-faillock` host (the tally file is `0660 user root`; the guide's runs used `sudo` with a password, and if the unprivileged read is refused `sudo` goes back into `tally`); the layer name of the power menu; the menu guard canary; `journalctl --user -u tinkero-session-end.service --since @<epoch>`; the run's duration. Each is named in the guide's section 5 with its correction or fallback, and Task 5 records the outcome.
 
 **Review findings applied while writing:** the tests never delete a fixture file (cases that need an absent file use a second fixture home or root); a packaged-unit fixture that sat outside `/systemd/user/` made the `[Install]` check pass vacuously and was moved; the driver's dry run prints commands quoted only where the shell needs it, so the sequences can be read and compared; `lock-reset` was added to the guest so that the driver's recovery from a stuck lock stays behind the `guest` helper; the expected package comes from the lock in both the driver and the test, so plan 3A's `tinkero_rev` bump changes neither.
+
+**Review.** An independent review of this plan found 0 Critical, 0 Important and 7 Minor findings, and the host-safety reading of `ci/vm-smoke/run` found no input that makes it touch what it did not create. What changed: (1) `build_base` stops when a disk file with the base's name exists and no domain owns it, instead of overwriting it with `cp`, and the tests that rebuilt over their own state directory use fresh ones; (2) the passt forward is bound to `127.0.0.1` (`portForward0.address`), and the guide and Task 5 say how to check it; (3) both scripts `export LC_ALL=C`, `fedora`, `omarchy_tag` and `tinkero_rev` are validated after `lock_get`, and the expected package name reaches the guest's command line through `printf %q`; (4) `--stages` with `clone` anywhere but first is refused with exit 2; (5) the guest reads the faillock tally without `sudo`, an absent snapshot section no longer passes as an empty one, and two report lines that claimed more than `lock-wait idle` shows were reworded; (6) `ci/vm-smoke/guest` refuses to run (exit 2) without `/etc/tinkero-smoke-vm`, which `cloud-init.yaml` writes, with a `TINKERO_SMOKE_MARKER` seam; (7) the menu canary is restored by a trap on `EXIT`, `HUP` and `TERM`, and a later `check` restores a canary a killed one left behind. The orchestrator's item: `remove_clone` reads `virsh domblklist --details` first and refuses unless every disk is a file directly under `TINKERO_SMOKE_STATE`, so that a hand-made domain with a `tinkero-smoke*` name never has its storage removed. Tallies after the round, measured in the sandbox: Task 1 `1..153`, Task 2 `1..216`, Task 3 `1..306`, all green; ShellCheck and `bash -n` clean.
