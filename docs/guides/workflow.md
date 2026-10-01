@@ -13,7 +13,9 @@ contract for people and for agent sessions alike. The design is in
 - Done since: 2C (menu rewrite, 2026-09-23), 2E (provisioning and install, 2026-09-23), 2D
   (branding, 2026-09-24) and 2F (session integration, 2026-09-24; its first COPR build and VM
   check are post-merge issues).
-- Then Phase 3 (maintenance), planned when 2F's post-merge issues are closed.
+- Phase 3 (maintenance and release) is planned (2026-10-01): design
+  `docs/superpowers/specs/2026-10-01-phase-3-maintenance-release-design.md`, plans 3A to 3D
+  in the roadmap's Phase 3 section. Its issues await approval.
 
 ## The loop
 
