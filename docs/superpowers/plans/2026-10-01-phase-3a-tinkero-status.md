@@ -4,7 +4,7 @@
 
 **Goal:** `tinkero-status` reports, as text or as `--json`, what on an installed machine needs the user's or the packager's attention (the pins, a pending Quickshell rebuild, a newer upstream release, the next Fedora release's chroot, `rpm -V`, PAM drift, provisioning, SELinux denials), exits 0, 1 or 2 by the rule of the Phase 3 design, and prints with `--rollback` how to go back one release.
 
-**Architecture:** One bash file, `bin/tinkero-status`, is the framework (options, the `result`/`datum` contract, the fixed check order, the text report, the JSON document built by `jq -n`, the exit status) and the two host-neutral checks, `upstream` and `provision`. The six checks that ask `rpm`, `dnf`, the COPR, PAM or the audit log are `check_<id>` functions in `distro/fedora/lib/status.sh`, installed as `/usr/share/tinkero/status.sh` and sourced at start; a check with no function is reported as skipped. Nothing fetched from the network is ever printed: a check reduces it to a token that matched a fixed pattern, to a number, or to a yes or no. The package gains the two files and `Requires: curl`, so `tinkero_rev` goes to 3, and that build's first run on an installed host closes the plan after the merge.
+**Architecture:** One bash file, `bin/tinkero-status`, is the framework (options, the `result`/`datum` contract, the fixed check order, the text report, the JSON document built by `jq -n`, the exit status) and the two host-neutral checks, `upstream` and `provision`. The six checks that ask `rpm`, `dnf`, the COPR, PAM or the audit log are `check_<id>` functions in `distro/fedora/lib/status.sh`, installed as `/usr/share/tinkero/status.sh` and sourced after the framework's own checks are defined (so `-h` and `--rollback` need no library); a check with no function is reported as skipped. The whole script runs in the C locale (`export LC_ALL=C`, before anything else), because design D3's patterns are byte patterns. Nothing fetched from the network is ever printed: a check reduces it to a token that matched a fixed pattern, to a number, or to a yes or no. The package gains the two files and `Requires: curl`, so `tinkero_rev` goes to 3, and that build's first run on an installed host closes the plan after the merge.
 
 **Tech Stack:** bash, `jq` (the real one, also in the tests), `curl`, `rpm`, `dnf`, `ausearch`, `tinkero-pam-sync` and `tinkero-provision` (each a stub on `PATH` in the tests), `sort -V`, the existing `tests/lib.sh` harness; no Python in this plan.
 
@@ -12,16 +12,16 @@
 
 ## Global Constraints
 
-- Base: `master` at `95bb8d4`, measured 2026-10-01. Every tally of `tests/test-status.sh` in this plan (`1..71`, `1..114`, `1..166`, `1..188`) was measured on the prototype that day. The tallies of the existing test files are CI's on `master` at `95bb8d4` (test-assemble `1..70`, test-check-rpm `1..16`, test-render-spec `1..25`, test-branding-render `1..34`).
+- Base: `master` at `95bb8d4`, measured 2026-10-01. Every tally of `tests/test-status.sh` in this plan (`1..73`, `1..120`, `1..183`, `1..208`) was measured on the prototype that day. The tallies of the existing test files are CI's on `master` at `95bb8d4` (test-assemble `1..70`, test-check-rpm `1..16`, test-render-spec `1..25`, test-branding-render `1..34`).
 - Phase 3's plans land serially (3A, 3B, 3C, 3D): where a step shows a diff of a file another Phase 3 plan also edits (`.github/workflows/ci.yml`, `dev`, the roadmap, the master spec, `CLAUDE.md`, `README.md`), apply the change to the file as it is then, and read a tally as "N more than before".
 - The Phase 3 design is binding: the file names (`bin/tinkero-status`, `distro/fedora/lib/status.sh`, `tests/test-status.sh`), the options (`--json`, `--rollback`, `-h`, `--help`), the eight check ids and their order (`versions qt upstream chroot package pam provision selinux`), the five statuses (`ok info action skipped failed`), the JSON keys (`schema release fedora exit checks`; per check `id status summary fix data`), `schema` 1, the exit status rule (2 when any check is `failed`, else 1 when any is `action`, else 0), and the seams of its section 2.6. If a step cannot be built as written, make the smallest change that works and record it under "## Deviations".
-- Design D3 is a rule for every line of output: a summary is a template filled with local facts; a token from the network is printed only after it matched its pattern (`^v[0-9]+\.[0-9]+\.[0-9]+$` for an upstream tag, `^[0-9]{4}-[0-9]{2}-[0-9]{2}` for its date, cut to ten characters, `^v[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$` for a Tinkero release); everything else fetched is reduced to a number or a yes or no; a token that fails its pattern is not echoed, not even in the error. The same holds for lines of other programs (`rpm -V`, `dnf`, `ausearch`, `tinkero-pam-sync`, the user's `release` file): counted or matched, never copied.
+- Design D3 is a rule for every line of output: a summary is a template filled with local facts; a token from the network is printed only after it matched its pattern (`^v[0-9]+\.[0-9]+\.[0-9]+$` for an upstream tag, `^[0-9]{4}-[0-9]{2}-[0-9]{2}` for its date, cut to ten characters, `^v[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$` for a Tinkero release); everything else fetched is reduced to a number or a yes or no; a token that fails its pattern is not echoed, not even in the error. Every pattern is matched in the C locale: `bin/tinkero-status` exports `LC_ALL=C` before any check or library code runs, because in a UTF-8 locale bash's `[0-9]` also admits the digits of other scripts (`٥`, `５`, `²`, `①`), which would pass the pattern and be printed. The same holds for lines of other programs (`rpm -V`, `dnf`, `ausearch`, `tinkero-pam-sync`, the user's `release` file): counted or matched, never copied.
 - Data over code: the check order is the `CHECKS` array of `bin/tinkero-status`; the desktop's process names for the `selinux` check are the `STATUS_SELINUX_COMMS` array at the top of `distro/fedora/lib/status.sh`. The lock is parsed with `lock_get`, never sourced.
 - Gate allowlists under `ci/allow/` only shrink; this plan adds no entry. Nothing this plan puts in the payload (`/usr/bin/tinkero-status`, `/usr/share/tinkero/status.sh`, `host.md`) may contain a token the arch-leak gate matches (`ci/gate-arch-leak`), or name a command `build/drop.list` removes.
 - Scripts start with `#!/bin/bash` and `set -euo pipefail` (the sourced library starts with `# shellcheck shell=bash` instead, as `distro/fedora/lib/pkg.sh` does); a header comment gives the usage, printed with `sed -n 'A,Bp' "$0"`; ShellCheck clean with `-x -e SC1090,SC1091`; no `A && B || C` one-liners (SC2015); a `# shellcheck disable=` line carries its reason.
 - Privilege goes through the `TINKERO_EUID` seam (`${TINKERO_EUID:-$EUID}`): CI runs the suite as root in a container, a developer runs it as a user, and the tests set the seam on every run. `tinkero-status` never calls `sudo`, `pkexec` or `runuser` (design D7).
-- Tests never use the network and never run a real `rpm`, `dnf`, `curl`, `ausearch`, `tinkero-pam-sync` or `tinkero-provision`: each is a stub the test writes into its temporary directory and puts first on `PATH`, answering from fixture files. The seams are `TINKERO_SHARE`, `TINKERO_LOCK`, `TINKERO_STATUS_LIB`, `TINKERO_EUID`, `TINKERO_OS_RELEASE`, `XDG_STATE_HOME`, `TINKERO_UPSTREAM_API`, `TINKERO_RELEASES_API`, `TINKERO_COPR_API` and `TINKERO_FEDORA_RELEASES`, each with its real default. `jq`, `sed`, `awk`, `sort` and `grep` are the real ones. Assertions are on messages, not only on exit statuses.
-- Test safety: a test deletes only its own `mktmp` directory, by the house idiom's last line (`rm -rf "$d"; finish`), and nothing else; a fixture that must disappear is moved aside inside that directory (`mv x "$d/x.away"`), never removed. No test exports `HOME` or reassigns a variable that a later `rm` expands; a command under test that needs a home directory gets `HOME="$d/home"` on its own command line. `tinkero-status` itself deletes nothing and creates no temporary file.
+- Tests never use the network and never run a real `rpm`, `dnf`, `curl`, `ausearch`, `tinkero-pam-sync` or `tinkero-provision`: each is a stub the test writes into its temporary directory and puts first on `PATH`, answering from fixture files. The seams are `TINKERO_SHARE`, `TINKERO_LOCK`, `TINKERO_STATUS_LIB`, `TINKERO_EUID`, `TINKERO_OS_RELEASE`, `XDG_STATE_HOME`, `TINKERO_UPSTREAM_API`, `TINKERO_RELEASES_API`, `TINKERO_COPR_API` and `TINKERO_FEDORA_RELEASES`, each with its real default (one case per default runs without the seam, with a stub `curl` that records the URL it was asked for). The `rpm` and `dnf` stubs also record the `LC_ALL` they were started with. `jq`, `sed`, `awk`, `sort` and `grep` are the real ones. Assertions are on messages, not only on exit statuses.
+- Test safety: the code this plan adds to tests deletes only its own `mktmp` directory, by the house idiom's last line (`rm -rf "$d"; finish`), and nothing else; a fixture that must disappear is moved aside inside that directory (`mv x "$d/x.away"`), never removed. The helpers that pre-existing test files already have (`payload` in `tests/test-check-rpm.sh` removes a file from its own `$d/p` payload, inside that file's `mktmp` directory) are used as they are. No test exports `HOME` or reassigns a variable that a later `rm` expands; a command under test that needs a home directory gets `HOME="$d/home"` on its own command line. `tinkero-status` itself deletes nothing and creates no temporary file.
 - One commit per task, its message in the style of `git log` on `master` (`status: ...`, `build: ...`, `docs: ...`); a new script joins the ShellCheck step of `.github/workflows/ci.yml` in the task that creates it (`bin/tinkero-*` and `tests/test-*.sh` are already there as globs). Bash only: this plan adds no Python.
 - No em dashes in Tinkero's own prose. Attribution trailers on every commit per the session's rules. Land through a PR against the approved issue; never push `master`. `copr-build` is never triggered by this plan's code issue: only Task 7's issue says to dispatch it.
 - Each task's PR includes its Deviations line in this plan's "## Deviations" section when anything deviated.
@@ -29,19 +29,19 @@
 
 ## Issue map
 
-To be filed as two issues that, together with the issues of plans 3B, 3C and 3D, supersede placeholder #11 (which is then closed with a comment naming them). Tasks 1 to 6 are one orchestrated issue, built serially on one branch because they share `bin/tinkero-status`, `distro/fedora/lib/status.sh`, `tests/test-status.sh` and `.github/workflows/ci.yml`, and land as one PR. Task 7 is a post-merge issue `blocked by` the first and closed by hand (workflow guide, adaptation 1: `tinkero_rev` 3 is a new package version, so its verification has two stages). The `approved` label is Diego's.
+To be filed as two issues that, together with the issues of plans 3B, 3C and 3D, supersede placeholder #11 (which is then closed with a comment naming them). Tasks 1 to 6 are one orchestrated issue, built serially on one branch because they share `bin/tinkero-status`, `distro/fedora/lib/status.sh`, `tests/test-status.sh` and `.github/workflows/ci.yml`, and land as one PR. Task 7 is a post-merge issue `blocked by` the first and closed by hand (workflow guide, adaptation 1: `tinkero_rev` 3 is a new package version, so its verification has two stages). The `approved` label is Diego's. The first issue's WHERE names `CLAUDE.md` (Task 6 edits it: it is the project's instructions for agent sessions), so that `approved` visibly covers that edit.
 
 | Task | Size | Area | WHAT | WHERE | HOW TO VERIFY |
 |---|---|---|---|---|---|
-| 1 Framework and the `provision` check | medium | build | `bin/tinkero-status`: options, `result`/`datum`, the ordered check list, the text report, `--json` through `jq -n`, the exit status rule, the library seam, `check_provision`; CI installs `jq` | `bin/tinkero-status`, `tests/test-status.sh`, `.github/workflows/ci.yml` | `bash tests/test-status.sh` at `1..71`; without `jq` it prints `1..0 # skip` and exits 0 |
-| 2 The Fedora library: `versions`, `package`, `pam`, `selinux` | medium | build | `distro/fedora/lib/status.sh` with four checks and the `selinux` process list as data; `build/assemble` installs it beside `pkg.sh` | `distro/fedora/lib/status.sh`, `build/assemble`, `tests/test-status.sh`, `tests/test-assemble.sh`, `tests/test-branding-render.sh`, `.github/workflows/ci.yml` | `bash tests/test-status.sh` at `1..114`; test-assemble 2 more than before (`1..72`) |
-| 3 The network checks: `upstream`, `chroot`, `qt` | medium | build | `fetch` and `check_upstream` in the framework, `check_qt` and `check_chroot` in the library; design D3's pattern rule; Milestone D's simulated tag | `bin/tinkero-status`, `distro/fedora/lib/status.sh`, `tests/test-status.sh` | `bash tests/test-status.sh` at `1..166`, among them "Milestone D: a simulated newer upstream tag is exit 1" and the design's example report line for line |
-| 4 `--rollback` | small | build | the previous release from the repository's release list, the downgrade text of design 2.5 | `bin/tinkero-status`, `tests/test-status.sh` | `bash tests/test-status.sh` at `1..188` |
+| 1 Framework and the `provision` check | medium | build | `bin/tinkero-status`: options, `result`/`datum`, the ordered check list, the text report, `--json` through `jq -n`, the exit status rule, the library seam, `check_provision`; CI installs `jq` | `bin/tinkero-status`, `tests/test-status.sh`, `.github/workflows/ci.yml` | `bash tests/test-status.sh` at `1..73`; without `jq` it prints `1..0 # skip` and exits 0 |
+| 2 The Fedora library: `versions`, `package`, `pam`, `selinux` | medium | build | `distro/fedora/lib/status.sh` with four checks and the `selinux` process list as data; `build/assemble` installs it beside `pkg.sh` | `distro/fedora/lib/status.sh`, `build/assemble`, `tests/test-status.sh`, `tests/test-assemble.sh`, `tests/test-branding-render.sh`, `.github/workflows/ci.yml` | `bash tests/test-status.sh` at `1..120`; test-assemble 2 more than before (`1..72`) |
+| 3 The network checks: `upstream`, `chroot`, `qt` | medium | build | `fetch` and `check_upstream` in the framework, `check_qt` and `check_chroot` in the library; design D3's pattern rule, kept in the C locale; Milestone D's simulated tag | `bin/tinkero-status`, `distro/fedora/lib/status.sh`, `tests/test-status.sh` | `bash tests/test-status.sh` at `1..183`, among them "Milestone D: a simulated newer upstream tag is exit 1" and the design's example report line for line |
+| 4 `--rollback` | small | build | the previous release from the repository's release list, the downgrade text of design 2.5 | `bin/tinkero-status`, `tests/test-status.sh` | `bash tests/test-status.sh` at `1..208` |
 | 5 Packaging | small | build | `Requires: curl`; `ci/check-rpm` requires the two payload files; `tinkero_rev=3`; `host.md` describes the command | `tinkero.spec.in`, `ci/check-rpm`, `upstream.lock`, `distro/fedora/skills/host.md`, `docs/guides/phase-2f-vm-check.md`, `tests/test-check-rpm.sh`, `tests/test-render-spec.sh` | test-check-rpm 5 more than before (`1..21`), test-render-spec 1 more (`1..26`); `./dev gates` passes; CI prints `PASS: rpm tinkero-4.0.4-3.fc44.noarch.rpm ...` |
-| 6 Docs | small | docs | master spec amendments (D2 to D8, D13), roadmap row and queue section, workflow guide, README, `CLAUDE.md` | `docs/**`, `README.md`, `CLAUDE.md` | every quoted string found once before the edit; `./dev check` green; no em dash added |
+| 6 Docs | small | docs | master spec amendments (D2 to D8, D13), roadmap row and queue section, workflow guide, README, `CLAUDE.md` | `docs/**`, `README.md`, `CLAUDE.md` (the project's instructions for agent sessions) | every quoted string found once before the edit; `./dev check` green; no em dash added |
 | 7 The COPR build of `tinkero` 4.0.4-3 and the first run on an installed host (post-merge) | small | build | dispatch `copr-build` for `tinkero`, upgrade an installed host, run the four invocations and Milestone D's simulated tag | none (a record on the issue) | the build id and NVR, the outputs with their exit statuses, and every difference between real `rpm`, `dnf` or `ausearch` output and the stubs; closed by hand |
 
-After Tasks 1 to 6, `./dev check` runs: test-status `1..188` (new), test-assemble `1..72` (70 before), test-check-rpm `1..21` (16 before), test-render-spec `1..26` (25 before); the others unchanged (test-branding-render `1..34`, test-branding `1..14`, test-copr `1..21`, test-fastfetch-fedora `1..3`, test-fetch `1..9`, test-gates `1..94`, test-install `1..34`, test-launch-webapp `1..41`, test-lock `1..4`, test-menu-guards `1..8`, test-pam-sync `1..75`, test-provision `1..189`, test-replacements `1..54`, test-session-end `1..35`, test-specs `1..88`, test-theme-set-browser `1..15`, test-update `1..6`, Python `Ran 45 tests`). The three changed tallies of existing files are derived, not measured at planning time (Global Constraints, last bullet).
+After Tasks 1 to 6, `./dev check` runs: test-status `1..208` (new), test-assemble `1..72` (70 before), test-check-rpm `1..21` (16 before), test-render-spec `1..26` (25 before); the others unchanged (test-branding-render `1..34`, test-branding `1..14`, test-copr `1..21`, test-fastfetch-fedora `1..3`, test-fetch `1..9`, test-gates `1..94`, test-install `1..34`, test-launch-webapp `1..41`, test-lock `1..4`, test-menu-guards `1..8`, test-pam-sync `1..75`, test-provision `1..189`, test-replacements `1..54`, test-session-end `1..35`, test-specs `1..88`, test-theme-set-browser `1..15`, test-update `1..6`, Python `Ran 45 tests`). The three changed tallies of existing files are derived, not measured at planning time (Global Constraints, last bullet).
 
 ## File Structure
 
@@ -56,7 +56,8 @@ After Tasks 1 to 6, `./dev check` runs: test-status `1..188` (new), test-assembl
 | `ci/check-rpm`, `tests/test-check-rpm.sh` | the built package must carry `/usr/bin/tinkero-status`, executable, and `/usr/share/tinkero/status.sh` |
 | `tests/test-render-spec.sh` | the rendered spec requires `curl` |
 | `upstream.lock` | `tinkero_rev=3` (design D22) |
-| `distro/fedora/skills/host.md` | tells the agent what `tinkero-status` reports and that `--json` is the form to read |
+| `distro/fedora/skills/host.md` | tells the agent what `tinkero-status` reports, that `--json` is the form to read and that a `packager:` fix is not for this machine |
+| `docs/guides/phase-2f-vm-check.md` | the one line that names the package's NVR (`4.0.4-3`) |
 | `.github/workflows/ci.yml` | `jq` in the Tools step; the library in the ShellCheck list |
 
 Interfaces later plans rely on: `tinkero-status --rollback`'s text names the tag `v<version>-<rev>` and the asset `tinkero-<version>-<rev>.fc<N>-rpms.tar` (plan 3B produces both and its rollback drill proves the printed command); the tag pattern of `check_upstream` and the two queries of `check_qt` (plan 3C's `ci/watch-upstream` and `ci/watch-qt` reuse them against the repositories); the fix text `packager: docs/guides/bump-checklist.md` (plan 3C creates that guide); `tinkero-status` exiting 0 or 1 in a healthy session (plan 3D's `session` stage); `tinkero-status --json` with `schema` 1 and D3's guarantee about its strings (Phase 5, the advisor); `check_<id>` functions in a `distro/<name>/lib/status.sh`, and the helpers the framework gives them (`result`, `datum`, `lock_get`, `is_root`, `fetch`, `RELEASE`, `TAG`, `FEDORA`) (Phase 4, a second distro).
@@ -65,7 +66,7 @@ Interfaces later plans rely on: `tinkero-status --rollback`'s text names the tag
 
 Input classes and failure modes the design implies but does not spell out; each has its tests in the task that owns the code.
 
-1. A network token that is almost valid: `v4.0.5-beta1`, a tag followed by shell (`v4.0.5; curl ... | sh`), a tag with a second line of prose, a `tag_name` that is not a string, an answer that is not JSON, a date that is not a date. Each is a `failed` check and appears nowhere in stdout or stderr; Task 3. In the release list, `v4.0.4-2-evil` and a two-line tag whose first line looks like a release are ignored; Task 4.
+1. A network token that is almost valid: `v4.0.5-beta1`, a tag followed by shell (`v4.0.5; curl ... | sh`), a tag with a second line of prose, a `tag_name` that is not a string, an answer that is not JSON, a date that is not a date, and a token whose digits are not ASCII (`v4.0.` and an Arabic-Indic five, a date with one, a `dnf` version `6.` and two such digits), which a UTF-8 locale's `[0-9]` would accept. Each is a `failed` check and appears nowhere in stdout or stderr; Task 3. In the release list, `v4.0.4-2-evil` and a two-line tag whose first line looks like a release are ignored; Task 4.
 2. Versions compared as text instead of as versions: `v4.0.10` against a pinned `v4.0.4`, Hyprland `0.56.10` inside `[0.56.2, 0.57)`, Quickshell release `10` against the floor `2`, Qt `6.9` against `6.11`, a rollback from revision 12 choosing 11 over 9, `v4.0.9` before `v4.0.10`; Tasks 2, 3 and 4.
 3. "Nothing found" that is really "could not look": `ausearch` failing without `<no matches>`, `rpm -V` failing with no output, `dnf` failing or printing something that is not a version, `tinkero` not installed, a missing library file, root's run (no `provision`) and a user's run (no `selinux`), each of which must say how to get the check run. A `failed` check outranks an `action` in the exit status; Tasks 1, 2 and 3.
 4. Somebody else's text reaching the report, and from there an agent: the user's own `release` file holding prose, an unknown line of `tinkero-provision --plan`, a line `tinkero-pam-sync --check` never printed before, the paths of `rpm -V`, the package names of `dnf repoquery --upgrades`, AVC records, a release's `body`. All are counted or matched, never copied; Tasks 1, 2, 3 and 4.
@@ -88,6 +89,7 @@ Input classes and failure modes the design implies but does not spell out; each 
   - Exit status: 2 when any check is `failed`, else 1 when any is `action`, else 0; also 2 for an unknown option, for `--json` without `jq`, and when the lock cannot be read.
   - The contract for a check function `check_<id>`: it is called in the current shell with its stdout sent to stderr; it calls `result STATUS SUMMARY [FIX]` exactly once and `datum KEY VALUE` any number of times; its return status is ignored. Zero or several `result` calls, or an unknown status, make the check `failed` with a summary that names the function. An id with no function is `skipped` with the summary `not implemented for this host`.
   - The library seam: `TINKERO_STATUS_LIB` (default `$TINKERO_SHARE/status.sh`) is sourced after the framework's own checks are defined, so a function the library defines replaces the framework's check of the same id (the tests use this; Fedora's library defines neither, and Task 2 pins that). A missing library file is a line on stderr, and its checks are skipped.
+  - The locale: the script runs in the C locale (`export LC_ALL=C` right after `set -euo pipefail`), so this shell, the library and every program they run match and print bytes (design D3; Deviations). The test of this task that needs it runs the command under a UTF-8 locale when `locale -a` lists one.
   - Helpers a library may call: `result`, `datum`, `lock_get KEY` (returns 1 without a value), `is_root`, `os_release_get KEY`, and the variables `RELEASE`, `TAG`, `FEDORA`.
   - `check_provision`, with these summaries, in this order of precedence:
 
@@ -121,7 +123,7 @@ fi
 S=$ROOT/bin/tinkero-status
 d=$(mktmp); mkdir -p "$d/bin" "$d/stub/url" "$d/share/config-notes" "$d/state"
 export LOG=$d/log STUB=$d/stub
-: > "$LOG"
+: > "$LOG"; : > "$LOG.locale"
 printf 'omarchy_tag=v4.0.4\nhyprland=0.56.2\nquickshell=0.3.0^20.git28771c7\nquickshell_release=2\nfedora=44\ntinkero_rev=3\n' > "$d/share/upstream.lock"
 printf 'NAME="Fedora Linux"\nVERSION_ID=44\nID=fedora\n' > "$d/os-release"
 
@@ -141,7 +143,7 @@ B
 cat > "$d/bin/rpm" <<'B'
 #!/bin/bash
 # rpm -q --qf FORMAT NAME | rpm -q --requires NAME | rpm -q NAME | rpm -V NAME
-echo "rpm $*" >> "$LOG"
+echo "rpm $*" >> "$LOG"; echo "rpm LC_ALL=${LC_ALL:-}" >> "$LOG.locale"
 case "$1 $2" in
   "-q --qf")       f=$STUB/rpm-q-$4 ;;
   "-q --requires") f=$STUB/rpm-requires-$3 ;;
@@ -155,11 +157,13 @@ B
 cat > "$d/bin/dnf" <<'B'
 #!/bin/bash
 # dnf -q repoquery --latest-limit=1 --queryformat FORMAT NAME | dnf -q repoquery --upgrades NAME
-echo "dnf $*" >> "$LOG"
-[[ $(cat "$STUB/dnf.fail" 2>/dev/null) != 1 ]] || { echo "Failed to download metadata" >&2; exit 1; }
+# $STUB/dnf.fail: 1 makes every call fail, "upgrades" only the second kind.
+echo "dnf $*" >> "$LOG"; echo "dnf LC_ALL=${LC_ALL:-}" >> "$LOG.locale"
+fail=$(cat "$STUB/dnf.fail" 2>/dev/null)
+[[ $fail != 1 ]] || { echo "Failed to download metadata" >&2; exit 1; }
 name=${*: -1}
 case "$*" in
-  "-q repoquery --upgrades "*) cat "$STUB/dnf-upgrades-$name" ;;
+  "-q repoquery --upgrades "*) [[ $fail != upgrades ]] || exit 1; cat "$STUB/dnf-upgrades-$name" ;;
   "-q repoquery --latest-limit=1 --queryformat "*) cat "$STUB/dnf-latest-$name" ;;
   *) exit 64 ;;
 esac
@@ -183,15 +187,26 @@ chmod +x "$d/bin"/*
 
 # run [ARG...]: sets out (stdout), err (stderr) and rc. euid (default 1000) and lib (default: the
 # all-ok stub library) choose the user and the host library. Every seam of design 2.6 is set
-# here, on the command line of the one command under test.
+# here, in the environment of the one command under test. defaults=1 leaves the four URL seams
+# unset instead (the stub curl then logs the default URL and fails); loc, when not empty, is
+# the command's LC_ALL.
 run() {
-  out=$(TINKERO_EUID="${euid:-1000}" TINKERO_SHARE="$d/share" TINKERO_STATUS_LIB="${lib:-$d/lib-ok.sh}" \
-    TINKERO_OS_RELEASE="$d/os-release" XDG_STATE_HOME="$d/state" \
-    TINKERO_UPSTREAM_API=https://stub.invalid/upstream TINKERO_RELEASES_API=https://stub.invalid/tinkero \
-    TINKERO_COPR_API=https://stub.invalid/copr TINKERO_FEDORA_RELEASES=https://stub.invalid/fedora-releases.json \
-    PATH="$d/bin:$PATH" "$S" "$@" 2>"$d/err") && rc=0 || rc=$?
+  local vars=(TINKERO_EUID="${euid:-1000}" TINKERO_SHARE="$d/share" TINKERO_STATUS_LIB="${lib:-$d/lib-ok.sh}"
+    TINKERO_OS_RELEASE="$d/os-release" XDG_STATE_HOME="$d/state" PATH="$d/bin:$PATH")
+  if [[ ${defaults:-0} == 1 ]]; then
+    vars=(-u TINKERO_UPSTREAM_API -u TINKERO_RELEASES_API -u TINKERO_COPR_API -u TINKERO_FEDORA_RELEASES "${vars[@]}")
+  else
+    vars+=(TINKERO_UPSTREAM_API=https://stub.invalid/upstream TINKERO_RELEASES_API=https://stub.invalid/tinkero
+      TINKERO_COPR_API=https://stub.invalid/copr TINKERO_FEDORA_RELEASES=https://stub.invalid/fedora-releases.json)
+  fi
+  if [[ -n ${loc:-} ]]; then vars+=(LC_ALL="$loc"); fi
+  out=$(env "${vars[@]}" "$S" "$@" 2>"$d/err") && rc=0 || rc=$?
   err=$(cat "$d/err")
 }
+# utf8: a UTF-8 locale that collates, when one is installed (in such a locale bash's [0-9] also
+# matches the digits of other scripts, which design D3's patterns must not). CI's container has
+# none: the cases that use it then run in the caller's locale and must pass all the same.
+utf8=$(locale -a 2>/dev/null | grep -iE '^(en_US|en_GB|de_DE|fr_FR|es_ES)\.utf-?8$' | head -n1) || utf8=""
 # check ID: the JSON object of one check from the last `run --json`; field ID JQ-PATH: one value.
 check() { jq -c --arg id "$1" '.checks[] | select(.id == $id)' <<<"$out"; }
 field() { jq -r --arg id "$1" ".checks[] | select(.id == \$id) | $2" <<<"$out"; }
@@ -299,6 +314,8 @@ lib=$d/lib-odd.sh run --json
 assert_eq "$(field versions .summary)" 'a "quoted" \ back$lash `tick`
 second line	tab' "json: jq escapes every character of a summary"
 assert_eq "$(check versions | jq -c '[.fix, .data]')" '["fix \"it\"",{"k \"1\"":"v\\n","k2":""}]' "json: and of a fix and of the data"
+out=$(PATH="$d/bin" TINKERO_SHARE="$d/share" "$S" --json 2>&1) && rc=0 || rc=$?   # a PATH with the stubs only: no jq
+assert_eq "$rc:$out" "2:tinkero-status: --json needs jq" "json: without jq it says so and exits 2"
 
 # --- the library seam and the check contract -------------------------------------------------
 lib=$d/lib-odd.sh run --json
@@ -371,6 +388,9 @@ run --json
 assert_eq "$(field provision '.status + ": " + .summary')" "action: the recorded release is not a release name; the package is v4.0.4-3; 0 pending, 0 conflicts, 0 moved defaults" "provision: a release file that is not a release name is actionable"
 if grep -q 'reboot\|ignore previous' <<<"$out"; then not_ok "provision: and its content is not echoed"; else ok "provision: and its content is not echoed"; fi
 assert_eq "$(field provision .data.recorded)" "unreadable" "provision: data.recorded says unreadable"
+printf 'v4.0.4-\xd9\xa2\n' > "$d/state/tinkero/release"   # the revision is U+0662, an Arabic-Indic two
+loc=$utf8 run --json
+assert_eq "$(field provision .data.recorded):$err" "unreadable:" "provision: a digit of another script does not make a release name, in a UTF-8 locale either"
 
 provisioned; mv "$d/state/tinkero/release" "$d/release.away"; : > "$LOG"
 run --json
@@ -411,7 +431,7 @@ rm -rf "$d"; finish
 - [ ] **Step 2: Run it to see it fail**
 
 Run: `bash tests/test-status.sh`
-Expected: `1..71`, 66 `not ok` (there is no `bin/tinkero-status` yet; the five that pass, 6, 47, 59, 63 and 70, each assert that something is absent), exit 1.
+Expected: `1..73`, 68 `not ok` (there is no `bin/tinkero-status` yet; the five that pass, 6, 48, 60, 65 and 72, each assert that something is absent), exit 1.
 
 - [ ] **Step 3: `bin/tinkero-status`**
 
@@ -431,6 +451,11 @@ Expected: `1..71`, 66 `not ok` (there is no `bin/tinkero-status` yet; the five t
 # filled with local facts, or with a token from the network that matched a fixed pattern.
 # shellcheck disable=SC2329  # the checks are called by name ("check_$id"), and the helpers from them and from the host library
 set -euo pipefail
+# The C locale, for this shell, the host library and every command they run. Design D3's
+# patterns are byte patterns: in a UTF-8 locale bash's [0-9] also admits the digits of other
+# scripts, so a tag such as v4.0.<an Arabic five> would pass its pattern and be printed. It also
+# keeps the programs whose lines are read (rpm -V's "missing") from translating them.
+export LC_ALL=C
 
 TINKERO_SHARE=${TINKERO_SHARE:-/usr/share/tinkero}
 TINKERO_LOCK=${TINKERO_LOCK:-$TINKERO_SHARE/upstream.lock}
@@ -606,11 +631,11 @@ In `.github/workflows/ci.yml`, the Tools step (`tests/test-*.sh` and `bin/tinker
 
 - [ ] **Step 5: Run the tests**
 
-Run: `bash tests/test-status.sh` Expected: `1..71`, no `not ok`, exit 0.
+Run: `bash tests/test-status.sh` Expected: `1..73`, no `not ok`, exit 0.
 Run: `mkdir -p .cache/nojq && ln -sf /usr/bin/dirname .cache/nojq/dirname && PATH=$PWD/.cache/nojq /usr/bin/bash tests/test-status.sh; echo $?` Expected: `1..0 # skip jq is needed (sudo dnf install jq)`, then `0` (`.cache/` is ignored by git).
 Run: `bin/tinkero-status -h` Expected: the three usage lines, exit 0.
 Run: `shellcheck -x -e SC1090,SC1091 bin/tinkero-status tests/test-status.sh` Expected: no output.
-Run: `./dev check` Expected: green; `tests/test-status.sh` at `1..71`, every other file as before.
+Run: `./dev check` Expected: green; `tests/test-status.sh` at `1..73`, every other file as before.
 
 - [ ] **Step 6: Commit**
 
@@ -619,7 +644,7 @@ git add bin/tinkero-status tests/test-status.sh .github/workflows/ci.yml
 git commit -m "status: tinkero-status, the framework, --json and the provisioning check (plan 3A)"
 ```
 
-**Verification for the issue:** `bash tests/test-status.sh` at `1..71`; the skip line without `jq`; ShellCheck clean on both files; CI green with `jq` in the Tools step.
+**Verification for the issue:** `bash tests/test-status.sh` at `1..73`; the skip line without `jq`; ShellCheck clean on both files; CI green with `jq` in the Tools step.
 
 ---
 
@@ -655,7 +680,7 @@ git commit -m "status: tinkero-status, the framework, --json and the provisionin
   | | a denial whose `comm` matches the list | `action` | `D of T AVC denials in the last seven days are from the desktop's processes` | `sudo ausearch -m AVC -ts week-ago` |
 
   Data keys: `versions`: `tinkero`, `hyprland`, `quickshell` (each `V-R` or `missing`), `fedora`. `package`: `changed`, `config`. `pam`: `state`. `selinux`: `total`, `desktop`, and `patterns` (the patterns of the list that matched, in list order) when `desktop` is not 0.
-- How `rpm -V` lines are classified: a verify line is nine attribute characters and two spaces, or the word `missing` and three spaces, then the file's marker (`c` for a `%config` file, a space for none), a space and the path (rpm(8); `S.5....T.  c /etc/x`, `missing   c /etc/x`, `missing     /usr/x`). A line counts as configuration when it matches `^(.{9}|missing )  c /`; any other non-empty line, whatever it is, counts as a difference. `rpm -V` runs under `LC_ALL=C`, because rpm translates the word `missing`. Paths are never copied into the report.
+- How `rpm -V` lines are classified: a verify line is nine attribute characters and two spaces, or the word `missing` and three spaces, then the file's marker (`c` for a `%config` file, a space for none), a space and the path (rpm(8); `S.5....T.  c /etc/x`, `missing   c /etc/x`, `missing     /usr/x`). A line counts as configuration when it matches `^(.{9}|missing )  c /`; any other non-empty line, whatever it is, counts as a difference. `rpm -V` runs in the C locale (`tinkero-status` exports it, and a test pins that the `rpm` and `dnf` stubs see `LC_ALL=C` whatever the caller's locale), because rpm translates the word `missing`. Paths are never copied into the report.
 - How AVC records are read: only lines matching `^type=AVC[[:space:]].*avc:[[:space:]]+denied` count (a `SYSCALL` record of the same event carries the `comm` too and must not be counted twice); the `comm="..."` value is matched as a whole against each glob of `STATUS_SELINUX_COMMS` (`quickshell`, `qs`, `Hyprland`, `hypr*`, `omarchy-*`, `tinkero-*`, `uwsm*`). The kernel cuts a `comm` at 15 characters, which the trailing `*` allows for.
 
 The pins are compared the way `build/render-spec` writes them into the RPM requirement: Hyprland inside `[hyprland, next minor)`, Quickshell's version equal to `quickshell` and its release at least `quickshell_release`. `--input-logs` is added to the design's `ausearch` command line so that the audit logs are read even when stdin is a pipe (a script or an agent running the command); the fix the user is shown stays the design's `sudo ausearch -m AVC -ts week-ago`. Real `rpm -V` and `ausearch` output cannot be produced without an installed Tinkero: the fixtures follow the documented formats, and Task 7 is their first contact with the real thing.
@@ -712,7 +737,12 @@ host_ok; echo 'something else entirely' > "$STUB/rpm-q-tinkero"; lrun --json
 assert_eq "$(st versions)" "failed: rpm -q printed something unexpected for tinkero" "versions: output it does not understand is a failed check"
 host_ok; sed -i '/^hyprland=/d' "$d/share/upstream.lock"; lrun --json
 assert_eq "$(st versions)" "failed: the lock lacks hyprland, quickshell, quickshell_release or fedora" "versions: a lock without the pins is a failed check"
+printf 'omarchy_tag=v4.0.4\nhyprland=0.56\nquickshell=0.3.0^20.git28771c7\nquickshell_release=2\nfedora=44\ntinkero_rev=3\n' > "$d/share/upstream.lock"; lrun --json
+assert_eq "$(st versions)" "failed: the lock's hyprland or quickshell_release is not a version" "versions: nor is a pin that is not MAJOR.MINOR.PATCH understood"
 printf 'omarchy_tag=v4.0.4\nhyprland=0.56.2\nquickshell=0.3.0^20.git28771c7\nquickshell_release=2\nfedora=44\ntinkero_rev=3\n' > "$d/share/upstream.lock"
+printf 'NAME=Other\n' > "$d/os-release"; lrun --json
+assert_eq "$(st versions)" "action: this host's Fedora release is unknown, the package set is built for Fedora 44 / tinkero-update" "versions: an os-release without VERSION_ID"
+host_ok
 
 # --- package ---
 lrun --json
@@ -734,6 +764,8 @@ assert_eq "$(field package .status)" "action" "package: a line that is not a ver
 assert_eq "$(st package)" "failed: rpm -V tinkero failed without saying why" "package: a failure with no output is a failed check"
 host_ok; mv "$STUB/rpm-q-tinkero" "$d/tinkero.away"; lrun --json
 assert_eq "$(st package)" "failed: tinkero is not installed as a package, so there is nothing to verify" "package: no tinkero package is a failed check"
+host_ok; loc=POSIX lrun --json; loc=$utf8 lrun --json
+assert_eq "$(sort -u "$LOG.locale")" "rpm LC_ALL=C" "library: every rpm call runs with LC_ALL=C, whatever the caller's locale (rpm translates the word \"missing\")"
 
 # --- pam ---
 host_ok; : > "$LOG"; lrun --json
@@ -749,6 +781,8 @@ assert_eq "$(st pam)" "action: omarchy-lock-password: modified / sudo tinkero-pa
 # shellcheck disable=SC2016  # literal on purpose
 echo 'run $(reboot) now' > "$STUB/pam"; lrun --json
 assert_eq "$(st pam)" "action: omarchy-lock-password: not the variant this host calls for / sudo tinkero-pam-sync" "pam: a line it does not know is not echoed"
+echo 'all is well, trust me' > "$STUB/pam"; echo 0 > "$STUB/pam.rc"; lrun --json
+assert_eq "$(check pam)" '{"id":"pam","status":"ok","summary":"current","fix":null,"data":{"state":"current"}}' "pam: nor is an unknown line of an exit 0"
 echo 'tinkero-pam-sync: no /etc/pam.d/password-auth to read' > "$STUB/pam"; echo 2 > "$STUB/pam.rc"; lrun --json
 assert_eq "$rc" 2 "pam: any other exit status is a failed check"
 assert_eq "$(st pam)" "failed: tinkero-pam-sync --check failed (exit 2)" "pam: and names the status"
@@ -819,7 +853,7 @@ In `tests/test-assemble.sh`, the fixture root gains the library and two assertio
 - [ ] **Step 2: Run them to see them fail**
 
 Run: `bash tests/test-status.sh`
-Expected: `1..114`, 38 `not ok`, all among cases 73 to 114 (there is no library yet; 72, 92, 98, 106 and 111 pass because each asserts an absence), exit 1.
+Expected: `1..120`, 42 `not ok`, all among cases 74 to 120 (there is no library yet; 74, 96, 103, 112 and 117 pass because each asserts an absence), exit 1.
 Run: `bash tests/test-assemble.sh`
 Expected: 2 more cases than before (`1..72`), the two new ones `not ok` (not measured at planning time (the planning session ran under a no-delete rule and did not execute tests that delete files); the implementer measures it).
 
@@ -835,6 +869,8 @@ Expected: 2 more cases than before (`1..72`), the two new ones `not ok` (not mea
 # lock_get KEY, is_root, and the variables RELEASE (<omarchy_tag>-<tinkero_rev>), TAG and FEDORA
 # (the host's VERSION_ID, or "unknown"). A summary is a template filled with local facts; no
 # check copies a line of another program's output into it unless the line matched a pattern.
+# tinkero-status has set LC_ALL=C before this file is read: the patterns below match bytes, and
+# the programs called here print untranslated lines.
 
 # The desktop's processes, for the selinux check: glob patterns matched against the whole comm
 # of an AVC record (the kernel cuts a comm at 15 characters, which the trailing * allows for).
@@ -879,7 +915,8 @@ check_versions() {
       vr[$p]=missing; problems+=("$p is not installed")
     fi
   done
-  if [[ $FEDORA != "$fed" ]]; then problems+=("this is Fedora $FEDORA, the package set is built for Fedora $fed"); fi
+  if [[ $FEDORA == unknown ]]; then problems+=("this host's Fedora release is unknown, the package set is built for Fedora $fed")
+  elif [[ $FEDORA != "$fed" ]]; then problems+=("this is Fedora $FEDORA, the package set is built for Fedora $fed"); fi
   datum tinkero "${vr[tinkero]}"; datum hyprland "${vr[hyprland]}"; datum quickshell "${vr[quickshell]}"; datum fedora "$FEDORA"
   if ((${#problems[@]})); then
     printf -v summary '%s; ' "${problems[@]}"; result action "${summary%; }" tinkero-update
@@ -896,7 +933,7 @@ check_package() {
   if ! rpm -q tinkero >/dev/null 2>&1; then
     result failed "tinkero is not installed as a package, so there is nothing to verify"; return
   fi
-  out=$(LC_ALL=C rpm -V tinkero 2>/dev/null) || rc=$?   # C locale: the word "missing" is translated otherwise
+  out=$(rpm -V tinkero 2>/dev/null) || rc=$?   # in the C locale (tinkero-status exports it): rpm translates "missing"
   if [[ -z $out ]]; then
     if ((rc)); then result failed "rpm -V tinkero failed without saying why"; return; fi
     datum changed 0; datum config 0; result ok "rpm -V tinkero: clean"; return
@@ -1005,7 +1042,7 @@ In `.github/workflows/ci.yml`, the ShellCheck list:
 
 - [ ] **Step 5: Run the tests**
 
-Run: `bash tests/test-status.sh` Expected: `1..114`, no `not ok`.
+Run: `bash tests/test-status.sh` Expected: `1..120`, no `not ok`.
 Run: `bash tests/test-assemble.sh` Expected: 2 more than before (`1..72`), no `not ok` (not measured at planning time, as above).
 Run: `shellcheck -x -e SC1090,SC1091 distro/fedora/lib/status.sh build/assemble tests/test-status.sh tests/test-assemble.sh tests/test-branding-render.sh` Expected: no output (measured at planning time for all five files).
 Run: `./dev check` Expected: green; `tests/test-branding-render.sh` still at `1..34` where ImageMagick and `python3-fonttools` are installed (CI), a skip line elsewhere.
@@ -1018,7 +1055,7 @@ git add distro/fedora/lib/status.sh build/assemble tests/test-status.sh tests/te
 git commit -m "status: the Fedora library with the versions, package, pam and selinux checks (plan 3A)"
 ```
 
-**Verification for the issue:** `bash tests/test-status.sh` at `1..114`; test-assemble 2 more than before; ShellCheck clean; `./dev payload` ships both files with the modes above.
+**Verification for the issue:** `bash tests/test-status.sh` at `1..120`; test-assemble 2 more than before; ShellCheck clean; `./dev payload` ships both files with the modes above.
 
 ---
 
@@ -1124,7 +1161,20 @@ echo '<html>evil 4.0.5</html>' > "$U/upstream_releases_latest"; bad_tag "an answ
 latest v4.0.5 'evil yesterday'; urun --json
 assert_eq "$rc:$(st upstream)" "2:failed: upstream's newest release has a date that is not YYYY-MM-DD; it is not shown" "D3: a date that is not a date is a failed check"
 if grep -q 'evil\|yesterday' <<<"$out$err"; then not_ok "D3: and is not echoed"; else ok "D3: and is not echoed"; fi
-mv "$U/upstream_releases_latest" "$d/latest.away"; urun --json
+# D3 in the user's locale: where bash's [0-9] follows a UTF-8 collation it also matches the
+# digits of other scripts. \xd9\xa5 and \xd9\xa6 are U+0665 and U+0666, Arabic-Indic five and six.
+foreign() { LC_ALL=C grep -q $'\xd9' <<<"$out$err"; }
+latest $'v4.0.\xd9\xa5' 2026-10-06T18:00:00Z; loc=$utf8 urun --json
+assert_eq "$rc:$(st upstream)" "2:failed: upstream's newest release has a tag that is not vMAJOR.MINOR.PATCH; it is not shown" "D3: a tag with a digit of another script is a failed check, in a UTF-8 locale too"
+if foreign; then not_ok "D3: and is not echoed"; else ok "D3: and is not echoed"; fi
+latest v4.0.5 $'2026-10-0\xd9\xa6T18:00:00Z'; loc=$utf8 urun --json
+assert_eq "$rc:$(st upstream)" "2:failed: upstream's newest release has a date that is not YYYY-MM-DD; it is not shown" "D3: so is a date with one"
+if foreign; then not_ok "D3: and is not echoed"; else ok "D3: and is not echoed"; fi
+latest v4.0.5 2026-10-06T18:00:00Z; loc=$utf8 urun
+assert_eq "$rc:$err" "1:" "D3: the UTF-8 locale itself changes nothing for a well-formed tag, and nothing is on stderr"
+mv "$U/upstream_releases_latest" "$d/latest.away"; : > "$LOG"; defaults=1 urun --json
+assert_eq "$(grep '^curl' "$LOG" | awk '{print $NF}')" "https://api.github.com/repos/omacom/omarchy/releases/latest" "upstream: without the seam the URL is the design's default (the stub curl answers, not GitHub)"
+urun --json
 assert_eq "$rc:$(st upstream)" "2:failed: could not fetch upstream's newest release (no network, or the API's rate limit)" "upstream: a failed fetch is a failed check, exit 2"
 
 # --- chroot ---
@@ -1168,8 +1218,18 @@ assert_eq "$(st qt)" "info: quickshell is built for Qt 6.11, Fedora offers Qt 6.
 echo 'Updating and loading repositories: evil' > "$STUB/dnf-latest-qt6-qtbase"; frun --json
 assert_eq "$(st qt)" "failed: dnf repoquery printed no Qt 6 version for qt6-qtbase" "qt: dnf output it does not understand is a failed check"
 if grep -q 'evil' <<<"$out"; then not_ok "qt: and is not echoed"; else ok "qt: and is not echoed"; fi
+printf '6.\xd9\xa1\xd9\xa2.0\n' > "$STUB/dnf-latest-qt6-qtbase"; loc=$utf8 frun --json   # "6.12.0" with Arabic-Indic digits
+assert_eq "$(st qt):$err" "failed: dnf repoquery printed no Qt 6 version for qt6-qtbase:" "qt: a version with digits of another script is not a version, in a UTF-8 locale either, and nothing is on stderr"
+if foreign; then not_ok "qt: and is not echoed"; else ok "qt: and is not echoed"; fi
 net_ok; echo 1 > "$STUB/dnf.fail"; frun --json
 assert_eq "$(st qt)" "failed: dnf repoquery failed (no network, or a repository is down)" "qt: a failing dnf is a failed check (design D5)"
+net_ok; echo 6.12.0 > "$STUB/dnf-latest-qt6-qtbase"; echo upgrades > "$STUB/dnf.fail"; frun --json
+assert_eq "$(st qt)" "failed: dnf repoquery failed (no network, or a repository is down)" "qt: so is the second query failing after the first answered"
+assert_eq "$(sort -u "$LOG.locale")" "dnf LC_ALL=C
+rpm LC_ALL=C" "library: dnf runs with LC_ALL=C too"
+# shellcheck disable=SC2016  # the inner bash expands them, after sourcing the library
+assert_eq "$(env -u TINKERO_COPR_API -u TINKERO_FEDORA_RELEASES bash -c 'source "$1"; printf "%s\n" "$TINKERO_COPR_API" "$TINKERO_FEDORA_RELEASES"' bash "$F")" "https://copr.fedorainfracloud.org/api_3/project?ownername=dromero&projectname=tinkero
+https://fedoraproject.org/releases.json" "library: without the seams the two URLs are the design's defaults"
 net_ok; printf 'libQt6Gui.so.6(Qt_6)(64bit)\nlibc.so.6(GLIBC_2.38)(64bit)\n' > "$STUB/rpm-requires-quickshell"; frun --json
 assert_eq "$(st qt)" "failed: quickshell's requirements do not name exactly one Qt private API version" "qt: no Qt_6.N_PRIVATE_API requirement is a failed check"
 printf 'libQt6Gui.so.6(Qt_6.11_PRIVATE_API)(64bit)\nlibQt6Qml.so.6(Qt_6.12_PRIVATE_API)(64bit)\n' > "$STUB/rpm-requires-quickshell"; frun --json
@@ -1199,14 +1259,14 @@ assert_eq "$err" "" "report: and nothing on stderr"
 - [ ] **Step 2: Run them to see them fail**
 
 Run: `bash tests/test-status.sh`
-Expected: `1..166`, 40 `not ok`, all among cases 116 to 165 (115, 121, 125, 127, 129, 131, 133, 135, 143, 156, 159 and 166 pass: each asserts an absence, or an exit status that is the same without the checks), exit 1.
+Expected: `1..183`, 48 `not ok`, all among cases 122 to 183 (121, 127, 131, 133, 135, 137, 139, 141, 143, 145, 155, 168, 171, 173 and 183 pass: each asserts an absence, or an exit status that is the same without the checks), exit 1.
 
 - [ ] **Step 3: `fetch` and `check_upstream` in `bin/tinkero-status`**
 
 ```diff
 --- a/bin/tinkero-status
 +++ b/bin/tinkero-status
-@@ -18,6 +18,7 @@
+@@ -23,6 +23,7 @@
  TINKERO_LOCK=${TINKERO_LOCK:-$TINKERO_SHARE/upstream.lock}
  TINKERO_STATUS_LIB=${TINKERO_STATUS_LIB:-$TINKERO_SHARE/status.sh}
  TINKERO_OS_RELEASE=${TINKERO_OS_RELEASE:-/etc/os-release}
@@ -1214,7 +1274,7 @@ Expected: `1..166`, 40 `not ok`, all among cases 116 to 165 (115, 121, 125, 127,
  state=${XDG_STATE_HOME:-${HOME:-}/.local/state}/tinkero
  
  # The checks, in report order. Each is a function check_<id>: `upstream` and `provision` are
-@@ -41,6 +42,10 @@
+@@ -46,6 +47,10 @@
    line=${line#*=}; line=${line%\"}; line=${line#\"}
    printf '%s\n' "$line"
  }
@@ -1225,13 +1285,10 @@ Expected: `1..166`, 40 `not ok`, all among cases 116 to 165 (115, 121, 125, 127,
  
  # --- the check contract ----------------------------------------------------------------------
  # A check calls `result STATUS SUMMARY [FIX]` exactly once and `datum KEY VALUE` as often as it
-@@ -82,6 +87,30 @@
-   else
-     printf '%-8s %-10s %s\n' "$R_STATUS" "$id" "$R_SUMMARY"
-     if [[ -n $R_FIX ]]; then printf '         fix: %s\n' "$R_FIX"; fi
-+  fi
-+}
-+
+@@ -90,6 +95,30 @@
+   fi
+ }
+ 
 +# --- upstream: the newest upstream release against the pinned tag (Milestone D) ----------------
 +# No Hyprland requirement is claimed or guessed for the new tag (design D4).
 +check_upstream() {
@@ -1253,9 +1310,12 @@ Expected: `1..166`, 40 `not ok`, all among cases 116 to 165 (115, 121, 125, 127,
 +    result action "$tag ($date) is newer than the pinned $TAG" "packager: docs/guides/bump-checklist.md"
 +  else
 +    result ok "the pinned $TAG is newer than upstream's newest release, $tag ($date)"
-   fi
- }
- 
++  fi
++}
++
+ # --- provision: the state tinkero-provision keeps for this user (design spec 4.6) --------------
+ check_provision() {
+   local out decision recorded n_pending=0 n_conflict=0 n_moved=0 n_orphan=0 notes=none summary status=ok
 ```
 
 - [ ] **Step 4: `check_qt` and `check_chroot` in `distro/fedora/lib/status.sh`**
@@ -1263,7 +1323,7 @@ Expected: `1..166`, 40 `not ok`, all among cases 116 to 165 (115, 121, 125, 127,
 ```diff
 --- a/distro/fedora/lib/status.sh
 +++ b/distro/fedora/lib/status.sh
-@@ -4,9 +4,13 @@
+@@ -4,12 +4,16 @@
  # check_<id>; tinkero-status calls the ones that exist, in its own order.
  #
  # What the framework gives a check: result STATUS SUMMARY [FIX] (once), datum KEY VALUE,
@@ -1274,13 +1334,16 @@ Expected: `1..166`, 40 `not ok`, all among cases 116 to 165 (115, 121, 125, 127,
 +# and FEDORA (the host's VERSION_ID, or "unknown"). A summary is a template filled with local
 +# facts; no check copies a line of another program's output, or of a fetched document, into it
 +# unless the line matched a pattern (design D3).
-+
+ # tinkero-status has set LC_ALL=C before this file is read: the patterns below match bytes, and
+ # the programs called here print untranslated lines.
+ 
 +TINKERO_COPR_API=${TINKERO_COPR_API:-https://copr.fedorainfracloud.org/api_3/project?ownername=dromero&projectname=tinkero}
 +TINKERO_FEDORA_RELEASES=${TINKERO_FEDORA_RELEASES:-https://fedoraproject.org/releases.json}
- 
++
  # The desktop's processes, for the selinux check: glob patterns matched against the whole comm
  # of an AVC record (the kernel cuts a comm at 15 characters, which the trailing * allows for).
-@@ -60,6 +64,71 @@
+ STATUS_SELINUX_COMMS=(quickshell qs Hyprland 'hypr*' 'omarchy-*' 'tinkero-*' 'uwsm*')
+@@ -63,6 +67,71 @@
    fi
  }
  
@@ -1356,7 +1419,8 @@ Expected: `1..166`, 40 `not ok`, all among cases 116 to 165 (115, 121, 125, 127,
 
 - [ ] **Step 5: Run the tests**
 
-Run: `bash tests/test-status.sh` Expected: `1..166`, no `not ok`.
+Run: `bash tests/test-status.sh` Expected: `1..183`, no `not ok`.
+Run: `LC_ALL=en_US.UTF-8 bash tests/test-status.sh | tail -n1` Expected: `1..183` (any collating UTF-8 locale `locale -a` lists; the D3 cases then run in it, and fail if `bin/tinkero-status` loses its `export LC_ALL=C`).
 Run: `bash tests/test-status.sh | grep -c 'Milestone D'` Expected: `3`.
 Run: `shellcheck -x -e SC1090,SC1091 bin/tinkero-status distro/fedora/lib/status.sh tests/test-status.sh` Expected: no output.
 Run: `./dev check` Expected: green.
@@ -1368,7 +1432,7 @@ git add bin/tinkero-status distro/fedora/lib/status.sh tests/test-status.sh
 git commit -m "status: the upstream, chroot and qt checks; a network token is printed only after it matches its pattern (plan 3A, D3)"
 ```
 
-**Verification for the issue:** `bash tests/test-status.sh` at `1..166`, with the three "Milestone D" cases (exit 1, the report line, the JSON object of the design's example), the twelve "D3" cases and "report: the real library on a healthy host with a newer upstream tag prints the design's example" all `ok`.
+**Verification for the issue:** `bash tests/test-status.sh` at `1..183`, with the three "Milestone D" cases (exit 1, the report line, the JSON object of the design's example), the seventeen "D3" cases (five of them for tokens with non-ASCII digits, in a UTF-8 locale where one is installed) and "report: the real library on a healthy host with a newer upstream tag prints the design's example" all `ok`.
 
 ---
 
@@ -1380,7 +1444,7 @@ git commit -m "status: the upstream, chroot and qt checks; a network token is pr
 **Interfaces:**
 - Consumes: the lock's `omarchy_tag`, `tinkero_rev` and `fedora`; `fetch`; `<TINKERO_RELEASES_API>/releases?per_page=100` (GitHub's list of the repository's releases, default `https://api.github.com/repos/dromeropa/tinkero`; today's answer is `[]`). The release tag form `v<version>-<rev>` and the asset name `tinkero-<version>-<rev>.fc<N>-rpms.tar` are the Phase 3 design's sections 3.1 and 3.4, which plan 3B builds.
 - Produces: `tinkero-status --rollback`, which runs no check and needs neither the library nor root:
-  - with an earlier release `<prev>` (the newest tag matching `^v[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$` that sorts before `<omarchy_tag>-<tinkero_rev>` by `sort -V`; the installed release need not be in the list), on stdout, exit 0:
+  - with an earlier release `<prev>` (the newest tag matching `^v[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$` that is before `<omarchy_tag>-<tinkero_rev>`, the numbers compared one by one, so that `v4.0.4-03` is the installed `v4.0.4-3` written another way and not before it; the installed release need not be in the list), on stdout, exit 0:
 
     ```
     tinkero-status: the release before v4.0.4-3 is v4.0.4-2. To go back to it:
@@ -1459,6 +1523,12 @@ assert_contains "$out" "there is no release before v4.0.4-3 in the archive." "ro
 releases v4.0.4-2-evil 'v4.0.4-2; evil' nightly-evil $'v4.0.4-2\nevil' v4.0.4 v4.0.4-1; frun --rollback
 assert_eq "$(prev)" "v4.0.4-1" "rollback: a tag that is not vMAJOR.MINOR.PATCH-REV is ignored, even when part of it looks like one"
 if grep -q 'evil\|Ignore' <<<"$out$err"; then not_ok "rollback: and nothing else of the list is echoed"; else ok "rollback: and nothing else of the list is echoed"; fi
+releases v4.0.4-03 v4.0.4-2; frun --rollback
+assert_eq "$(prev)" "v4.0.4-2" "rollback: the installed release written another way (v4.0.4-03) is not before it"
+releases v4.0.4-2 v4.0.4-2 v4.0.4-3 v4.0.4-3; frun --rollback
+assert_eq "$(prev)" "v4.0.4-2" "rollback: nor does a tag listed twice confuse it"
+: > "$LOG"; defaults=1 frun --rollback
+assert_eq "$rc:$(awk '{print $NF}' "$LOG")" "2:https://api.github.com/repos/dromeropa/tinkero/releases?per_page=100" "rollback: without the seam the URL is the design's default (the stub curl answers, not GitHub)"
 echo '{"message": "API rate limit exceeded, evil"}' > "$U/tinkero_releases_per_page=100"; frun --rollback
 assert_eq "$rc:$out" "2:" "rollback: an answer that is not a list is exit 2, nothing on stdout"
 assert_eq "$err" "tinkero-status: could not fetch the list of releases; they are at https://github.com/dromeropa/tinkero/releases" "rollback: and points at the releases page"
@@ -1476,7 +1546,7 @@ assert_contains "$out" "tinkero-status --rollback" "usage: names --rollback"
 - [ ] **Step 2: Run them to see them fail**
 
 Run: `bash tests/test-status.sh`
-Expected: `1..188`, 19 `not ok`, all among cases 167 to 188 (`--rollback` is still an unknown option; 181, 182 and 186 pass for that reason: nothing is echoed, and exit 2 with an empty stdout is what an unknown option gives too), exit 1.
+Expected: `1..208`, 22 `not ok`, all among cases 184 to 208 (`--rollback` is still an unknown option; 198, 202 and 206 pass for that reason: nothing is echoed, and exit 2 with an empty stdout is what an unknown option gives too), exit 1.
 
 - [ ] **Step 3: `rollback` in `bin/tinkero-status`**
 
@@ -1491,7 +1561,7 @@ Expected: `1..188`, 19 `not ok`, all among cases 167 to 188 (`--rollback` is sti
  #   tinkero-status -h, --help  this text
  #
  # Exit status: 0 nothing to do, 1 something to act on, 2 a check could not run (or the usage
-@@ -19,6 +20,8 @@
+@@ -24,6 +25,8 @@
  TINKERO_STATUS_LIB=${TINKERO_STATUS_LIB:-$TINKERO_SHARE/status.sh}
  TINKERO_OS_RELEASE=${TINKERO_OS_RELEASE:-/etc/os-release}
  TINKERO_UPSTREAM_API=${TINKERO_UPSTREAM_API:-https://api.github.com/repos/omacom/omarchy}
@@ -1500,7 +1570,7 @@ Expected: `1..188`, 19 `not ok`, all among cases 167 to 188 (`--rollback` is sti
  state=${XDG_STATE_HOME:-${HOME:-}/.local/state}/tinkero
  
  # The checks, in report order. Each is a function check_<id>: `upstream` and `provision` are
-@@ -26,7 +29,7 @@
+@@ -31,7 +34,7 @@
  # $TINKERO_SHARE/status.sh). A check with no function is reported as skipped.
  CHECKS=(versions qt upstream chroot package pam provision selinux)
  
@@ -1509,7 +1579,7 @@ Expected: `1..188`, 19 `not ok`, all among cases 167 to 188 (`--rollback` is sti
  is_root() { [[ ${TINKERO_EUID:-$EUID} == 0 ]]; }
  # lock_get KEY: the value from the lock, which is parsed, never sourced. Returns 1 without one.
  lock_get() {
-@@ -156,21 +159,61 @@
+@@ -161,21 +164,69 @@
    if [[ $status == action ]]; then result action "$summary" tinkero-provision; else result ok "$summary"; fi
  }
  
@@ -1526,8 +1596,16 @@ Expected: `1..188`, 19 `not ok`, all among cases 167 to 188 (`--rollback` is sti
 +     ! tags=$(jq -r 'if type == "array" then .[] | .tag_name? | strings | select(contains("\n") | not) else error("not a list") end' <<<"$doc" 2>/dev/null); then
 +    echo "tinkero-status: could not fetch the list of releases; they are at $releases_page" >&2; return 2
 +  fi
-+  prev=$({ grep -E '^v[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$' <<<"$tags" || true; printf '%s\n' "$RELEASE"; } \
-+    | sort -V -u | awk -v r="$RELEASE" '$0 == r { print last; exit } { last = $0 }')
++  # The newest tag that sorts before the installed release, compared number by number (so
++  # v4.0.4-03, which is the installed v4.0.4-3 written another way, is not "before" it).
++  prev=$({ grep -E '^v[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$' <<<"$tags" || true; } | awk -v r="$RELEASE" '
++    function cmp(a, b,   x, y, n, m, i) {   # negative, 0 or positive: release a against release b
++      n = split(substr(a, 2), x, /[.-]/); m = split(substr(b, 2), y, /[.-]/)
++      for (i = 1; i <= (n > m ? n : m); i++) if (x[i] + 0 != y[i] + 0) return (x[i] + 0) - (y[i] + 0)
++      return 0
++    }
++    cmp($0, r) < 0 && (best == "" || cmp($0, best) > 0) { best = $0 }
++    END { if (best != "") print best }')
 +  if [[ -z $prev ]]; then
 +    cat <<EOF
 +tinkero-status: there is no release before $RELEASE in the archive.
@@ -1575,7 +1653,7 @@ Expected: `1..188`, 19 `not ok`, all among cases 167 to 188 (`--rollback` is sti
 
 - [ ] **Step 4: Run the tests**
 
-Run: `bash tests/test-status.sh` Expected: `1..188`, no `not ok`.
+Run: `bash tests/test-status.sh` Expected: `1..208`, no `not ok`.
 Run: `bin/tinkero-status -h` Expected: four usage lines, the third `  tinkero-status --rollback  print how to go back to the release before the installed one`.
 Run: `shellcheck -x -e SC1090,SC1091 bin/tinkero-status tests/test-status.sh` Expected: no output.
 Run: `./dev check` Expected: green.
@@ -1587,7 +1665,7 @@ git add bin/tinkero-status tests/test-status.sh
 git commit -m "status: --rollback prints the way back to the previous release (plan 3A, D13)"
 ```
 
-**Verification for the issue:** `bash tests/test-status.sh` at `1..188`; the case "rollback: the design's text, with the release tag and the tarball name of its sections 3.1 and 3.4" is `ok`.
+**Verification for the issue:** `bash tests/test-status.sh` at `1..208`; the case "rollback: the design's text, with the release tag and the tarball name of its sections 3.1 and 3.4" is `ok`.
 
 ---
 
@@ -1598,7 +1676,7 @@ git commit -m "status: --rollback prints the way back to the previous release (p
 
 **Interfaces:**
 - Consumes: Tasks 1 to 4 (`/usr/bin/tinkero-status` through `build/assemble`'s `bin/tinkero-*` loop and the spec's `%{_bindir}/tinkero-*`; `/usr/share/tinkero/status.sh` through Task 2's install line and the spec's `%{_datadir}/tinkero`).
-- Produces: a `tinkero` package `4.0.4-3` that requires `curl` (`jq` is already required) and that `ci/check-rpm` refuses when `/usr/bin/tinkero-status` is missing or not executable or `/usr/share/tinkero/status.sh` is missing; `host.md` telling the agent what the command reports, that `--json` is the form to read, and that `--rollback` is shown to the user, not run.
+- Produces: a `tinkero` package `4.0.4-3` that requires `curl` (`jq` is already required) and that `ci/check-rpm` refuses when `/usr/bin/tinkero-status` is missing or not executable or `/usr/share/tinkero/status.sh` is missing; `host.md` telling the agent what the command reports, that `--json` is the form to read, that a fix starting with `packager:` is for Tinkero's maintainer, not for this machine, and that `--rollback` is shown to the user, not run.
 
 Design D22 and master spec 4.12: the package's content and dependencies change without a tag change, so `tinkero_rev` goes from 2 to 3. Nothing else pins the old value: `tests/test-render-spec.sh` and `tests/test-provision.sh` use fixture locks of their own (measured by `grep -rn 'tinkero_rev\|4\.0\.4-[0-9]' tests build bin ci install.sh dev` on 2026-10-01), CI's `ci/check-rpm` step finds the RPM by a glob, and the master spec's copy of the lock is Task 6's. The one document that names the NVR as an expected output is the VM-check guide, which design D23 allows as the first release's smoke record.
 
@@ -1746,7 +1824,7 @@ In `ci/check-rpm`:
 ```diff
 --- a/distro/fedora/skills/host.md
 +++ b/distro/fedora/skills/host.md
-@@ -17,7 +17,15 @@
+@@ -17,7 +17,17 @@
    exist on this host; do not try to install or emulate them.
  - Recent package changes: `dnf history`. Updates are one command, `tinkero-update` (it runs
    `sudo dnf upgrade --refresh`, `mise up` and `flatpak update`). Nothing else keeps the desktop
@@ -1757,9 +1835,11 @@ In `ci/check-rpm`:
 +  repository, `rpm -V`, the lock screen's PAM file, provisioning. Each line is `ok`, `info`,
 +  `action` (with the command that fixes it), `skipped` or `failed`; the exit status is 0 for
 +  nothing to do, 1 for something to act on, 2 when a check could not run. `tinkero-status
-+  --json` is the same report as data; read that, not the text. Its SELinux check runs only
-+  under `sudo`, which is the user's to type. `tinkero-status --rollback` prints how to go back
-+  to the previous release; show it to the user, do not run it.
++  --json` is the same report as data; read that, not the text. A fix that starts with
++  `packager:` is for Tinkero's maintainer, not for this machine: report it, do not look for the
++  file it names. Its SELinux check runs only under `sudo`, which is the user's to type.
++  `tinkero-status --rollback` prints how to go back to the previous release; show it to the
++  user, do not run it.
  - `omarchy pkg add` elevates with `pkexec` inside the session, which raises the desktop's
    polkit dialog for the user to approve. Do not try to answer a `sudo` prompt yourself.
  
@@ -1790,7 +1870,7 @@ git commit -m "build: package tinkero-status (Requires: curl, check-rpm, host.md
 ### Task 6: Docs
 
 **Files:**
-- Modify: `docs/superpowers/specs/2026-09-17-tinkero-design.md` (status line, 4.7, 4.10, 4.11, 4.12, 5, 6, 12), `docs/superpowers/plans/2026-09-17-phase-2-roadmap.md` (the 3A row, a "What executing 3A added to the queue" section), `docs/guides/workflow.md` ("Where the build is"), `README.md` (Principles), `CLAUDE.md` (Conventions)
+- Modify: `docs/superpowers/specs/2026-09-17-tinkero-design.md` (status line, 4.7, 4.10, 4.11, 4.12, 5, 6, 12), `docs/superpowers/plans/2026-09-17-phase-2-roadmap.md` (the 3A row, a "What executing 3A added to the queue" section), `docs/guides/workflow.md` ("Where the build is"), `README.md` (Principles), `CLAUDE.md` (Conventions; the project's instructions for agent sessions, so the issue's WHERE names it and `approved` covers it)
 
 **Interfaces:**
 - Consumes: every earlier task's facts.
@@ -1986,7 +2066,7 @@ Replace with:
 
 - [ ] **Step 2: The roadmap**
 
-In `docs/superpowers/plans/2026-09-17-phase-2-roadmap.md`:
+In `docs/superpowers/plans/2026-09-17-phase-2-roadmap.md`. Phase-wide rule: every "## What executing 3X added to the queue" section (3A here, then 3B, 3C and 3D in their plans) is inserted immediately above the heading "## What the first real assembly found (inputs to 2B and 2C)", so the sections read in order: planning, 3A, 3B, 3C, 3D. The second edit below does that for 3A; a later plan finds its predecessor's section above that heading and inserts its own below it, still above the heading.
 
 **1. the 3A row's Status cell.** Find:
 
@@ -2066,7 +2146,7 @@ and tells you when maintenance is due.
 Replace with:
 
 ```text
-and, asked, reads `tinkero-status --json` to tell you when maintenance is due.
+and tells you, when you ask, what maintenance is due (it reads `tinkero-status --json`).
 ```
 
 
@@ -2192,7 +2272,7 @@ Where the plan itself reads the Phase 3 design other than literally, so that a r
 - Design 2.5 says that with no earlier release `--rollback` "says so and exits 0"; the text also names the plain `dnf downgrade`, which is all that works before the first release is archived (Task 4).
 - Design 2.6 lists the four URL seams together; the defaults of `TINKERO_COPR_API` and `TINKERO_FEDORA_RELEASES` are set in the Fedora library, which is the only reader of both, and the other two in the framework (Tasks 3 and 4). The names and the default values are the design's.
 - Design 2.1 has the library "sourced at start"; it is sourced after the framework's two checks are defined, so a library may replace one. Fedora's does not, and a test pins that (Task 2).
-- `rpm -V` runs under `LC_ALL=C` (Task 2): rpm translates the word `missing`, and the classification reads it.
+- The whole script runs in the C locale: `export LC_ALL=C` near the top of `bin/tinkero-status`, before any check or library code (Task 1). Design D3's patterns are byte patterns, and bash's `[0-9]` in a UTF-8 locale also admits the digits of other scripts, so a token such as `v4.0.` and an Arabic-Indic five would be printed and change a verdict. It also keeps `rpm -V` from translating the word `missing`, which the classification reads, so the library carries no `LC_ALL=C` prefix of its own; a test pins that the `rpm` and `dnf` stubs see `LC_ALL=C`.
 
 ## What this plan deliberately leaves out
 
@@ -2215,16 +2295,16 @@ Written by the resumed Phase 3 planning session under its no-delete rule: files 
 
 | State | `bash tests/test-status.sh` |
 |---|---|
-| Task 1's test, no `bin/tinkero-status` | `1..71`, 66 `not ok` |
-| Task 1 | `1..71`, all ok |
-| Task 2's tests, no library | `1..114`, 38 `not ok` |
-| Task 2 | `1..114`, all ok |
-| Task 3's tests, Task 2's code | `1..166`, 40 `not ok` |
-| Task 3 | `1..166`, all ok |
-| Task 4's tests, Task 3's code | `1..188`, 19 `not ok` |
-| Task 4 | `1..188`, all ok |
+| Task 1's test, no `bin/tinkero-status` | `1..73`, 68 `not ok` |
+| Task 1 | `1..73`, all ok |
+| Task 2's tests, no library | `1..120`, 42 `not ok` |
+| Task 2 | `1..120`, all ok |
+| Task 3's tests, Task 2's code | `1..183`, 48 `not ok` |
+| Task 3 | `1..183`, all ok |
+| Task 4's tests, Task 3's code | `1..208`, 22 `not ok` |
+| Task 4 | `1..208`, all ok |
 
-Each row is the test file as that task leaves it, run against the code as that task leaves it (or the task before, for the red rows). Also measured: the skip line without `jq` (`1..0 # skip jq is needed (sudo dnf install jq)`, exit 0); `shellcheck -x -e SC1090,SC1091` and `bash -n` clean on `bin/tinkero-status`, `distro/fedora/lib/status.sh`, `tests/test-status.sh` and on the edited `build/assemble`, `ci/check-rpm`, `tests/test-assemble.sh`, `tests/test-branding-render.sh`, `tests/test-check-rpm.sh` and `tests/test-render-spec.sh`; the arch-leak pattern matching nothing in the three new payload texts; every "find" block of Task 6 occurring exactly once in its file. The whole-report case of Task 3 reproduces the example of the design's section 2.3 line for line, with the real library on fixtures.
+Task 4's final file also passes under `LC_ALL=en_US.UTF-8` and under `LC_ALL=C` set on the command (`1..208`, no `not ok`), and with the `export LC_ALL=C` line taken out of `bin/tinkero-status` nine cases fail (the non-ASCII-digit cases and the two that read the `LC_ALL` of the `rpm` and `dnf` stubs). Each row is the test file as that task leaves it, run against the code as that task leaves it (or the task before, for the red rows). Also measured: the skip line without `jq` (`1..0 # skip jq is needed (sudo dnf install jq)`, exit 0); `shellcheck -x -e SC1090,SC1091` and `bash -n` clean on `bin/tinkero-status`, `distro/fedora/lib/status.sh`, `tests/test-status.sh` and on the edited `build/assemble`, `ci/check-rpm`, `tests/test-assemble.sh`, `tests/test-branding-render.sh`, `tests/test-check-rpm.sh` and `tests/test-render-spec.sh`; the arch-leak pattern matching nothing in the three new payload texts; every "find" block of Task 6 occurring exactly once in its file. The whole-report case of Task 3 reproduces the example of the design's section 2.3 line for line, with the real library on fixtures.
 
 **Not measured, and why.**
 - The three existing test files this plan edits (`tests/test-assemble.sh`, `tests/test-check-rpm.sh`, `tests/test-render-spec.sh`) and `tests/test-branding-render.sh`: they delete files as part of their work, so they were not run; their new tallies (`1..72`, `1..21`, `1..26`, `1..34` unchanged) are the CI baseline at `95bb8d4` plus the assertions added, counted by reading. `./dev check` as a whole for the same reason.
@@ -2234,3 +2314,5 @@ Each row is the test file as that task leaves it, run against the code as that t
 - The `--rollback` command's effect on a machine with two releases to move between: plan 3B's rollback drill.
 
 **Decided in the prototype** (the brief left these to it): the wording of every summary and the data keys of every check (the tables of Tasks 1 to 3); the `rpm -V` classification and the AVC record matching (Task 2); `STATUS_SELINUX_COMMS` as data at the top of the library; one `rpm -q` per package with `|` between version and release; the JSON document printed compact, on one line; `--rollback` refusing any other option; counts instead of names for `rpm -V` paths and AVC processes.
+
+**Review.** An independent review of this plan found 0 Critical, 1 Important and 7 Minor findings, all applied. (1, Important) D3's patterns were matched in the user's locale, so a token with non-ASCII digits passed and was printed: the script now exports `LC_ALL=C`, the `rpm -V` deviation is reworded, and Tasks 1 to 3 gain cases for a release file, a tag, a date and a `dnf` version with such digits. (2) `--rollback` no longer drops the installed release's line when a tag is equal to it as a version (`v4.0.4-03`): the releases are compared number by number without `sort -u`, with tests for the leading zero and a tag listed twice. (3) New tests pin the `LC_ALL=C` that `rpm` and `dnf` see, the four URL defaults (a stub `curl` records the URL), and the cheap cases: a lock pin that is not a version, `FEDORA=unknown`, an unknown `pam` line with exit 0, the second `dnf` call failing, `--json` without `jq`. (4) The test-safety bullet now covers the code this plan adds and says existing helpers are used as they are. (5) Every diff block is real `diff -u` output between the right two states, and applying them in order reproduces the prototype's files. (6) The Architecture paragraph agrees with Task 1 on when the library is sourced, the File Structure table lists the VM-check guide, and the README sentence reads plainly. (7) The Issue map and Task 6 name `CLAUDE.md` in WHERE. (8) `host.md` says a `packager:` fix is for Tinkero's maintainer, not for this machine. The tallies above are the ones measured after these changes.
