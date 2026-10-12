@@ -38,3 +38,5 @@ Nothing on screen says or shows Omarchy: the mark, the wallpapers, the About scr
 ## License
 
 MIT. Omarchy, which Tinkero packages, is MIT licensed by its authors.
+
+Smoke test OK — 2026-10-12.
